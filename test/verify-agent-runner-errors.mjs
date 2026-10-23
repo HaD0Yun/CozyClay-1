@@ -59,6 +59,8 @@ function errorMessage(text) {
 
 // --- Wire efforts use the real runner, harness, auth and Codex API module.
 // Astra does not advertise off, but an explicit none must still omit reasoning.
+// gpt-5.5 supports off, and pi sends a model's off mapping, so its no-reasoning
+// reaches Codex as its own "none" instead of being omitted.
 {
 	const received = [];
 	const fixture = createServer(async (req, res) => {
@@ -95,13 +97,13 @@ function errorMessage(text) {
 		};
 		const freshCases = [
 			["gpt-6-astra", "none", undefined],
-			["gpt-5.4", "none", undefined],
+			["gpt-5.5", "none", "none"],
 			["gpt-6-astra", "high", "high"],
 			["gpt-6-astra", "ultra", "max"],
-			["gpt-5.4", "ultra", "xhigh"],
+			["gpt-5.5", "ultra", "xhigh"],
 			// With no initial effort the harness default is off, not medium.
 			["gpt-6-astra", undefined, undefined],
-			["gpt-5.4", undefined, undefined],
+			["gpt-5.5", undefined, "none"],
 		];
 		for (const [index, [model, effort, expected]] of freshCases.entries()) {
 			const session = await runner.openSession(`effort-fresh-${index}`);
@@ -112,8 +114,8 @@ function errorMessage(text) {
 			["gpt-6-astra", "high", "high"],
 			["gpt-6-astra", "none", undefined],
 			["gpt-6-astra", undefined, undefined],
-			["gpt-5.4", "ultra", "xhigh"],
-			["gpt-5.4", undefined, "xhigh"],
+			["gpt-5.5", "ultra", "xhigh"],
+			["gpt-5.5", undefined, "xhigh"],
 			["gpt-6-astra", "none", undefined],
 		]) await check(reused, model, effort, expected, `reused ${model} ${effort ?? "omitted"} preserves wire effort`);
 		assert.deepEqual(models.getModels("openai-codex"), metadata, "turn effort must not mutate advertised model metadata");
@@ -299,7 +301,8 @@ for (const token of ["AIza-secret-0123456789abcdefghijk", "sk-or-secret", "sk-an
 	console.log("post-tool-auth", JSON.stringify({ mutations, refreshes, contexts: calls.map((context) => context.messages.map((message) => message.role)), roles: history.map((message) => message.role), frames }));
 	assert.equal(mutations, 1, "auth recovery must not execute an already completed mutation again");
 	assert.equal(refreshes, 1);
-	assert.deepEqual(calls.map((context) => context.messages.map((message) => message.role)), [["user"], ["user", "assistant", "toolResult"], ["user", "assistant", "toolResult"]]);
+	// the conversation part of each request; pi's leading system message carries the prompt and tools
+	assert.deepEqual(calls.map((context) => context.messages.filter((message) => message.role !== "system").map((message) => message.role)), [["user"], ["user", "assistant", "toolResult"], ["user", "assistant", "toolResult"]]);
 	assert.deepEqual(calls[2].messages, calls[1].messages, "the pending model call retries with the exact completed transcript");
 	assert.deepEqual(history.map((message) => message.role), ["user", "assistant", "toolResult", "assistant"]);
 	assert.equal(history[2].toolCallId, "first-mutation");

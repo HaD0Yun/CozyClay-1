@@ -13,6 +13,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
+import { getCurrentSystemPrompt } from "@earendil-works/pi-ai";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
 import { startLiveHub } from "../mcp/live-hub.mjs";
 import { createAgentHandler } from "../bin/agent/agent-routes.mjs";
@@ -37,7 +38,7 @@ const marker = (text, key) => new RegExp(`\\[\\[${key}:([^\\]]+)\\]\\]`).exec(te
 const fake = createFakeModel({ provider: "openai-codex", modelId: "gpt-6-astra", modelName: "QA model" });
 const step = async context => {
 	const last = context.messages.at(-1), lastText = textOf(last);
-	if (context.systemPrompt === MAIN_SYSTEM_PROMPT) {
+	if (getCurrentSystemPrompt(context.messages) === MAIN_SYSTEM_PROMPT) {
 		if (last.role !== "user") return fauxAssistantMessage([fauxText("Started.")]);
 		if (lastText.includes("Task events arrived")) return fauxAssistantMessage([fauxText("QA main report: the tasks ended.")]);
 		const [c1, c2, c3] = ["c1", "c2", "c3"].map(key => marker(lastText, key));

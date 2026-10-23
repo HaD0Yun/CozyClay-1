@@ -125,7 +125,8 @@ export function createSubscriptionStream({ loadSdk, resolveExecutable = resolveC
 	const sdkPromise = () => (loadSdk ?? (() => import("@anthropic-ai/claude-agent-sdk")))();
 	return function streamAnthropicSubscription(model, context, options = {}) {
 		return (async () => {
-			const { createAssistantMessageEventStream, parseStreamingJson } = await import("@earendil-works/pi-ai");
+			// pi hands providers a TranscriptContext: the prompt and the tools live in its system messages.
+			const { createAssistantMessageEventStream, getCurrentSystemPrompt, getCurrentTools, parseStreamingJson } = await import("@earendil-works/pi-ai");
 			const stream = createAssistantMessageEventStream();
 			void (async () => {
 				const output = emptyOutput(model);
@@ -154,7 +155,7 @@ export function createSubscriptionStream({ loadSdk, resolveExecutable = resolveC
 					}
 					const sdk = await sdkPromise();
 					const executable = resolveExecutable({ env });
-					const piTools = Array.isArray(context.tools) ? context.tools : [];
+					const piTools = getCurrentTools(context.messages);
 					const mcpServers = await buildCustomToolServers(sdk, piTools);
 					const queryOptions = {
 						cwd,
@@ -181,7 +182,7 @@ export function createSubscriptionStream({ loadSdk, resolveExecutable = resolveC
 						systemPrompt: {
 							type: "preset",
 							preset: "claude_code",
-							append: typeof context.systemPrompt === "string" && context.systemPrompt.trim() ? context.systemPrompt : undefined,
+							append: getCurrentSystemPrompt(context.messages).trim() || undefined,
 						},
 						env: childEnvironment(env, accessToken),
 						pathToClaudeCodeExecutable: executable,

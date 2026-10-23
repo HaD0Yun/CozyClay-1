@@ -76,8 +76,7 @@ const factories = {
 
 const providerConfig = (id) => PROVIDERS.find((provider) => provider.id === id);
 
-export async function loadProvider(id, options = {}) {
-	const { baseUrl, env = process.env } = options;
+export async function loadProvider(id, { baseUrl, env = process.env } = {}) {
 	if (!providerConfig(id)) throw Object.assign(new Error(`Unknown provider: ${id}`), { code: "UNKNOWN_PROVIDER" });
 	if (id === "openai-codex") ensureCodexFetchPatched();
 	// Both Anthropic lanes come from CozyClay's own module: the subscription lane, and pi-ai's
@@ -87,6 +86,9 @@ export async function loadProvider(id, options = {}) {
 		: id === "anthropic" || id === "anthropic-subscription"
 			? await import("./anthropic-subscription.mjs").then((module) => module.anthropicLaneProvider(id))
 			: await import(`@earendil-works/pi-ai/providers/${id}`).then((module) => module[factories[id]]());
+	// pi 0.99 gave the API-key OpenAI lane a ChatGPT sign-in too; CozyClay's ChatGPT sign-in is the
+	// openai-codex lane, so the panel keeps showing one ChatGPT button.
+	if (id === "openai") provider.auth = { ...provider.auth, oauth: undefined };
 	if (baseUrl && id !== "cliproxy") {
 		provider.baseUrl = baseUrl;
 		const getModels = provider.getModels.bind(provider);
@@ -112,7 +114,8 @@ function catalogueState(models) {
 
 function livePiModel(model, template) {
 	const supported = new Set(model.efforts.map(piEffort));
-	const thinkingLevelMap = Object.fromEntries(PI_EFFORT_LEVELS.map((level) => [level, supported.has(level) ? level : null]));
+	// map values are what goes on the wire: pi sends a model's off mapping, and Codex calls it "none"
+	const thinkingLevelMap = Object.fromEntries(PI_EFFORT_LEVELS.map((level) => [level, supported.has(level) ? wireEffort(level) : null]));
 	return { ...template, id: model.id, name: model.label, thinkingLevelMap };
 }
 
