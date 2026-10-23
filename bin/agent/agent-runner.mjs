@@ -291,9 +291,9 @@ export function createAgentRunner({ models: suppliedModels, sessionStore, tools 
 		// not retroactively un-stream an already-committed message, so the run's
 		// own outcome arrives too late — by then `turn_end` has already flushed
 		// the completed turn through this same `persist`). The one reliable
-		// abort signal is therefore "did THIS session's `abort()` run during the
-		// still-active turn", tracked synchronously on `state.active` the instant
-		// `publicSession.abort` is called (see below) — not any one event's shape.
+		// abort signal is therefore "was THIS still-active turn aborted", tracked
+		// synchronously on `state.active` the instant `publicSession.abort` is
+		// called or the caller's signal fires (see below) — not any one event's shape.
 		// The user message (and any toolResult from a tool that finished before
 		// the abort) are real, completed history and ARE persisted; only the
 		// assistant role is withheld, as is any assistant pi itself ended as
@@ -312,7 +312,9 @@ export function createAgentRunner({ models: suppliedModels, sessionStore, tools 
 			state.persisted = messages.length;
 			const input = state.lastInput || {};
 			if (pending.length) await sessionStore.append(sessionId, pending, { surface, ...(input.meta || {}) });
-			if (failedAssistant && sessionStore.appendTurnError) {
+			// One record per turn: an abort mid-tool withholds two assistants (the tool call, then the request it stopped).
+			if (failedAssistant && sessionStore.appendTurnError && !state.active?.turnErrorRecorded) {
+				if (state.active) state.active.turnErrorRecorded = true;
 				const cancelled = aborted || failedAssistant.stopReason === "aborted";
 				const rawMessage = failedAssistant.errorMessage || "The model or live editor could not complete this turn.";
 				const message = cancelled ? "The turn was aborted." : sanitizeUpstreamDetail(JSON.stringify({ message: rawMessage })) || rawMessage;
@@ -521,8 +523,8 @@ export function createAgentRunner({ models: suppliedModels, sessionStore, tools 
 			const controller = input.signal ? null : new AbortController();
 			const signal = input.signal || controller.signal;
 			state.lastInput.signal = signal;
-			// The caller's own signal (a disconnect, a deadline) cancels the run like session.abort() does.
-			const cancel = () => state.agent?.abort();
+			// The caller's own signal (a Stop, a disconnect, a deadline) aborts the turn exactly like session.abort() does.
+			const cancel = () => { if (state.active) state.active.abortRequested = true; state.agent?.abort(); };
 			const run = (async () => {
 				let removeEventListeners;
 				try {
@@ -579,7 +581,7 @@ export function createAgentRunner({ models: suppliedModels, sessionStore, tools 
 					const { codexResponseObserver } = await import("./providers.mjs");
 					await codexResponseObserver.run((response) => { if (state.active) state.active.lastResponseHeaders = response.headers; }, () => {
 						const prompted = state.agent.prompt(prompts);
-						if (signal.aborted) state.agent.abort();
+						if (signal.aborted) cancel();
 						return prompted;
 					});
 				} catch (error) {

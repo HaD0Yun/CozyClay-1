@@ -607,9 +607,47 @@ for (const token of ["AIza-secret-0123456789abcdefghijk", "sk-or-secret", "sk-an
 	// Exactly the user turn: no tool ran in this scenario, so there is no
 	// completed toolResult to also expect; a scenario with a tool would keep
 	// any toolResult from a tool that finished BEFORE the abort (the `persist`
-	// filter only withholds the assistant role, never toolResult or user).
+	// filter withholds the assistant role and a call the abort cut short, never
+	// a finished toolResult or the user; see the next block).
 	assert.deepEqual(roles, ["user"], `stored roles after abort: ${JSON.stringify(roles)}`);
 	console.log("PASS the aborted assistant message never reaches sessionStore; only the completed user turn does");
+}
+
+// --- abort mid-tool, by session.abort() or by the caller's signal (the routes' Stop and disconnect): the call the
+// abort cut short stays unfinished (no tool.done, no stored toolResult), no further model request is made, and the
+// store keeps the user turn with exactly one aborted record ---
+for (const via of ["session", "signal"]) {
+	const sessionStore = createSessionStore(mkdtempSync(join(tmpdir(), "cozyclay-agent-runner-errors-tool-abort-")));
+	const models = createModels();
+	const faux = fauxProvider({ provider: "faux", models: [{ id: "scripted", name: "Scripted", input: ["text", "image"] }] });
+	models.setProvider(faux.provider);
+	const calls = installScripts(faux, [
+		fauxAssistantMessage([fauxToolCall("slow_tool", {})], { stopReason: "toolUse" }),
+		fauxAssistantMessage([fauxText("never requested")]),
+	]);
+	const tools = [{
+		name: "slow_tool",
+		parameters: { type: "object", properties: {}, additionalProperties: false },
+		// Settles successfully once stopped: a result that arrives after the abort must not count.
+		handler: async (_args, { signal }) => { if (!signal.aborted) await once(signal, "abort"); return { ok: true }; },
+	}];
+	const runner = createAgentRunner({ models, tools, sessionStore, clock: () => Date.now() });
+	const controller = new AbortController();
+	const frames = [];
+	try {
+		const session = await runner.openSession(`errors-tool-abort-${via}`, { surface: "workflow" });
+		for await (const frame of session.start({ text: "run the slow tool", model: "faux/scripted", ...(via === "signal" ? { signal: controller.signal } : {}) })) {
+			frames.push(frame);
+			if (frame.type === "tool.start") { if (via === "session") await session.abort("test"); else controller.abort(); }
+		}
+	} finally { await runner.close(); }
+	const stored = sessionStore.read(`errors-tool-abort-${via}`);
+	assert.ok(frames.some((frame) => frame.type === "tool.start") && !frames.some((frame) => frame.type === "tool.done"), `${via}: ${JSON.stringify(frames)}`);
+	assert.deepEqual(frames.slice(-2).map((frame) => frame.code ?? frame.type), ["aborted", "done"], `${via}: ${JSON.stringify(frames)}`);
+	assert.equal(calls.length, 1, `${via}: no model request after the abort`);
+	assert.deepEqual((stored?.history || []).map((message) => message.role), ["user"], `${via}: ${JSON.stringify(stored?.history)}`);
+	assert.deepEqual((stored?.turnErrors || []).map((record) => record.code), ["aborted"], `${via}: ${JSON.stringify(stored?.turnErrors)}`);
+	console.log(`PASS an abort mid-tool by ${via === "session" ? "session.abort()" : "the caller's signal"} leaves the call unfinished and stores the user turn with one aborted record`);
 }
 
 // --- status-first classification: a structured numeric status wins over the
