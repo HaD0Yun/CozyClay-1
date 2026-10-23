@@ -97,8 +97,11 @@ await check("/agent/logins lists pi's methods; ChatGPT stays CozyClay's sign-in;
 	assert.equal(status, 200);
 	const byId = Object.fromEntries(body.providers.map((entry) => [entry.id, entry]));
 	assert.deepEqual(byId["openai-codex"].methods.map((method) => method.type), ["chatgpt"]);
-	assert.deepEqual(byId.anthropic.methods.map((method) => method.type), ["oauth", "api_key"]);
-	assert.equal(byId.anthropic.methods[0].subscription, true);
+	// the API-key lane hides pi's anthropic OAuth: spending a subscription token against the API
+	// directly is the refused path; the subscription sign-in lives on anthropic-subscription.
+	assert.deepEqual(byId.anthropic.methods.map((method) => method.type), ["api_key"]);
+	assert.deepEqual(byId["anthropic-subscription"].methods.map((method) => method.type), ["oauth"]);
+	assert.equal(byId["anthropic-subscription"].methods[0].subscription, true);
 	assert.deepEqual(byId["fake-cloud"].methods.map((method) => method.type), ["oauth", "api_key"]);
 	assert.ok(byId.cliproxy.methods.some((method) => method.type === "api_key"));
 	// connected providers come first (ambient ones too, e.g. an AWS profile on this machine), then subscriptions, then api keys

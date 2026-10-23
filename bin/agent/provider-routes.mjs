@@ -82,6 +82,7 @@ export function createProviderRoutes({ auth, getModels, onChange, json, readBody
 		let key;
 		if (req.method === "PUT") {
 			if (id === "openai-codex") { json(res, 400, { error: "Use ChatGPT sign-in for OpenAI Codex." }); return true; }
+			if (id === "anthropic-subscription") { json(res, 400, { error: "Use the Claude sign-in; this provider takes no API key." }); return true; }
 			try {
 				const value = await readBody(req);
 				if (typeof value?.key !== "string" || !value.key.trim()) throw new Error("Invalid key.");
