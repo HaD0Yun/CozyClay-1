@@ -120,7 +120,7 @@ assert.equal(JSON.stringify(fauxMain.calls[0].messages).includes(png), false);
 	const unknownDone = unknownEvents.find((event) => event.type === "tool.done");
 	assert.equal(unknownDone?.callId, "u1");
 	assert.equal(unknownDone?.ok, false);
-	assert.match(unknownDone?.error || "", /unknown_tool.*unavailable/i);
+	assert.match(unknownDone?.error || "", /unknown_tool.*not found/i);
 	assert.equal(unknownEvents.at(-1).type, "done");
 	const errorResult = unknown.calls[1]?.messages?.find((message) => message.role === "toolResult" && message.toolCallId === "u1");
 	assert.equal(errorResult?.isError, true, "the faux model receives an error tool result for the unknown call");
@@ -321,11 +321,13 @@ try {
 		assert.equal(await resolveEffort(astra, "none"), "off", "none reaches pi as off even on a model whose thinkingLevelMap has no off");
 		assert.equal(await resolveEffort(astra, "ultra"), "max", "ultra is accepted on input and clamped to pi's top level, which astra supports");
 		assert.equal(await resolveEffort(astra, "medium"), "medium", "an effort the model already supports passes through unchanged");
-		// gpt-5.5 supports "off" and everything up to "xhigh" but not "max": it
+		// gpt-5.5 supported "off" and everything up to "xhigh" but not "max": it
 		// exercises the ordinary none→off mapping and clamping an effort the
 		// model lacks (xhigh's neighbour, "max") down to its highest supported
 		// level — read from getSupportedThinkingLevels, not a hardcoded string.
-		const gpt55 = base.getModel("openai-codex", "gpt-5.5");
+		// pi 1.4.0's Codex catalogue no longer has it (or any model without max),
+		// so the case runs on a Codex model with gpt-5.5's thinking levels.
+		const gpt55 = { ...base.getModel("openai-codex", "gpt-6-luna"), id: "gpt-5.5", thinkingLevelMap: { xhigh: "xhigh", minimal: "low" } };
 		const gpt55Levels = getSupportedThinkingLevels(gpt55);
 		assert.ok(gpt55Levels.includes("off") && !gpt55Levels.includes("max"), "gpt-5.5 is the fixture this assertion needs: off supported, max not");
 		const gpt55Highest = gpt55Levels.at(-1);

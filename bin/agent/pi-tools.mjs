@@ -31,6 +31,19 @@ function recoveryHint(error) {
 	return ` (${recovery.action}${recovery.retryAllowed === false ? ", do not retry" : ", retry allowed"})`;
 }
 
+/** The handler's result, unless the run is stopped first: then the call ends at once as aborted, as it did under pi's
+ * removed AgentHarness. The handler may still settle in the background; its result no longer counts. */
+function untilAborted(pending, signal) {
+	const aborted = () => Object.assign(new Error("Stopped before this call finished."), { name: "AbortError", code: "ABORTED" });
+	if (!signal) return pending;
+	if (signal.aborted) return Promise.reject(aborted());
+	return new Promise((resolve, reject) => {
+		const onAbort = () => reject(aborted());
+		signal.addEventListener("abort", onAbort, { once: true });
+		pending.then(resolve, reject).finally(() => signal.removeEventListener("abort", onAbort));
+	});
+}
+
 function formatToolError(error) {
 	const code = error?.code || "BACKEND_UNAVAILABLE";
 	const message = error?.message || "Tool execution failed.";
@@ -48,21 +61,17 @@ export function toAgentTools(tools, { emit, signal, labels = STUDIO_TOOL_LABELS 
 			parameters,
 			// Before pi's own check: array texts parsed, unknown fields named (tool-arguments.mjs).
 			prepareArguments: toolArgumentPreparer(tool.name, schema),
-			// pi's low-level `Agent` calls `execute(id, params, signal, onUpdate)`;
-			// pi's `AgentHarness` calls `execute(id, params, onUpdate, toolContext,
-			// invocation, context)` where `context.abortSignal` is the REAL abort
-			// signal (dist/harness/execution/tools.js:62-66). Accept both shapes:
-			// prefer `context.abortSignal`, else fall back to an AbortSignal found
-			// positionally in argument 3 (the low-level path), else the adapter's
-			// own fallback signal.
-			execute: async (toolCallId, params, third, toolContext, invocation, context) => {
-				const executeSignal = context?.abortSignal ?? (third instanceof AbortSignal ? third : undefined) ?? signal;
+			// pi's `Agent` calls `execute(id, params, signal, onUpdate)`, where `signal`
+			// is the REAL run abort signal (session.abort() fires it); a caller that
+			// passes none gets the adapter's own fallback signal.
+			execute: async (toolCallId, params, runSignal) => {
+				const executeSignal = runSignal ?? signal;
 				if (!Value.Check(parameters, params)) {
 					const first = [...Value.Errors(parameters, params)][0];
 					throw Object.assign(new Error(`Invalid arguments for ${tool.name}${first ? `: ${first.keyword}: ${first.message}` : "."}`), { code: "INVALID_ARGUMENT" });
 				}
 				try {
-					const result = await tool.handler(params, { signal: executeSignal, toolCallId, emit });
+					const result = await untilAborted(Promise.resolve(tool.handler(params, { signal: executeSignal, toolCallId, emit })), executeSignal);
 					const details = publicResult(result);
 					const image = result && typeof result === "object" && !Array.isArray(result) && result.dataUrl ? dataUrlImage(result.dataUrl) : null;
 					const content = [{ type: "text", text: resultText(details) }];
