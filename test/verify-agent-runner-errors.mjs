@@ -15,7 +15,7 @@ import { fauxProvider, fauxAssistantMessage, fauxText } from "@earendil-works/pi
 import { fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
 import { createAgentRunner, classifyError } from "../bin/agent/agent-runner.mjs";
 import { createSessionStore, transcriptFromHistory } from "../bin/agent/session-store.mjs";
-import { createModels as createAgentModels } from "../bin/agent/providers.mjs";
+import { createModels as createAgentModels, loadProvider } from "../bin/agent/providers.mjs";
 
 process.env.COZYCLAY_AGENT_SESSIONS_DIR = mkdtempSync(join(tmpdir(), "cozyclay-agent-runner-errors-"));
 
@@ -650,6 +650,41 @@ for (const token of ["AIza-secret-0123456789abcdefghijk", "sk-or-secret", "sk-an
 	expect("the tool's '403' text produces a tool.done failure frame, never a run-level error frame", toolDone && toolDone.ok === false, JSON.stringify(frames));
 	expect("the tool failure keeps the CODE: message format instead of being reclassified as code:'unauthorized'", typeof toolDone?.error === "string" && toolDone.error.startsWith("BACKEND_UNAVAILABLE:"), JSON.stringify(toolDone));
 	expect("no run-level error frame was produced for a tool failure that the assistant recovered from", frames.every((f) => f.type !== "error"), JSON.stringify(frames));
+}
+
+// --- provider attribution: the runner's requests carry no pi attribution headers ---
+// pi-agent-core's Agent attributes requests to pi by default (OpenRouter, NVIDIA NIM and OpenCode headers);
+// pi 0.99's runner sent none, and these are CozyClay's requests.
+{
+	const seen = [];
+	const fixture = createServer(async (req, res) => {
+		for await (const _chunk of req) { /* drain the request */ }
+		seen.push({ title: req.headers["x-openrouter-title"] ?? null, referer: req.headers["http-referer"] ?? null });
+		res.writeHead(200, { "content-type": "text/event-stream" });
+		res.write(`data: ${JSON.stringify({ id: "c1", object: "chat.completion.chunk", choices: [{ index: 0, delta: { role: "assistant", content: "hi" }, finish_reason: null }] })}\n\n`);
+		res.write(`data: ${JSON.stringify({ id: "c1", object: "chat.completion.chunk", choices: [{ index: 0, delta: {}, finish_reason: "stop" }], usage: { prompt_tokens: 3, completion_tokens: 1, total_tokens: 4 } })}\n\n`);
+		res.end("data: [DONE]\n\n");
+	});
+	const listening = once(fixture, "listening", { signal: AbortSignal.timeout(5000) });
+	fixture.listen(0, "127.0.0.1"); await listening;
+	const env = { OPENROUTER_API_KEY: "sk-or-fixture" };
+	const models = await createAgentModels({ auth: { readStored: () => undefined }, keys: { readKeys: () => ({}) }, env });
+	models.setProvider(await loadProvider("openrouter", { baseUrl: `http://127.0.0.1:${fixture.address().port}/api/v1`, env }));
+	const model = models.getModels("openrouter").find((entry) => entry.api === "openai-completions");
+	const runner = createAgentRunner({ models });
+	let frames;
+	try {
+		const session = await runner.openSession("errors-attribution");
+		frames = await collect(session, { text: "hi", model: `openrouter/${model.id}` });
+	} finally {
+		await runner.close();
+		const closed = once(fixture, "close", { signal: AbortSignal.timeout(5000) });
+		fixture.close(); fixture.closeAllConnections(); await closed;
+	}
+	assert.deepEqual(frames.filter((frame) => frame.type === "error"), [], JSON.stringify(frames));
+	assert.equal(frames.at(-1)?.type, "done", JSON.stringify(frames));
+	assert.deepEqual(seen, [{ title: null, referer: null }], "one request, with no provider attribution header naming pi");
+	console.log("PASS the runner's provider requests carry no pi attribution headers");
 }
 
 process.exit(failures === 0 ? 0 : 1);

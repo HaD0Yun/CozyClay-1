@@ -413,6 +413,9 @@ export function createAgentRunner({ models: suppliedModels, sessionStore, tools 
 					onPayload: (payload, model) => (model?.api === "anthropic-messages" ? withAnthropicCacheBreakpoints(payload, model) : undefined),
 					onResponse: (response) => { if (state.active && response?.headers) state.active.lastResponseHeaders = response.headers; },
 					sessionId,
+					// pi-agent-core's Agent attributes requests to pi (OpenRouter, NVIDIA NIM and OpenCode headers); these are
+					// CozyClay's requests, and pi 0.99 sent no attribution, so none is sent.
+					identity: { attribution: null },
 					toolExecution: "sequential",
 					steeringMode: "one-at-a-time",
 					maxRetryDelayMs: RETRY_MAX_DELAY_MS,
