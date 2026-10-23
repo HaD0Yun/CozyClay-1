@@ -206,7 +206,8 @@ const toolCommands = () => commands.filter(command => command.name !== "resolve_
 	assert.deepEqual(invokedCalls.slice(-5), Array(5).fill("script-1"), "the bus gives each action context.callId");
 	assert.ok(!JSON.stringify(result).includes("dataUrl"), "no dataUrl anywhere in the script result");
 	assert.ok(!raw.includes("data:image/"), "no image bytes anywhere in the SSE stream");
-	assert.ok(!JSON.stringify(modelCalls.at(-1).messages).includes("data:image/"), "no image bytes reach the model");
+	// the system message holds the prompt and tool declarations, which name data:image/ URLs in prose
+	assert.ok(!JSON.stringify(modelCalls.at(-1).messages.filter(message => message.role !== "system")).includes("data:image/"), "no image bytes reach the model");
 	const placed = objects.read().slice(preTurn.objects.length);
 	assert.equal(placed.length, 5);
 	assert.ok(placed.every(object => Math.abs(Math.hypot(object.x, object.z) - 3) < 0.01), "positions were computed on a 3 m circle");

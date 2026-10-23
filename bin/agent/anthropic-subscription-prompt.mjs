@@ -66,7 +66,8 @@ export const CONTINUE_TURN_INSTRUCTION = 'The above is the conversation history 
 export function buildPromptBlocks(context) {
 	const blocks = [];
 	const pushText = (text) => blocks.push({ type: "text", text });
-	const messages = context.messages ?? [];
+	// the system messages carry the prompt and tools, which reach the SDK through its own options
+	const messages = (context.messages ?? []).filter((message) => message.role !== "system");
 	const finalMessage = messages.at(-1);
 	const finalUserMessage = finalMessage?.role === "user" ? finalMessage : undefined;
 	const history = finalUserMessage ? messages.slice(0, -1) : messages;

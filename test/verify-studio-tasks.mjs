@@ -25,6 +25,7 @@ import { randomUUID } from "node:crypto";
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { getCurrentSystemPrompt } from "@earendil-works/pi-ai";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
 import { createTaskBoard, taskHeader, TASK_LIMITS } from "../bin/agent/studio-tasks.mjs";
 import { doneClaimCorrection, mainContextText } from "../bin/agent/main-agent.mjs";
@@ -341,11 +342,12 @@ const { MAIN_SYSTEM_PROMPT } = await import("../bin/agent/main-prompt.mjs");
 		workspaceId: () => f.host().workspaceId, resolveWorkspace: () => "handle-1", connected: true, workspaceHandles: ["handle-1"],
 	};
 	const fakeModel = createFakeModel();
-	const said = (context, text) => JSON.stringify(context.messages).includes(text);
+	// the conversation only: the system message (prompt and tool declarations) is not something anyone said
+	const said = (context, text) => JSON.stringify(context.messages.filter(message => message.role !== "system")).includes(text);
 	const toolResults = context => context.messages.filter(message => message.role === "toolResult").length;
 	let mainTurns = 0;
 	const step = async context => {
-		if (context.systemPrompt === MAIN_SYSTEM_PROMPT) {
+		if (getCurrentSystemPrompt(context.messages) === MAIN_SYSTEM_PROMPT) {
 			const last = context.messages.at(-1);
 			if (last.role === "user" && said({ messages: [last] }, "Task events arrived")) { mainTurns++; return fauxAssistantMessage([fauxText("두 작업이 모두 끝났어요.")]); }
 			if (last.role === "user") return fauxAssistantMessage([
@@ -427,7 +429,7 @@ async function reloadScenario({ lostWith, reloadKeeps }) {
 	const notes = [], fakeModel = createFakeModel();
 	const lastUser = context => JSON.stringify([...context.messages].reverse().find(message => message.role === "user") ?? {});
 	const step = async context => {
-		if (context.systemPrompt === MAIN_SYSTEM_PROMPT) {
+		if (getCurrentSystemPrompt(context.messages) === MAIN_SYSTEM_PROMPT) {
 			const last = context.messages.at(-1);
 			if (last.role === "user" && lastUser(context).includes("Move the cube")) return fauxAssistantMessage([fauxToolCall("dispatch_task", { title: "cube", instructions: `Move ${cube} to x 1, then to x 2.`, scope: [`object:${cube}`] }, { id: `m-${randomUUID()}` })]);
 			return fauxAssistantMessage([fauxText("알겠어요.")]);

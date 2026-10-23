@@ -16,6 +16,7 @@ import { randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { getCurrentSystemPrompt } from "@earendil-works/pi-ai";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
 import { createAgentHandler } from "../bin/agent/agent-routes.mjs";
 import { buildSupervisorInput, parseSupervisorVerdict, shouldSupervise, SUPERVISOR_RUBRIC, validateFixes } from "../bin/agent/supervisor.mjs";
@@ -121,7 +122,7 @@ const ACTION_SCHEMAS = [
 
 // --- (b) the route ------------------------------------------------------------
 const VERDICT = { items: [{ text: "의자 배치", status: "done", evidence: "receipt-1 chair" }], issues: [{ severity: "blocker", kind: "honesty", text: "검증 주장", evidence: "no verify_result" }, { severity: "concern", kind: "framing", text: "의자가 잘림", evidence: "clipped true" }], summary: "의자는 놓였지만 보고가 과장됨." };
-const isSupervisorCall = context => context.systemPrompt === SUPERVISOR_RUBRIC;
+const isSupervisorCall = context => getCurrentSystemPrompt(context.messages) === SUPERVISOR_RUBRIC;
 
 async function fixture({ readOnly = false, supervisorReply = JSON.stringify(VERDICT), actionIndex } = {}) {
 	const log = [], commands = [], modelCalls = [];
@@ -216,7 +217,7 @@ let authoredTypes;
 	assert.ok(Number.isInteger(note.elapsedMs) && note.elapsedMs >= 0);
 	const review = f.modelCalls.find(call => call.supervisor);
 	assert.equal(review.options.reasoning, "high", "the review runs at reasoning effort high");
-	const parts = review.context.messages[0].content;
+	const parts = review.context.messages.find(message => message.role === "user").content;
 	const digest = parts.find(part => part.type === "text").text;
 	assert.ok(digest.includes("의자") && digest.includes("receipt-1") && digest.includes("\"shotId\":\"shot-2\""), "the digest carries the request, the receipt and the geometry facts");
 	assert.equal(parts.filter(part => part.type === "image").length, 3, "current frame, top view and the created shot's frame");
@@ -334,7 +335,7 @@ let authoredTypes;
 	assert.equal(f.modelCalls.filter(call => !call.supervisor).length, 2, "the sidecar starts no turn of its own");
 	const schemaRead = f.commands.find(command => command.name === "inspect_studio" && command.args.scope === "actions");
 	assert.deepEqual(schemaRead.args.ids, ["character.setPose", "shot.frame", "object.update"], "only the pre-selected actions the index declares are read");
-	const digest = f.modelCalls.find(call => call.supervisor).context.messages[0].content.find(part => part.type === "text").text;
+	const digest = f.modelCalls.find(call => call.supervisor).context.messages.find(message => message.role === "user").content.find(part => part.type === "text").text;
 	assert.ok(digest.includes("\nACTIONS: ") && digest.includes("\nACTION SCHEMAS: "), "the digest carries ACTIONS and ACTION SCHEMAS");
 	for (const id of ["character.setPose", "shot.frame", "object.update", "scene.rename"]) assert.ok(digest.includes(id), `the digest lists ${id}`);
 	assert.ok(digest.includes("\"required\":[\"characterId\",\"posture\"]"), "the digest carries the pre-selected schemas");

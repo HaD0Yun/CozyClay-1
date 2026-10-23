@@ -10,8 +10,9 @@ const SOURCE_EXTENSIONS = new Set([".js", ".jsx", ".mjs", ".cjs"]);
 const ROOT_DEPENDENCY_ALLOWLIST = Object.freeze({
 	// the anthropic-subscription lane spawns the official Claude Code binary through the SDK
 	"@anthropic-ai/claude-agent-sdk": "^0.3.306",
-	"@earendil-works/pi-agent-core": "0.85.1",
-	"@earendil-works/pi-ai": "0.85.1",
+	// 0.99.2 is the last pi line that keeps AgentHarness, which agent-runner.mjs is built on
+	"@earendil-works/pi-agent-core": "0.99.2",
+	"@earendil-works/pi-ai": "0.99.2",
 	"@earendil-works/pi-codemode": "1.1.0",
 	// JSON Schema → Zod shape for the SDK's tool() definitions (SDK already depends on zod)
 	zod: "^4.6.7",

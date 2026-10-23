@@ -212,8 +212,8 @@ assert.equal(JSON.stringify(fauxMain.calls[0].messages).includes(png), false);
 
 	await post({ sessionId: "attach-workflow", text: "describe this", model: "faux/scripted", attachments: [{ dataUrl: png }] });
 	const workflowInput = workflowFaux.calls.at(-1)?.messages ?? [];
-	const workflowImageAt = workflowInput.findIndex((item) => item.content?.some((part) => part.type === "image"));
-	const workflowTextAt = workflowInput.findIndex((item) => item.content?.some((part) => part.type === "text" && part.text.includes("describe this")));
+	const workflowImageAt = workflowInput.findIndex((item) => item.role === "user" && item.content?.some((part) => part.type === "image"));
+	const workflowTextAt = workflowInput.findIndex((item) => item.role === "user" && item.content?.some((part) => part.type === "text" && part.text.includes("describe this")));
 	assert.ok(workflowImageAt !== -1 && workflowImageAt < workflowTextAt, `the workflow turn carries the attachment too: ${JSON.stringify(workflowInput).slice(0, 300)}`);
 	assert.match(workflowInput[workflowImageAt].content[0].text, /User attachment 1/, "an unnamed attachment is named by its position");
 	const badWorkflow = await fetch(`${attachOrigin}/agent/turn`, { method: "POST", headers: { "content-type": "application/json", origin: attachOrigin }, body: JSON.stringify({ sessionId: "attach-bad", text: "hi", attachments: [{ dataUrl: "https://example.test/a.png" }] }) });
@@ -321,17 +321,17 @@ try {
 		assert.equal(await resolveEffort(astra, "none"), "off", "none reaches pi as off even on a model whose thinkingLevelMap has no off");
 		assert.equal(await resolveEffort(astra, "ultra"), "max", "ultra is accepted on input and clamped to pi's top level, which astra supports");
 		assert.equal(await resolveEffort(astra, "medium"), "medium", "an effort the model already supports passes through unchanged");
-		// gpt-5.4 supports "off" and everything up to "xhigh" but not "max": it
+		// gpt-5.5 supports "off" and everything up to "xhigh" but not "max": it
 		// exercises the ordinary none→off mapping and clamping an effort the
 		// model lacks (xhigh's neighbour, "max") down to its highest supported
 		// level — read from getSupportedThinkingLevels, not a hardcoded string.
-		const gpt54 = base.getModel("openai-codex", "gpt-5.4");
-		const gpt54Levels = getSupportedThinkingLevels(gpt54);
-		assert.ok(gpt54Levels.includes("off") && !gpt54Levels.includes("max"), "gpt-5.4 is the fixture this assertion needs: off supported, max not");
-		const gpt54Highest = gpt54Levels.at(-1);
-		assert.equal(await resolveEffort(gpt54, "none"), "off", "the wire name none maps to pi's off");
-		assert.equal(await resolveEffort(gpt54, "ultra"), gpt54Highest, "ultra is accepted on input, clamped to max, then clamped again to what this model supports");
-		assert.equal(await resolveEffort(gpt54, "max"), gpt54Highest, "an effort a model lacks is clamped down to what it supports");
+		const gpt55 = base.getModel("openai-codex", "gpt-5.5");
+		const gpt55Levels = getSupportedThinkingLevels(gpt55);
+		assert.ok(gpt55Levels.includes("off") && !gpt55Levels.includes("max"), "gpt-5.5 is the fixture this assertion needs: off supported, max not");
+		const gpt55Highest = gpt55Levels.at(-1);
+		assert.equal(await resolveEffort(gpt55, "none"), "off", "the wire name none maps to pi's off");
+		assert.equal(await resolveEffort(gpt55, "ultra"), gpt55Highest, "ultra is accepted on input, clamped to max, then clamped again to what this model supports");
+		assert.equal(await resolveEffort(gpt55, "max"), gpt55Highest, "an effort a model lacks is clamped down to what it supports");
 		assert.deepEqual(EFFORT_LEVELS, REASONING_EFFORTS, "the frozen wire vocabulary providers.mjs exports matches the turn route's own REASONING_EFFORTS");
 		console.log("PASS resolveModel/resolveEffort: unknown model id rejects, effort maps and clamps through clampThinkingLevel");
 	} finally {
@@ -474,7 +474,7 @@ server.close();
 	const secondEnvelope = { ...envelopeFixture(), turnId: "00000000-0000-4000-8000-000000000003", text: "continue this" };
 	const secondOrigin = `http://127.0.0.1:${second.studioServer.address().port}`;
 	await fetch(`${secondOrigin}/agent/turn`, { method: "POST", headers: { "content-type": "application/json", origin: secondOrigin }, body: JSON.stringify(secondEnvelope) }).then((response) => response.text());
-	assert.equal(studioFaux.calls[1].messages[0].role, "user");
+	assert.equal(studioFaux.calls[1].messages.find((item) => item.role !== "system").role, "user");
 	assert.equal(studioFaux.calls[1].messages.filter((item) => item.role === "user").length, 2, "a fresh route instance sends prior history to pi");
 	const listed = await fetch(`${secondOrigin}/agent/sessions?surface=studio`).then((response) => response.json());
 	assert.equal(listed.sessions[0].sessionId, firstEnvelope.sessionId, "Studio sessions list newest metadata first");

@@ -1,8 +1,9 @@
 // Verifies the anthropic-subscription lane without a real Anthropic account: the SDK boundary is
-// faked, so what is checked is the contract — query options (token injection, executable, deny
+// faked, so what is checked is the contract (contexts go through pi's normalizeContext, as pi hands them to providers) — query options (token injection, executable, deny
 // hooks, preset system prompt, custom tools), stream-event translation (text, tool call, usage),
 // history replay, and graceful failure when no credential resolved.
 import assert from "node:assert/strict";
+import { normalizeContext } from "@earendil-works/pi-ai";
 import { createSubscriptionStream } from "../bin/agent/anthropic-subscription-stream.mjs";
 import { anthropicSubscriptionProvider, SUBSCRIPTION_PROVIDER_ID } from "../bin/agent/anthropic-subscription.mjs";
 import { buildPromptBlocks, RESPOND_TO_USER_INSTRUCTION, CONTINUE_TURN_INSTRUCTION } from "../bin/agent/anthropic-subscription-prompt.mjs";
@@ -56,11 +57,11 @@ function fakeQuery(messages) {
 		env: { PATH: "/usr/bin", ANTHROPIC_API_KEY: "sk-ant-should-not-leak", CLAUDE_CODE_OAUTH_TOKEN_2: "stale" },
 	});
 	const events = [];
-	const eventStream = await stream(model, {
+	const eventStream = await stream(model, normalizeContext({
 		systemPrompt: "You are a previs assistant.",
 		messages: [{ role: "user", content: "say hi", timestamp: 1 }],
 		tools: [],
-	}, { apiKey: "access-token-123" });
+	}), { apiKey: "access-token-123" });
 	for await (const event of eventStream) events.push(event);
 	const done = events.at(-1);
 	assert.equal(done.type, "done");
@@ -111,11 +112,11 @@ function fakeQuery(messages) {
 		description: "Add a primitive to the scene",
 		parameters: { type: "object", properties: { shape: { type: "string" }, size: { type: "number" } }, required: ["shape"] },
 	};
-	const eventStream = await stream(model, {
+	const eventStream = await stream(model, normalizeContext({
 		systemPrompt: "s",
 		messages: [{ role: "user", content: "add a box", timestamp: 1 }],
 		tools: [piTool],
-	}, { apiKey: "tok" });
+	}), { apiKey: "tok" });
 	let done;
 	for await (const event of eventStream) if (event.type === "done") done = event;
 	assert.equal(done.reason, "toolUse");
@@ -139,7 +140,7 @@ function fakeQuery(messages) {
 		resolveExecutable: () => "/fake/claude",
 		env: {},
 	});
-	const eventStream = await stream(model, { systemPrompt: "s", messages: [{ role: "user", content: "hi", timestamp: 1 }], tools: [] }, { apiKey: "tok", reasoning: "high" });
+	const eventStream = await stream(model, normalizeContext({ systemPrompt: "s", messages: [{ role: "user", content: "hi", timestamp: 1 }], tools: [] }), { apiKey: "tok", reasoning: "high" });
 	await eventStream.result();
 	assert.deepEqual(seen.options.thinking, { type: "adaptive", display: "summarized" });
 	assert.equal(seen.options.effort, "high");
@@ -148,7 +149,7 @@ function fakeQuery(messages) {
 // --- no credential → graceful error, never a throw ---
 {
 	const stream = createSubscriptionStream({ loadSdk: async () => fakeSdk(fakeQuery(textTurn)), resolveExecutable: () => "/fake/claude", env: {} });
-	const result = await (await stream(model, { systemPrompt: "s", messages: [], tools: [] }, {})).result();
+	const result = await (await stream(model, normalizeContext({ systemPrompt: "s", messages: [], tools: [] }), {})).result();
 	assert.equal(result.stopReason, "error");
 	assert.match(result.errorMessage, /sign in/i);
 }
@@ -157,7 +158,7 @@ function fakeQuery(messages) {
 {
 	const failTurn = [{ type: "result", subtype: "error_max_turns", usage: { input_tokens: 1, output_tokens: 1 } }];
 	const stream = createSubscriptionStream({ loadSdk: async () => fakeSdk(fakeQuery(failTurn)), resolveExecutable: () => "/fake/claude", env: {} });
-	const result = await (await stream(model, { systemPrompt: "s", messages: [{ role: "user", content: "hi", timestamp: 1 }], tools: [] }, { apiKey: "tok" })).result();
+	const result = await (await stream(model, normalizeContext({ systemPrompt: "s", messages: [{ role: "user", content: "hi", timestamp: 1 }], tools: [] }), { apiKey: "tok" })).result();
 	assert.equal(result.stopReason, "error");
 	assert.match(result.errorMessage, /error_max_turns/);
 }
@@ -184,7 +185,7 @@ function fakeQuery(messages) {
 		resolveExecutable: () => "/fake/claude",
 		env: {},
 	});
-	const eventStream = await stream(model, { systemPrompt: "s", messages: [{ role: "user", content: "hi", timestamp: 1 }], tools: [] }, { apiKey: "tok", signal: controller.signal });
+	const eventStream = await stream(model, normalizeContext({ systemPrompt: "s", messages: [{ role: "user", content: "hi", timestamp: 1 }], tools: [] }), { apiKey: "tok", signal: controller.signal });
 	await started;
 	controller.abort();
 	const result = await eventStream.result();
@@ -192,16 +193,18 @@ function fakeQuery(messages) {
 	assert.equal(interrupted, true);
 }
 
-// --- prompt replay: history labels, tool results, final user message, image passthrough ---
+// --- prompt replay: history labels, tool results, final user message, image passthrough; the system message stays out ---
 {
-	const blocks = buildPromptBlocks({
+	const blocks = buildPromptBlocks(normalizeContext({
+		systemPrompt: "SYSTEM PROMPT TEXT",
+		tools: [{ name: "add_object", description: "Add a primitive", parameters: { type: "object", properties: {} } }],
 		messages: [
 			{ role: "user", content: "make a scene", timestamp: 1 },
 			{ role: "assistant", content: [{ type: "text", text: "sure" }, { type: "toolCall", id: "t1", name: "add_object", arguments: { shape: "box" } }], timestamp: 2 },
 			{ role: "toolResult", toolCallId: "t1", toolName: "add_object", content: [{ type: "text", text: "added obj-1" }], timestamp: 3 },
 			{ role: "user", content: [{ type: "text", text: "now blue" }, { type: "image", mimeType: "image/png", data: "aGVsbG8=" }], timestamp: 4 },
 		],
-	});
+	}));
 	// blocks are split at content boundaries, so check the joined stream of text
 	const text = blocks.filter((block) => block.type === "text").map((block) => block.text).join("");
 	assert.ok(text.includes("<conversation_history>"));
@@ -212,6 +215,8 @@ function fakeQuery(messages) {
 	assert.ok(text.includes("added obj-1"));
 	assert.ok(text.includes(RESPOND_TO_USER_INSTRUCTION));
 	assert.ok(text.includes("now blue"));
+	assert.ok(!text.includes("SYSTEM PROMPT TEXT"), "the system prompt reaches the SDK as its own option, never as history");
+	assert.ok(text.startsWith("<conversation_history>\nUSER:"), "the history opens with the first user turn");
 	const image = blocks.find((block) => block.type === "image");
 	assert.deepEqual(image.source, { type: "base64", media_type: "image/png", data: "aGVsbG8=" });
 }

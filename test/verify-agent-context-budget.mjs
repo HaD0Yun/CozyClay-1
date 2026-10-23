@@ -6,6 +6,7 @@
 // static actionIndex from an <actions> block in the system prompt. The done
 // frame carries the turn's accumulated provider usage.
 import assert from "node:assert/strict";
+import { getCurrentSystemPrompt } from "@earendil-works/pi-ai";
 import * as runnerModule from "../bin/agent/agent-runner.mjs";
 import { encodeStudioContext, studioActionIndex } from "../src/studio-agent-context.js";
 import { createFakeModel } from "./fixtures/fake-model.mjs";
@@ -46,6 +47,8 @@ await runner.close();
 
 assert.equal(fake.calls.length, 6, "two provider requests per turn");
 const request = fake.calls.at(-1);
+// pi hands providers a TranscriptContext: the system prompt is replayed from its system messages
+const systemPrompt = getCurrentSystemPrompt(request.messages);
 const userParts = (messages) => messages.filter((message) => message.role === "user").flatMap((message) => message.content).filter((part) => part.type === "text");
 const bytes = (parts) => parts.reduce((total, part) => total + Buffer.byteLength(part.text), 0);
 const toolResultParts = (messages) => messages.filter((message) => message.role === "toolResult").flatMap((message) => message.content).filter((part) => part.type === "text");
@@ -54,7 +57,7 @@ const toolResultParts = (messages) => messages.filter((message) => message.role 
 const raw = stored.slice(0, -1);
 console.log(`turn-3 request user text parts: ${bytes(userParts(raw))} bytes before the hook, ${bytes(userParts(request.messages))} bytes after`);
 console.log(`turn-3 request user + toolResult text parts: ${bytes([...userParts(raw), ...toolResultParts(raw)])} bytes before the hook, ${bytes([...userParts(request.messages), ...toolResultParts(request.messages)])} bytes after`);
-console.log(`turn-3 system prompt: ${Buffer.byteLength(request.systemPrompt)} bytes after the hook`);
+console.log(`turn-3 system prompt: ${Buffer.byteLength(systemPrompt)} bytes after the hook`);
 
 const parts = userParts(request.messages);
 assert.equal(parts.filter((part) => part.text.startsWith("<studio-context>\n{")).length, 1, "exactly one full studio context reaches the provider");
@@ -62,14 +65,14 @@ assert.equal(parts.filter((part) => part.text === "<studio-context superseded/>"
 assert.ok(parts.every((part) => !part.text.includes("actionIndex")), "no user text part carries actionIndex");
 const latest = JSON.parse(/^<studio-context>\n(.*)\n<\/studio-context>$/s.exec(parts.find((part) => part.text.startsWith("<studio-context>\n{")).text)[1]);
 assert.equal(latest.revision.scene, 43, "the kept studio context is the latest turn's");
-assert.ok(request.systemPrompt.includes("<actions>"), "the system prompt carries the actions block");
-const actions = JSON.parse(/\n<actions>\n(.*)\n<\/actions>$/s.exec(request.systemPrompt)[1]);
+assert.ok(systemPrompt.includes("<actions>"), "the system prompt carries the actions block");
+const actions = JSON.parse(/\n<actions>\n(.*)\n<\/actions>$/s.exec(systemPrompt)[1]);
 assert.deepEqual(actions, actionIndex, "the actions block is the context's actionIndex");
-for (const { id } of actionIndex) assert.ok(request.systemPrompt.includes(id), `the system prompt names ${id}`);
+for (const { id } of actionIndex) assert.ok(systemPrompt.includes(id), `the system prompt names ${id}`);
 // The motion reference sits after the rules and before the actions, and the prompt prefix is the same bytes on every request.
 const reference = await motionReference();
-assert.ok(request.systemPrompt.startsWith(`${STUDIO_SYSTEM_PROMPT}\n\n${reference}\n<actions>\n`), "rules, then the motion reference, then the actions");
-assert.ok(fake.calls.every((call) => call.systemPrompt === request.systemPrompt), "every request of the session carries the same system prompt");
+assert.ok(systemPrompt.startsWith(`${STUDIO_SYSTEM_PROMPT}\n\n${reference}\n<actions>\n`), "rules, then the motion reference, then the actions");
+assert.ok(fake.calls.every((call) => getCurrentSystemPrompt(call.messages) === systemPrompt), "every request of the session carries the same system prompt");
 const inspectResults = request.messages.filter((message) => message.role === "toolResult" && message.toolName === "inspect_studio");
 assert.equal(inspectResults.length, 3, "all three inspect_studio results are in the request");
 assert.deepEqual(inspectResults.map((message) => message.content[0].text.includes("\"context\"")), [false, false, true], "only the most recent inspect_studio result keeps its context");
