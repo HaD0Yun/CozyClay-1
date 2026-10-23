@@ -658,7 +658,7 @@ for (const token of ["AIza-secret-0123456789abcdefghijk", "sk-or-secret", "sk-an
 {
 	const seen = [];
 	const fixture = createServer(async (req, res) => {
-		for await (const _chunk of req) { /* drain the request */ }
+		req.resume(); await once(req, "end");
 		seen.push({ title: req.headers["x-openrouter-title"] ?? null, referer: req.headers["http-referer"] ?? null });
 		res.writeHead(200, { "content-type": "text/event-stream" });
 		res.write(`data: ${JSON.stringify({ id: "c1", object: "chat.completion.chunk", choices: [{ index: 0, delta: { role: "assistant", content: "hi" }, finish_reason: null }] })}\n\n`);
