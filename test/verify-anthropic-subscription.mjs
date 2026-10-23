@@ -162,15 +162,22 @@ function fakeQuery(messages) {
 	assert.match(result.errorMessage, /error_max_turns/);
 }
 
-// --- abort before start → aborted, query interrupted ---
+// --- abort while the query runs → aborted, query interrupted ---
 {
 	let interrupted = false;
-	// like the real SDK: interrupt() ends the iteration
-	const hanging = () => ({
-		interrupt: async () => { interrupted = true; },
-		close: () => {},
-		[Symbol.asyncIterator]: () => (async function* () { while (!interrupted) await new Promise((resolve) => setTimeout(resolve, 10)); })(),
-	});
+	let markStarted;
+	const started = new Promise((resolve) => { markStarted = resolve; });
+	let endIteration;
+	const ended = new Promise((resolve) => { endIteration = resolve; });
+	// like the real SDK: the query yields nothing until interrupt() ends the iteration
+	const hanging = () => {
+		markStarted();
+		return {
+			interrupt: async () => { interrupted = true; endIteration(); },
+			close: () => {},
+			[Symbol.asyncIterator]: () => ({ next: () => ended.then(() => ({ done: true, value: undefined })) }),
+		};
+	};
 	const controller = new AbortController();
 	const stream = createSubscriptionStream({
 		loadSdk: async () => fakeSdk(() => hanging()),
@@ -178,7 +185,7 @@ function fakeQuery(messages) {
 		env: {},
 	});
 	const eventStream = await stream(model, { systemPrompt: "s", messages: [{ role: "user", content: "hi", timestamp: 1 }], tools: [] }, { apiKey: "tok", signal: controller.signal });
-	await new Promise((resolve) => setTimeout(resolve, 50));
+	await started;
 	controller.abort();
 	const result = await eventStream.result();
 	assert.equal(result.stopReason, "aborted");

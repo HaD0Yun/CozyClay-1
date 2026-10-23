@@ -69,36 +69,24 @@ export const PROVIDERS = [
 
 const factories = {
 	"openai-codex": "openaiCodexProvider",
-	anthropic: "anthropicProvider",
 	openai: "openaiProvider",
 	google: "googleProvider",
 	openrouter: "openrouterProvider",
-};
-
-// Providers whose module is CozyClay's own rather than a pi-ai factory.
-const localLoaders = {
-	"anthropic-subscription": () => import("./anthropic-subscription.mjs").then((module) => module.anthropicSubscriptionProvider()),
 };
 
 const providerConfig = (id) => PROVIDERS.find((provider) => provider.id === id);
 
 export async function loadProvider(id, options = {}) {
 	const { baseUrl, env = process.env } = options;
-	const config = providerConfig(id);
-	if (!config) throw Object.assign(new Error(`Unknown provider: ${id}`), { code: "UNKNOWN_PROVIDER" });
+	if (!providerConfig(id)) throw Object.assign(new Error(`Unknown provider: ${id}`), { code: "UNKNOWN_PROVIDER" });
 	if (id === "openai-codex") ensureCodexFetchPatched();
+	// Both Anthropic lanes come from CozyClay's own module: the subscription lane, and pi-ai's
+	// API-key lane minus the OAuth login it also advertises (see anthropicLaneProvider).
 	const provider = id === "cliproxy"
 		? await cliproxyProvider({ baseUrl, env })
-		: localLoaders[id]
-			? await localLoaders[id]()
+		: id === "anthropic" || id === "anthropic-subscription"
+			? await import("./anthropic-subscription.mjs").then((module) => module.anthropicLaneProvider(id))
 			: await import(`@earendil-works/pi-ai/providers/${id}`).then((module) => module[factories[id]]());
-	// pi-ai 0.85.1's anthropic provider also advertises its OAuth login, but spending a
-	// subscription token against the API directly is the refused path — that sign-in belongs
-	// to anthropic-subscription, whose requests run through the official Claude Code binary.
-	// Strip the method so the panel's only Anthropic subscription button is the safe lane.
-	if (id === "anthropic" && provider.auth?.oauth) {
-		provider.auth = { ...provider.auth, oauth: undefined };
-	}
 	if (baseUrl && id !== "cliproxy") {
 		provider.baseUrl = baseUrl;
 		const getModels = provider.getModels.bind(provider);
@@ -213,22 +201,21 @@ function unknownModel(requested) {
 // below: the label a signed-in provider surfaces ("env", "file", "chatgpt")
 // comes from CozyClay's own stored credentials, never from pi's free-form
 // `AuthResult.source` string.
-function resolveAuthSource(provider, { auth, saved, env, credentials }) {
+function resolveAuthSource(provider, { auth, saved, env }) {
 	if (provider.id === "openai-codex") {
 		const raw = typeof auth.readStored === "function" ? auth.readStored() : undefined;
 		const signedIn = auth.status ? !!auth.status().signedIn : !!raw?.refresh_token;
 		return signedIn ? "chatgpt" : null;
 	}
 	const envName = provider.env.find((name) => typeof env[name] === "string" && env[name].trim());
-	// OAuth credentials (a subscription sign-in) live in auth.json, not the keys file.
-	return envName ? "env" : saved[provider.id] || credentials?.[provider.id] ? "file" : null;
+	return envName ? "env" : saved[provider.id] ? "file" : null;
 }
 
 export function providerStatus({ auth = defaultAuth, keys = defaultKeys, env = process.env } = {}) {
-	const saved = keys.readKeys();
-	const credentials = readCredentials();
+	// a stored API key (keys file) and an OAuth sign-in such as a subscription (auth.json) both count
+	const saved = { ...keys.readKeys(), ...readCredentials() };
 	return PROVIDERS.map((provider) => {
-		const authSource = resolveAuthSource(provider, { auth, saved, env, credentials });
+		const authSource = resolveAuthSource(provider, { auth, saved, env });
 		return { id: provider.id, label: provider.label, authSource, signedIn: !!authSource };
 	});
 }
@@ -398,13 +385,13 @@ const cliproxyFirst = (a, b) => astraFirst(a, b) || Number(b.id === "claude-fabl
 export async function listAgentModels({ models, codex, auth = defaultAuth, keys = defaultKeys, env = process.env } = {}) {
 	const { getSupportedThinkingLevels } = await import("@earendil-works/pi-ai");
 	const resolvedModels = models ?? await createModels({ auth, keys, env });
-	const saved = keys.readKeys();
-	const storedCredentials = readCredentials();
+	// a stored API key (keys file) and an OAuth sign-in such as a subscription (auth.json) both count
+	const saved = { ...keys.readKeys(), ...readCredentials() };
 	const providers = [];
 	for (const provider of PROVIDERS) {
 		const authResult = await resolvedModels.getAuth(provider.id).catch(() => undefined);
 		const signedIn = authResult !== undefined;
-		const authSource = resolveAuthSource(provider, { auth, saved, env, credentials: storedCredentials });
+		const authSource = resolveAuthSource(provider, { auth, saved, env });
 		let list = catalogModels(resolvedModels, provider.id, getSupportedThinkingLevels);
 		if (provider.id === "openai-codex") {
 			if (signedIn && codex?.listModels) {
@@ -433,9 +420,8 @@ export async function listAgentModels({ models, codex, auth = defaultAuth, keys 
 	}
 	// a provider outside the curated list joins the picker once a pi login stored its credential here (#pi-login); ambient
 	// credentials (an AWS profile, cloud ADC files) alone do not list it, so the picker shows what the author connected
-	const stored = new Set([...Object.keys(readCredentials()), ...Object.keys(saved)]);
 	for (const provider of resolvedModels.getProviders?.() ?? []) {
-		const check = providerConfig(provider.id) || !stored.has(provider.id) ? undefined : await resolvedModels.checkAuth?.(provider.id).catch(() => undefined);
+		const check = providerConfig(provider.id) || !(provider.id in saved) ? undefined : await resolvedModels.checkAuth?.(provider.id).catch(() => undefined);
 		if (check) providers.push({ id: provider.id, label: provider.name ?? provider.id, signedIn: true, authSource: check.type === "oauth" || /stored/i.test(check.source ?? "") ? "file" : "env", models: catalogModels(resolvedModels, provider.id, getSupportedThinkingLevels) });
 	}
 	// The flat union is what the panel's dropdown reads today (`models[].id`);

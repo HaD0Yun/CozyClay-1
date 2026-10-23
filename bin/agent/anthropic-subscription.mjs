@@ -57,3 +57,17 @@ export async function anthropicSubscriptionProvider() {
 		api: { stream: streamImpl, streamSimple: streamImpl },
 	});
 }
+
+/**
+ * Both Anthropic lanes of the agent registry. The subscription lane is the provider above; the
+ * API-key lane is pi-ai's anthropic provider minus the OAuth login it also advertises: spending a
+ * subscription token against the API directly is the refused path, so the panel's only Claude
+ * sign-in stays the subscription lane, whose requests run through the official Claude Code binary.
+ */
+export async function anthropicLaneProvider(id) {
+	if (id === SUBSCRIPTION_PROVIDER_ID) return anthropicSubscriptionProvider();
+	const { anthropicProvider } = await import("@earendil-works/pi-ai/providers/anthropic");
+	const provider = anthropicProvider();
+	if (provider.auth?.oauth) provider.auth = { ...provider.auth, oauth: undefined };
+	return provider;
+}

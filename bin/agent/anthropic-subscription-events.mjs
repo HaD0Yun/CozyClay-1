@@ -17,7 +17,7 @@ export function mapStopReason(reason) {
 function mapSdkToolNameToPi(name) {
 	return typeof name === "string" && name.startsWith(CUSTOM_TOOLS_MCP_PREFIX) ? name.slice(CUSTOM_TOOLS_MCP_PREFIX.length) : name;
 }
-export function updateUsage(model, output, usage, { reset = false, contextUsage = true } = {}) {
+export function updateUsage(model, output, usage, { reset = false } = {}) {
 	if (!usage) return;
 	if (reset) {
 		output.usage.input = 0;
