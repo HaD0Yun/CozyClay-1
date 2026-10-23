@@ -2,15 +2,15 @@ import { summariseCanvasResult } from "./agent-tools.mjs";
 import { createReasoningFrames } from "./turn-frames.mjs";
 import { sanitizeUpstreamDetail } from "./agent-routes.mjs";
 import { budgetStudioRequest } from "./studio-context-budget.mjs";
+import { createRetryingStream } from "./agent-stream.mjs";
 
 const DEFAULT_MODEL = "gpt-6-astra";
 
-// Bounded provider retries (issue #379): the harness's own `retry` option
-// drives the retry loop (pi classifies 429/5xx/network as transient via
-// `isRetryableAssistantError`); this is just the budget. `maxRetryDelayMs`
-// caps how long a single request sleeps for a provider-requested Retry-After
-// before pi's own SDK-level retry gives up and surfaces the error to us.
-const RETRY_POLICY = { enabled: true, maxRetries: 2, baseDelayMs: 1000 };
+// Bounded provider retries (issue #379) run in agent-stream.mjs, around each
+// request (pi classifies 429/5xx/network as transient via
+// `isRetryableAssistantError`). `maxRetryDelayMs` caps how long a single
+// request sleeps for a provider-requested Retry-After before pi's own
+// SDK-level retry gives up and surfaces the error to us.
 const RETRY_MAX_DELAY_MS = 20000;
 
 const AUTH_ERROR_PATTERN = /\b(401|403)\b|unauthorized|forbidden/i;
@@ -163,11 +163,11 @@ function withoutInspectContext(part) {
 }
 
 /** The Studio per-request context diet (#716), applied to the provider view
- * only (pi's transform_context): every <studio-context> but the latest is
+ * only (the Agent's transformContext): every <studio-context> but the latest is
  * replaced by a superseded marker, every inspect_studio result but the most
  * recent tool result drops its re-embedded `context`, and the latest
  * context's static actionIndex moves to the end of the system prompt. The
- * stored lane messages are never touched; edited messages are new objects. */
+ * stored transcript is never touched; edited messages are new objects. */
 function studioContextDiet({ messages, systemPrompt }) {
 	let latestContext = -1;
 	let latestToolResult = -1;
@@ -240,21 +240,20 @@ function studioObservationMessage(observation) {
  * The runner is deliberately the only module in the bin/agent chain that
  * knows about pi. Keep these imports lazy: the package-isolation checks start
  * bin/cozyclay.mjs without node_modules installed.
+ *
+ * One session is one pi-agent-core `Agent`: its transcript (the system prompt
+ * and tool declarations ride in its system messages), its model and thinking
+ * level, and its steering queue. Each turn is one `agent.prompt()`.
  */
-export function createAgentRunner({ models: suppliedModels, sessionStore, tools = [], systemPrompt = "", clock = () => performance.now(), fauxProvider, onQuota, codexBaseUrl, cliproxyBaseUrl, auth, credentials, keys, env, compaction = { enabled: false }, pi: injectedPi } = {}) {
+export function createAgentRunner({ models: suppliedModels, sessionStore, tools = [], systemPrompt = "", clock = () => performance.now(), fauxProvider, onQuota, codexBaseUrl, cliproxyBaseUrl, auth, credentials, keys, env } = {}) {
 	const openSessions = new Map();
 	let models = suppliedModels;
-	let piModules = injectedPi;
+	let piModules;
 
 	const loadPi = async () => {
 		if (piModules) return piModules;
-		const [{ AgentHarness }, context, sessionModule, ai] = await Promise.all([
-			import("@earendil-works/pi-agent-core"),
-			import("@earendil-works/pi-agent-core/harness/context"),
-			import("@earendil-works/pi-agent-core/harness/session"),
-			import("@earendil-works/pi-ai"),
-		]);
-		piModules = { AgentHarness, ...context, ...sessionModule, ...ai };
+		const [{ Agent }, ai] = await Promise.all([import("@earendil-works/pi-agent-core"), import("@earendil-works/pi-ai")]);
+		piModules = { Agent, ai };
 		return piModules;
 	};
 
@@ -273,52 +272,51 @@ export function createAgentRunner({ models: suppliedModels, sessionStore, tools 
 
 	const openSession = async (sessionId, { surface = "workflow" } = {}) => {
 		if (openSessions.has(sessionId)) return openSessions.get(sessionId).public;
-		const { pi } = await ensureModels();
-		const context = pi.BACKGROUND_CONTEXT;
-		const repo = new pi.MemorySessionRepo();
-		const durable = await repo.create({ id: sessionId }, context);
+		await ensureModels();
 		const state = {
 			sessionId,
 			surface,
-			repo,
-			durable,
-			harness: null,
-			lane: null,
-			context,
+			agent: null,
 			active: null,
 			persisted: 0,
 			lastInput: null,
 			unsubscribers: [],
 		};
+		// The conversation: the transcript minus its system messages, which carry the prompt and the tool declarations.
+		const conversation = () => (state.agent?.state.messages ?? []).filter((message) => message.role !== "system");
 
 		// An aborted turn's assistant message must never reach sessionStore, even
 		// when the generation itself finished normally before the cancellation
 		// registered (pi only stops the run from starting a FURTHER turn; it does
-		// not retroactively un-stream an already-committed message, so `run_end`'s
-		// own `status` arrives too late — by then `turn_end` has already flushed
+		// not retroactively un-stream an already-committed message, so the run's
+		// own outcome arrives too late — by then `turn_end` has already flushed
 		// the completed turn through this same `persist`). The one reliable
 		// abort signal is therefore "did THIS session's `abort()` run during the
 		// still-active turn", tracked synchronously on `state.active` the instant
 		// `publicSession.abort` is called (see below) — not any one event's shape.
 		// The user message (and any toolResult from a tool that finished before
 		// the abort) are real, completed history and ARE persisted; only the
-		// assistant role is withheld.
+		// assistant role is withheld, as is any assistant pi itself ended as
+		// failed or cancelled.
 		const persist = async () => {
-			if (!state.lane || !sessionStore?.append) return;
-			const entries = await state.lane.findEntries({ order: "oldestFirst" }, state.context);
-			const messages = entries.filter((entry) => entry.type === "message").map((entry) => entry.message);
+			if (!state.agent || !sessionStore?.append) return;
+			const messages = conversation();
 			if (messages.length <= state.persisted) return;
 			const aborted = state.active?.abortRequested === true;
 			const newlyGenerated = messages.slice(state.persisted);
-			const failedAssistant = newlyGenerated.find((message) => message?.role === "assistant" && (aborted || message.stopReason === "error"));
-			const pending = newlyGenerated.filter((message) => !(aborted && message?.role === "assistant") && !(message?.role === "assistant" && message?.stopReason === "error"));
+			const withheld = (message) => message?.role === "assistant" && (aborted || message.stopReason === "error" || message.stopReason === "aborted");
+			const failedAssistant = newlyGenerated.find(withheld);
+			// A tool call the abort cut short never finished: its result is not history either.
+			const cutShort = (message) => message?.role === "toolResult" && state.active?.abortedCalls.has(message.toolCallId);
+			const pending = newlyGenerated.filter((message) => !withheld(message) && !cutShort(message));
 			state.persisted = messages.length;
 			const input = state.lastInput || {};
 			if (pending.length) await sessionStore.append(sessionId, pending, { surface, ...(input.meta || {}) });
 			if (failedAssistant && sessionStore.appendTurnError) {
+				const cancelled = aborted || failedAssistant.stopReason === "aborted";
 				const rawMessage = failedAssistant.errorMessage || "The model or live editor could not complete this turn.";
-				const message = aborted ? "The turn was aborted." : sanitizeUpstreamDetail(JSON.stringify({ message: rawMessage })) || rawMessage;
-				const code = aborted ? "aborted" : classifyProviderError(rawMessage);
+				const message = cancelled ? "The turn was aborted." : sanitizeUpstreamDetail(JSON.stringify({ message: rawMessage })) || rawMessage;
+				const code = cancelled ? "aborted" : classifyProviderError(rawMessage);
 				await sessionStore.appendTurnError(sessionId, { code, message, at: new Date().toISOString() }, { surface, ...(input.meta || {}) });
 			}
 		};
@@ -337,13 +335,13 @@ export function createAgentRunner({ models: suppliedModels, sessionStore, tools 
 		// possible (#379, F2 pass 5 finding 4): `sendQuota` fires the moment
 		// anything else is about to reach the browser (see `pushFrame` below),
 		// using the freshest codex response headers captured so far (from the
-		// `codexResponseObserver` seam wired around `state.lane.prompt` in
-		// `start`) or the null-quota shape when none arrived yet (a non-codex
-		// provider, or a codex call that has not resolved headers yet). The
-		// `after_response` hook below is a pure fallback for a turn that somehow
-		// reaches full completion without ever calling `pushFrame` — `sendQuota`
-		// is idempotent (`quotaSent` guards both paths), so at most one quota
-		// frame is ever sent, exactly like before.
+		// `codexResponseObserver` seam wired around `agent.prompt` in `start`, or
+		// the Agent's `onResponse`) or the null-quota shape when none arrived yet
+		// (a non-codex provider, or a codex call that has not resolved headers
+		// yet). Each finished provider request (agent-stream.mjs `onAttempt`) is a
+		// pure fallback for a turn that somehow reaches full completion without
+		// ever calling `pushFrame` — `sendQuota` is idempotent (`quotaSent` guards
+		// both paths), so at most one quota frame is ever sent, exactly like before.
 		const sendQuota = (queue, input) => {
 			if (!state.active || state.active.quotaSent) return;
 			state.active.quotaSent = true;
@@ -357,13 +355,41 @@ export function createAgentRunner({ models: suppliedModels, sessionStore, tools 
 			for (const pending of state.active.pendingFrames) queue.push(pending);
 			state.active.pendingFrames = [];
 		};
-		const emitQuota = (queue, input, response) => {
+		const emitQuota = (queue, input) => {
 			if (input?.surface === "studio") return; // quotaSent is set at turn start; no quota frame ever
-			if (state.active && response?.headers) state.active.lastResponseHeaders = response.headers;
 			sendQuota(queue, input);
 		};
 
-		const ensureHarness = async (input) => {
+		// Every finished provider request counts, failed attempts included (agent-stream.mjs retries in place).
+		const countAttempt = (message) => {
+			const usage = state.active?.usage;
+			if (!usage) return;
+			usage.requests += 1;
+			for (const key of ["input", "output", "cacheRead", "cacheWrite"]) if (Number.isFinite(message?.usage?.[key])) usage[key] += message.usage[key];
+			if (Number.isFinite(message?.usage?.cost?.total)) state.active.cost = (state.active.cost ?? 0) + message.usage.cost.total;
+		};
+
+		// A Codex 401 earns one forced credential refresh per turn and one more try of the same request: completed tools
+		// stay completed, and the failed attempt stays out of the transcript and the JSONL.
+		const refreshAuth = async (model, message) => {
+			if (model?.provider !== "openai-codex" || !state.active || state.active.authRetried
+				|| classifyError({ message: message.errorMessage }).code !== "unauthorized") return false;
+			state.active.authRetried = true;
+			try { await state.registry?.getAuth?.("openai-codex", { minOAuthValidityMs: Number.MAX_SAFE_INTEGER }); } catch { /* the retried call resolves credentials again and surfaces any refresh failure */ }
+			return true;
+		};
+
+		// Studio only, on the provider view (studioContextDiet, then studio-context-budget.mjs): the stored transcript and the
+		// persisted history keep every context, result, script and image whole. The prompt is the leading system message.
+		const studioView = async (messages) => {
+			if (state.lastInput?.surface !== "studio") return messages;
+			const head = messages[0]?.role === "system" ? messages[0] : null;
+			const prompt = typeof head?.content === "string" ? head.content : (head?.content ?? []).map((part) => part?.text ?? "").join("");
+			const view = budgetStudioRequest(studioContextDiet({ messages: head ? messages.slice(1) : messages, systemPrompt: prompt }));
+			return head ? [{ ...head, content: view.systemPrompt }, ...view.messages] : view.messages;
+		};
+
+		const ensureAgent = async (input) => {
 			const { pi, models: registry } = await ensureModels();
 			const activePrompt = input.systemPrompt || (input.surface === "studio" ? await (await import("./studio-motion-reference.mjs")).studioSystemPrompt() : systemPrompt);
 			const { resolveModel, resolveEffort } = await import("./providers.mjs");
@@ -373,63 +399,32 @@ export function createAgentRunner({ models: suppliedModels, sessionStore, tools 
 			const modelId = slash === -1 ? requested : requested.slice(slash + 1);
 			const direct = registry.getModel(provider, modelId);
 			const selected = direct ? { provider, modelId, model: direct } : await resolveModel(requested, { models: registry });
-			// Preserve an omitted effort (harness default or existing lane level).
-			// For explicit none, pi's harness omits reasoning when the level is off,
+			// Preserve an omitted effort (off for a new session, else the session's
+			// level). For explicit none, off reaches pi-ai as no reasoning level,
 			// avoiding the provider's clamp of unsupported off back up to low.
 			const thinkingLevel = input.effort === undefined ? undefined : await resolveEffort(selected.model, input.effort);
-			if (!state.harness) {
-				state.harness = (await pi.AgentHarness.create({
-					session: state.durable,
-					models: registry,
-					model: selected.model,
-					thinkingLevel,
-					tools: await adapters(input),
-					systemPrompt: activePrompt,
+			state.registry = registry;
+			if (!state.agent) {
+				const restored = sessionStore?.read?.(sessionId);
+				state.agent = new pi.Agent({
+					initialState: { systemPrompt: activePrompt, model: selected.model, thinkingLevel: thinkingLevel ?? "off", tools: await adapters(input), messages: restored?.history ?? [] },
+					streamFn: createRetryingStream({ ai: pi.ai, models: registry, refreshAuth, onAttempt: (message) => { countAttempt(message); emitQuota(state.active?.queue, state.lastInput); } }),
+					transformContext: studioView,
+					onPayload: (payload, model) => (model?.api === "anthropic-messages" ? withAnthropicCacheBreakpoints(payload, model) : undefined),
+					onResponse: (response) => { if (state.active && response?.headers) state.active.lastResponseHeaders = response.headers; },
+					sessionId,
 					toolExecution: "sequential",
 					steeringMode: "one-at-a-time",
-					compaction: { enabled: false, reserveTokens: 0, keepRecentTokens: 0, ...compaction },
-					retry: RETRY_POLICY,
-					streamOptions: { maxRetryDelayMs: RETRY_MAX_DELAY_MS, ...(codexBaseUrl ? { transport: "sse" } : {}) },
-				}, state.context)).harness;
-				state.harness.hooks.on("after_response", (response) => emitQuota(state.active?.queue, state.lastInput, response));
-				state.harness.hooks.on("after_response", ({ message }) => {
-					const usage = state.active?.usage;
-					if (!usage) return;
-					usage.requests += 1;
-					for (const key of ["input", "output", "cacheRead", "cacheWrite"]) if (Number.isFinite(message?.usage?.[key])) usage[key] += message.usage[key]; if (Number.isFinite(message?.usage?.cost?.total)) state.active.cost = (state.active.cost ?? 0) + message.usage.cost.total;
+					maxRetryDelayMs: RETRY_MAX_DELAY_MS,
+					...(codexBaseUrl ? { transport: "sse" } : {}),
 				});
-				state.harness.hooks.on("transform_context", (event) => state.lastInput?.surface === "studio" ? budgetStudioRequest(studioContextDiet(event)) : undefined);
-				state.harness.hooks.on("before_payload", ({ model, payload }) => {
-					if (model?.api !== "anthropic-messages") return undefined;
-					const next = withAnthropicCacheBreakpoints(payload, model);
-					return next ? { payload: next } : undefined;
-				});
-				state.harness.hooks.on("after_response", async ({ message }) => {
-					if (message.stopReason !== "error" || state.provider !== "openai-codex" || state.active.authRetried
-						|| classifyError({ message: message.errorMessage }).code !== "unauthorized") return;
-					state.active.authRetried = true;
-					try { await state.registry?.getAuth?.("openai-codex", { minOAuthValidityMs: Number.MAX_SAFE_INTEGER }); } catch { /* the retried call resolves credentials again and surfaces any refresh failure */ }
-					// "server error" opts this one auth failure into pi's generation retry.
-					// It preserves completed tools and re-resolves credentials in place;
-					// failed assistant attempts stay out of provider context and JSONL.
-					return { message: { ...message, errorMessage: `${message.errorMessage} (credentials refreshed; server error, retrying)` } };
-				});
-				state.lane = await state.harness.lane("main", state.context);
-				const restored = sessionStore?.read?.(sessionId);
-				if (restored?.history?.length) {
-					for (const message of restored.history) await state.lane.appendMessage(message, state.context);
-					state.persisted = restored.history.length;
-				}
-				// Studio only, on the provider view (studioContextDiet, then studio-context-budget.mjs): the stored
-				// lane and the persisted history keep every context, result, script and image whole.
-				state.unsubscribers.push(state.harness.events.on("turn_end", persist));
-				state.unsubscribers.push(state.harness.events.on("run_end", persist));
+				state.persisted = restored?.history?.length ?? 0;
+				state.unsubscribers.push(state.agent.subscribe(async (event) => { if (event.type === "turn_end" || event.type === "agent_end") await persist(); }));
 			}
 			state.currentModel = selected.model;
-			state.registry = registry;
 			state.provider = selected.provider;
-			await state.lane.setModel({ provider: selected.provider, modelId: selected.modelId }, state.context);
-			if (thinkingLevel !== undefined) await state.lane.setThinkingLevel(thinkingLevel, state.context);
+			state.agent.state.model = selected.model;
+			if (thinkingLevel !== undefined) state.agent.state.thinkingLevel = thinkingLevel;
 			return { registry, selected };
 		};
 
@@ -437,7 +432,6 @@ export function createAgentRunner({ models: suppliedModels, sessionStore, tools 
 			const toolStartedAt = new Map();
 			const toolStarted = new Set();
 			const toolCompleted = new Set();
-			const eventUnsubscribers = [];
 			// The frame gate must never hold a turn's first visible output waiting
 			// on generation to finish (#379, F2 pass 5 finding 4): the ONLY thing it
 			// still waits for is the quota frame itself, and only long enough to
@@ -449,14 +443,8 @@ export function createAgentRunner({ models: suppliedModels, sessionStore, tools 
 				if (state.active && !state.active.quotaSent && frame.type !== "quota") sendQuota(queue, state.lastInput);
 				queue.push(frame);
 			};
-			const subscribe = (type, listener) => eventUnsubscribers.push(state.harness.events.on(type, listener));
 			// The reasoning summary and the tool call being written, for the panel (turn-frames.mjs).
 			const reasoning = createReasoningFrames(pushFrame, clock);
-			subscribe("message_update", (event) => {
-				reasoning.onMessageEvent(event.event);
-				if (event.event?.type === "text_delta") pushFrame({ type: "text.delta", text: event.event.delta });
-				if (event.event?.type === "error") pushFrame(errorFrame(event.event.error, event.event.reason === "aborted"));
-			});
 			const startTool = (event) => {
 				if (toolStarted.has(event.toolCallId)) return;
 				toolStarted.add(event.toolCallId);
@@ -465,9 +453,11 @@ export function createAgentRunner({ models: suppliedModels, sessionStore, tools 
 				const tool = (Array.isArray(activeTools) ? activeTools : []).find((candidate) => candidate.name === event.toolName);
 				pushFrame({ type: "tool.start", callId: event.toolCallId, name: event.toolName, label: tool?.label || event.toolName.replaceAll("_", " "), args: summariseCanvasResult(event.args) });
 			};
-			subscribe("tool_start", startTool);
-			subscribe("tool_end", (event) => {
+			const endTool = (event) => {
 				if (toolCompleted.has(event.toolCallId)) return;
+				// A call the run's abort ended (pi-tools.mjs untilAborted) stays unfinished, as under the removed
+				// AgentHarness: the route reports it cancelled and the panel shows it stopped with an unknown result.
+				if (event.isError && state.agent?.signal?.aborted) { state.active?.abortedCalls.add(event.toolCallId); return; }
 				startTool(event);
 				toolCompleted.add(event.toolCallId);
 				const started = toolStartedAt.get(event.toolCallId) ?? clock();
@@ -477,9 +467,13 @@ export function createAgentRunner({ models: suppliedModels, sessionStore, tools 
 					const message = event.result?.content?.find((part) => part.type === "text")?.text || "Tool execution failed.";
 					pushFrame({ type: "tool.done", callId: event.toolCallId, ok: false, elapsedMs, error: message });
 				} else pushFrame({ type: "tool.done", callId: event.toolCallId, ok: true, elapsedMs, result: details });
-			});
-			subscribe("run_end", (event) => {
+			};
+			const finish = (event) => {
 				if (state.active?.pendingFrames.length) { for (const pending of state.active.pendingFrames) queue.push(pending); state.active.pendingFrames = []; }
+				// The run's outcome is its last assistant message: the Agent ends a
+				// failed or cancelled request there (stopReason error/aborted).
+				const last = event.messages.findLast((message) => message.role === "assistant");
+				const status = last?.stopReason === "aborted" ? "aborted" : last?.stopReason === "error" ? "error" : "completed";
 				// #379 / 16q: an acknowledged Studio Stop whose held tool already settled
 				// with a real structured outcome (tool.done above) calls `abort(reason,
 				// { quiet: true })` purely to stop the model from being prompted again —
@@ -487,21 +481,27 @@ export function createAgentRunner({ models: suppliedModels, sessionStore, tools 
 				// told about a second time via a synthesized error. Only THIS run's own
 				// quiet flag suppresses the error frame; a stop with no active job (no
 				// resolvable outcome) never sets it and still surfaces error{aborted}.
-				const quiet = event.status === "aborted" && state.active?.quietAbort;
-				if (event.status !== "completed" && !quiet) {
-					const rawMessage = event.error?.message || (event.status === "aborted" ? "The turn was aborted." : "The model or live editor could not complete this turn.");
+				const quiet = status === "aborted" && state.active?.quietAbort;
+				if (status !== "completed" && !quiet) {
+					const rawMessage = last?.errorMessage || (status === "aborted" ? "The turn was aborted." : "The model or live editor could not complete this turn.");
 					const truncated = /ended before a terminal response event/i.test(rawMessage);
-					const classified = event.status === "aborted" ? { code: "aborted", status: undefined } : classifyError(event.error || {});
-					const code = event.status === "aborted" ? "aborted" : truncated ? "truncated" : classified.code;
-					const status = classified.status;
+					const classified = status === "aborted" ? { code: "aborted", status: undefined } : classifyError({ message: rawMessage });
+					const code = status === "aborted" ? "aborted" : truncated ? "truncated" : classified.code;
 					const detail = sanitizeUpstreamDetail(JSON.stringify({ message: rawMessage }));
 					const fallback = code === "aborted" ? "The turn was aborted." : code === "truncated" ? "The model stream ended before a terminal response event." : "The model or live editor could not complete this turn.";
-					queue.push({ type: "error", code, message: detail || fallback, ...(status ? { status } : {}) });
+					queue.push({ type: "error", code, message: detail || fallback, ...(classified.status ? { status: classified.status } : {}) });
 				}
 				queue.push({ type: "done", usage: { ...state.active.usage }, ...(state.lastInput?.reportCost ? { cost: state.active.cost ?? 0 } : {}) });
 				queue.close();
+			};
+			return state.agent.subscribe((event) => {
+				if (event.type === "message_update") {
+					reasoning.onMessageEvent(event.assistantMessageEvent);
+					if (event.assistantMessageEvent?.type === "text_delta") pushFrame({ type: "text.delta", text: event.assistantMessageEvent.delta });
+				} else if (event.type === "tool_execution_start") startTool(event);
+				else if (event.type === "tool_execution_end") endTool(event);
+				else if (event.type === "agent_end") finish(event);
 			});
-			return () => { for (const unsubscribe of eventUnsubscribers) unsubscribe(); };
 		};
 
 		const start = async function* (input = {}) {
@@ -513,41 +513,38 @@ export function createAgentRunner({ models: suppliedModels, sessionStore, tools 
 			const queue = new FrameQueue();
 			// Studio never sends a quota frame at all (unchanged, #379): mark it sent
 			// up front so `pushFrame`'s gate never holds Studio's first frame.
-			state.active = { queue, quotaSent: input.surface === "studio", pendingFrames: [], authRetried: false, abortRequested: false, lastResponseHeaders: null, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, requests: 0 } };
+			state.active = { queue, quotaSent: input.surface === "studio", pendingFrames: [], authRetried: false, abortRequested: false, abortedCalls: new Set(), lastResponseHeaders: null, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, requests: 0 } };
 			state.lastInput = input;
 			const controller = input.signal ? null : new AbortController();
 			const signal = input.signal || controller.signal;
 			state.lastInput.signal = signal;
+			// The caller's own signal (a disconnect, a deadline) cancels the run like session.abort() does.
+			const cancel = () => state.agent?.abort();
 			const run = (async () => {
 				let removeEventListeners;
 				try {
-					await ensureHarness(input);
-					// Keep the lane history, but replace per-turn tool closures (admission,
+					await ensureAgent(input);
+					// Keep the transcript, but replace per-turn tool closures (admission,
 					// workspace and cancellation). Auth retry reuses these same bindings.
-					// The Tasks switch swaps the whole tool set inside one session; the lane's
-					// active names must follow, or pi refuses the turn (configured_tools_unavailable).
-					if (state.harness && input.tools !== undefined) { const turnTools = await adapters(input); await state.harness.setTools(turnTools, state.context); await state.lane.setActiveTools(turnTools.map((tool) => tool.name), state.context); }
+					// The Tasks switch swaps the whole tool set inside one session; the
+					// Agent declares the change to the model in a system message.
+					if (input.tools !== undefined) state.agent.state.tools = await adapters(input);
 					removeEventListeners = mapEvents(queue);
-					// Compose and deliver once; pi retries provider calls in place without
+					// Compose and deliver once; agent-stream.mjs retries provider calls in place without
 					// repeating attachments, captures or completed tool executions.
-					let composed;
+					let prompts;
 					if (input.surface === "studio") {
 						const studioContext = typeof input.studioContextText === "string" ? input.studioContextText : `<studio-context>\n${input.contextText || ""}\n</studio-context>`;
 						const attachments = Array.isArray(input.attachments) ? input.attachments : [];
 						if (input.frameObservation) {
-							const observation = studioObservationMessage(input.frameObservation);
-							composed = { appends: [studioUserMessage({ ...input, studioContextText: studioContext })], text: observation.content[0].text, images: [observation.content[1]] };
+							prompts = [studioUserMessage({ ...input, studioContextText: studioContext }), studioObservationMessage(input.frameObservation)];
 						} else {
 							// Same shape as studioUserMessage/attachmentMessage: one text part per
 							// attachment label immediately followed by its image, then the studio
 							// context and the user prompt as their OWN text parts (not concatenated
 							// into one string) so session-store's transcriptFromHistory restores
 							// the prompt text and the attachment names intact (#379, F2 pass 5).
-							const message = {
-								role: "user",
-								content: [...studioAttachmentContent(attachments), { type: "text", text: studioContext }, { type: "text", text: input.text || "" }],
-							};
-							composed = { appends: [], text: message, images: undefined };
+							prompts = [{ role: "user", content: [...studioAttachmentContent(attachments), { type: "text", text: studioContext }, { type: "text", text: input.text || "" }] }];
 						}
 					} else {
 						let text = input.text || "";
@@ -565,10 +562,11 @@ export function createAgentRunner({ models: suppliedModels, sessionStore, tools 
 								throw error;
 							}
 						}
-						composed = { appends: (Array.isArray(input.attachments) ? input.attachments : []).map(attachmentMessage), text, images: [] };
+						prompts = [...(Array.isArray(input.attachments) ? input.attachments : []).map(attachmentMessage), { role: "user", content: [{ type: "text", text }] }];
 					}
-					for (const message of composed.appends) await state.lane.appendMessage(message, state.context);
-					const promptContext = input.signal ? (await loadPi()).withAbortSignal(signal, state.context) : state.context;
+					const now = Date.now();
+					prompts = prompts.map((message) => ({ timestamp: now, ...message }));
+					signal.addEventListener("abort", cancel, { once: true });
 					// The seam that lets the browser see codex quota headers before the
 					// response body is read (#379, F2 pass 5 finding 4): `codexResponseObserver`
 					// (bin/agent/providers.mjs) is an AsyncLocalStorage whose store this ONE
@@ -576,10 +574,15 @@ export function createAgentRunner({ models: suppliedModels, sessionStore, tools 
 					// patch it installs calls back into it the instant a `/codex/responses`
 					// Response exists, correlated back to this turn by async context alone.
 					const { codexResponseObserver } = await import("./providers.mjs");
-					await codexResponseObserver.run((response) => { if (state.active) state.active.lastResponseHeaders = response.headers; }, () => state.lane.prompt(composed.text, composed.images, promptContext));
+					await codexResponseObserver.run((response) => { if (state.active) state.active.lastResponseHeaders = response.headers; }, () => {
+						const prompted = state.agent.prompt(prompts);
+						if (signal.aborted) state.agent.abort();
+						return prompted;
+					});
 				} catch (error) {
 					if (!queue.closed) { queue.push(errorFrame(error, signal.aborted)); queue.push({ type: "done" }); queue.close(); }
 				} finally {
+					signal.removeEventListener("abort", cancel);
 					removeEventListeners?.();
 				}
 			})();
@@ -588,23 +591,24 @@ export function createAgentRunner({ models: suppliedModels, sessionStore, tools 
 
 		const publicSession = {
 			start,
-			steer: async (text, images = []) => state.lane?.steer(text, images, state.context),
+			steer: async (text, images = []) => state.agent?.steer({ role: "user", content: [{ type: "text", text }, ...images], timestamp: Date.now() }),
 			abort: async (reason, { quiet = false } = {}) => {
-				// Set synchronously, before the (async) `lane.abort()` round-trip: any
-				// `persist` that runs after this point — for the turn that is active
-				// right now — must withhold its assistant message, whether or not the
-				// underlying generation happens to finish before pi's cancellation
-				// actually takes effect. `quiet` (#379 / 16q) additionally withholds the
-				// run_end error frame this abort would otherwise cause: the caller
-				// already has a real, settled tool outcome to show instead (a Studio
-				// Stop that the motion runtime acknowledged) and is only using this
-				// abort to stop the model from being prompted again.
+				// Set synchronously, before the run winds down: any `persist` that runs
+				// after this point — for the turn that is active right now — must
+				// withhold its assistant message, whether or not the underlying
+				// generation happens to finish before pi's cancellation actually takes
+				// effect. `quiet` (#379 / 16q) additionally withholds the run's error
+				// frame this abort would otherwise cause: the caller already has a real,
+				// settled tool outcome to show instead (a Studio Stop that the motion
+				// runtime acknowledged) and is only using this abort to stop the model
+				// from being prompted again.
 				if (state.active) { state.active.abortRequested = true; if (quiet) state.active.quietAbort = true; }
-				if (state.lane) return state.lane.abort(state.context);
-				return { ok: false, reason };
+				if (!state.agent?.state.isStreaming) return { ok: false, reason };
+				state.agent.abort();
+				return { ok: true };
 			},
-			snapshot: async () => state.lane ? state.lane.inspectExecution(state.context) : null,
-			close: async () => { for (const unsubscribe of state.unsubscribers.splice(0)) unsubscribe(); await state.harness?.close(state.context); await state.repo.close(state.context); },
+			snapshot: async () => (state.agent ? { streaming: state.agent.state.isStreaming, pendingToolCalls: [...state.agent.state.pendingToolCalls], messages: conversation().length } : null),
+			close: async () => { for (const unsubscribe of state.unsubscribers.splice(0)) unsubscribe(); state.agent?.abort(); await state.agent?.waitForIdle(); },
 		};
 		state.public = publicSession;
 		openSessions.set(sessionId, state);

@@ -79,6 +79,12 @@ function errorMessage(text) {
 	let runner;
 	try {
 		const models = await createAgentModels({ auth, keys: { readKeys: () => ({}) }, env: {}, codexBaseUrl });
+		// gpt-5.5 left pi's Codex catalogue in 1.4.0, and no model left there supports off without max. Keep its case
+		// with a Codex model shaped like it (off supported, max not), served by the same fixture.
+		const codex = models.getProvider("openai-codex");
+		const catalogue = codex.getModels.bind(codex);
+		codex.getModels = () => [...catalogue(), { ...catalogue().find((model) => model.id === "gpt-6-luna"), id: "gpt-5.5", name: "GPT-5.5", thinkingLevelMap: { xhigh: "xhigh", minimal: "low" } }];
+		models.setProvider(codex);
 		const metadata = structuredClone(models.getModels("openai-codex"));
 		assert.equal(models.getModel("openai-codex", "gpt-6-astra").thinkingLevelMap.off, null, "Astra must exercise the unsupported-off case");
 		runner = createAgentRunner({ models, codexBaseUrl });
