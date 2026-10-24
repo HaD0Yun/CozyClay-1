@@ -146,7 +146,12 @@
       /* First screen: black stage, the headline and the reel. Scrolling plays
          it out: the reel rises over the headline and grows to the full width,
          then the page continues. --p (0..1) is set by the script below. */
-      .stage { position: relative; height: 210vh; background: #0b0b0c; color: #f2efe8; --p: 0; }
+      .stage {
+        position: relative; height: 210vh; color: #f2efe8; --p: 0;
+        background:
+          url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
+          radial-gradient(120% 90% at 50% 35%, #1f1e1c 0%, #161615 55%, #111110 100%);
+      }
       .stage-pin {
         position: sticky; top: 0; height: 100vh; height: 100svh; overflow: hidden;
         display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
@@ -161,19 +166,19 @@
         transform-origin: 50% 0;
       }
       .stage-reel {
-        position: relative; z-index: 1; width: min(1160px, 92vw); margin-top: 1vh;
-        transform: translateY(calc(var(--p) * var(--rise, 0px))) scale(calc(.82 + var(--p) * var(--grow, .18)));
+        position: relative; z-index: 1; width: min(1280px, 94vw); margin-top: 7vh;
+        transform: translateY(calc(var(--p) * var(--rise, 0px))) scale(calc(.94 + var(--p) * var(--grow, .06)));
         transform-origin: 50% 0;
       }
-      .stage .window { border-color: #2a2a2e; background: #141416; box-shadow: 0 40px 120px rgba(0, 0, 0, .6); }
-      .stage .titlebar { background: #1c1c1f; border-bottom-color: #2a2a2e; }
+      .stage .window { border-color: #2c2b29; background: #1a1a19; box-shadow: 0 30px 80px rgba(0, 0, 0, .45); }
+      .stage .titlebar { background: #22211f; border-bottom-color: #2c2b29; }
       .stage .titlebar span { color: #8a8a90; }
       .stage-cue {
         position: absolute; bottom: 3vh; left: 50%; margin-left: -11px; color: #8a8a90;
         opacity: calc(1 - var(--p) * 5); animation: cue 1.8s ease-in-out infinite;
       }
       @keyframes cue { 50% { transform: translateY(6px); } }
-      body.on-stage header.site { background: #0b0b0c; border-bottom-color: #1f1f22; }
+      body.on-stage header.site { background: #151514; border-bottom-color: #262624; }
       body.on-stage header.site .brand, body.on-stage header.site .icon-link { color: #f2efe8; }
       body.on-stage header.site nav a { color: #9a9aa0; }
       body.on-stage header.site nav a:hover { color: #f2efe8; }
@@ -352,7 +357,7 @@
         :root { --header-h: 56px; }
         .stage { height: 170vh; }
         .stage-pin { justify-content: center; padding-top: var(--header-h); }
-        .stage-reel { margin-top: 4vh; }
+        .stage-reel { margin-top: 6vh; }
         body { font-size: 16px; }
         .brand img { width: 32px; }
         section { padding: 72px 0; }
@@ -729,7 +734,7 @@ npm run dev</code></pre>
         const still = matchMedia("(prefers-reduced-motion: reduce)");
         const measure = () => {
           const pin = stage.querySelector(".stage-pin");
-          const start = 0.82;
+          const start = 0.94;
           const width = reel.offsetWidth;
           const full = Math.min(innerWidth * 0.98, (innerHeight - header.offsetHeight - 24) * 16 / 9 + 0);
           const end = Math.max(start, full / width);
