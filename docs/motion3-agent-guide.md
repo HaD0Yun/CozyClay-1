@@ -100,6 +100,8 @@ A channel is interpolated (monotone cubic) only through the keys that set it, so
 | `wtwist_l/r`, `wflex_l/r` | Wrist twist and flex in degrees |
 | `fingers_l/r { relaxed, fist, grip, cigarette, point }` | Preset weights over relaxed |
 
+Flow (`spec.flow`) also leads the head into a turn: `headLead` (default on, 5 frames; a number 0..12 sets the frames, `false` turns it off). Walking or standing, the head takes the turn the trunk (`yaw` + `spine_yaw`) makes over the next frames, at most 30 degrees, so the head turns first. It skips any span where your keys move `head_yaw`. `observations.life.lead` reports `[frames the head turns before the pelvis, correlation]`.
+
 ## Anchors, props and fits
 
 - Anchors are where a hand goes:
