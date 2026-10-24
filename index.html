@@ -234,48 +234,6 @@
       .exports b { flex: 0 0 9.5em; font-weight: 600; }
       .exports span { color: var(--muted); font-size: 15px; }
 
-      /* Playground. The ids and data-state values belong to the script below. */
-      .demo .window { min-width: 0; }
-      .playground {
-        position: relative;
-        /* Header 64 + margin 12 + title bar 40 + bottom bar 52 + 12. */
-        height: clamp(480px, calc(100vh - 180px), 900px);
-        overflow: hidden;
-        background: #1b1b1b center / cover no-repeat;
-      }
-      .playground iframe { display: block; width: 100%; height: 100%; border: 0; background: #1b1b1b; }
-      .playground-cover {
-        position: absolute; inset: 0; display: flex; flex-direction: column;
-        align-items: center; justify-content: flex-end; gap: 12px; padding-bottom: 48px !important;
-        background: linear-gradient(180deg, rgba(0, 0, 0, 0) 35%, rgba(0, 0, 0, .45) 100%); cursor: pointer; border: 0; color: #fff;
-        font: inherit; padding: 0; width: 100%;
-      }
-      .playground-cover[hidden] { display: none; }
-      .playground-cover .btn { pointer-events: none; }
-      .playground-cover small { font-size: 14px; font-weight: 500; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, .5); }
-      .playground[data-state="loading"] iframe { opacity: 0; }
-      .playground-loading {
-        position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
-        color: #fff; font-size: 14px; background: rgba(0, 0, 0, .45); pointer-events: none;
-      }
-      .playground[data-state="loading"] .playground-loading { display: flex; }
-      .playground-phone { display: none; }
-      .playground-bar {
-        display: none; gap: 8px 12px; align-items: center; flex-wrap: wrap;
-        padding: 10px 14px; border-top: 1px solid var(--line); background: var(--paper-2);
-        font-size: 14px; color: var(--muted);
-      }
-      .playground[data-state="live"] + .playground-bar,
-      .playground[data-state="loading"] + .playground-bar { display: flex; }
-      .playground-bar a { color: var(--muted); }
-      .playground-bar button, button.copy {
-        min-height: 32px; padding: 0 12px; border-radius: 6px; cursor: pointer;
-        background: var(--panel); border: 1px solid var(--line-strong); color: var(--ink); font-size: 14px;
-      }
-      .playground-bar .spacer { flex: 1; }
-      button.copy[data-state="copied"] { border-color: var(--ok); color: var(--ok); }
-      .demo-note { margin: 20px 0 0; }
-
       /* Direct it with AI: pick a surface, get its setup. */
       .ai { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); gap: 24px 40px; align-items: start; }
       .ai-view p { margin: 0 0 16px; color: var(--muted); }
@@ -345,13 +303,6 @@
         .ai, .why, .start, .flow, .hero-grid { grid-template-columns: minmax(0, 1fr); }
         .hero-grid { align-items: start; }
       }
-      @media (max-width: 720px), (hover: none) {
-        .playground-cover .btn, .playground-cover small { display: none; }
-        .playground-phone { display: block; font-size: 15px; padding: 0 24px; text-align: center; font-weight: 500; }
-        .playground-cover { cursor: default; background: rgba(245, 245, 247, .78); color: var(--ink); }
-        .playground { height: auto; aspect-ratio: 4 / 3; }
-        .demo-note { display: none; }
-      }
       @media (max-width: 760px) {
         header.site nav { display: none; }
       }
@@ -383,7 +334,6 @@
         <a class="brand" href="/"><img src="/media/cozyclay-mark.png" width="144" height="98" alt="" />CozyClay</a>
         <nav aria-label="Sections">
           <a href="#how">How it works</a>
-          <a href="#try">Demo</a>
           <a href="#ai">AI agents</a>
           <a href="#start">Quick start</a>
         </nav>
@@ -391,7 +341,7 @@
           <a class="icon-link" href="https://github.com/NomaDamas/CozyClay" aria-label="CozyClay on GitHub">
             <svg width="22" height="22" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
           </a>
-          <a class="btn primary sm" href="#try">Try it</a>
+          <a class="btn primary sm" href="/app/">Try it</a>
         </div>
       </div>
     </header>
@@ -403,7 +353,7 @@
           <div class="hero-side">
             <p class="lede">Previs in a browser tab. Block the set, move the cast, cut the camera, then hand the shot to an AI video model.</p>
             <div class="hero-actions">
-              <a class="btn primary" href="#try">Try it in your browser</a>
+              <a class="btn primary" href="/app/">Try it in your browser</a>
               <span class="cmd">
                 <code>npx cozyclay --via site</code>
                 <button type="button" class="copy" data-copy="npx cozyclay --via site" aria-label="Copy command">
@@ -498,85 +448,6 @@
               </div>
             </div>
           </div>
-        </div>
-      </section>
-
-      <section id="try" class="alt">
-        <div class="wrap">
-        <span class="kicker">Demo</span>
-        <h2>Try it right here</h2>
-        <p class="sub">The real studio, loaded into this page. Nothing to install.</p>
-        <div class="demo">
-        <div class="window">
-        <div class="titlebar" aria-hidden="true"><i></i><i></i><i></i><span>CozyClay</span></div>
-        <div class="playground" id="playground" style="background-image: url('/media/playground-poster.jpg')">
-          <button class="playground-cover" id="playground-start" type="button" aria-label="Start the playground">
-            <span class="btn primary">Open the studio here</span>
-            <small>The real studio, in this page · about 4 MB · mouse and keyboard</small>
-            <span class="playground-phone">The studio needs a mouse and keyboard. Open this page on a computer, or run <code>npx cozyclay --via site</code>.</span>
-          </button>
-          <div class="playground-loading">Loading the studio…</div>
-        </div>
-        <div class="playground-bar">
-          <span class="spacer"></span>
-          <button type="button" id="playground-full">Fullscreen</button>
-          <a href="/app/" target="_blank" rel="noopener">Open studio ↗</a>
-          <button type="button" id="playground-close">Close</button>
-        </div>
-        </div>
-        </div>
-        <p class="small demo-note">Right-drag to look, WASD to fly, W / E / R to move, rotate, scale.</p>
-        <script type="module">
-          (() => {
-            const box = document.getElementById("playground");
-            const section = document.getElementById("try");
-            const start = document.getElementById("playground-start");
-            const full = document.getElementById("playground-full");
-            const close = document.getElementById("playground-close");
-            const SRC = "/app/?embed=playground";
-            const canPlay = () => matchMedia("(min-width: 721px) and (hover: hover)").matches;
-            let frame = null;
-            let cancelReady = () => {};
-            const stop = () => {
-              cancelReady();
-              if (frame) frame.remove();
-              frame = null;
-              box.dataset.state = "";
-              start.hidden = false;
-              section.classList.remove("playground-live");
-            };
-            start.addEventListener("click", () => {
-              if (!canPlay()) return;
-              if (frame) stop();
-              frame = document.createElement("iframe");
-              frame.src = SRC;
-              frame.title = "CozyClay playground";
-              frame.allow = "fullscreen; pointer-lock";
-              frame.loading = "eager";
-              box.appendChild(frame);
-              box.dataset.state = "loading";
-              start.hidden = true;
-              const ready = () => {
-                if (box.dataset.state !== "loading") return;
-                cancelReady();
-                box.dataset.state = "live";
-                section.classList.add("playground-live");
-              };
-              const onReady = (event) => { if (event.data?.type === "cozyclay:playground-ready" && event.source === frame?.contentWindow && event.origin === window.location.origin) ready(); };
-              window.addEventListener("message", onReady);
-              const readyTimeout = setTimeout(ready, 15000);
-              cancelReady = () => { clearTimeout(readyTimeout); window.removeEventListener("message", onReady); };
-              if (window.posthog?.capture) window.posthog.capture("landing:playground_started");
-            });
-            full.addEventListener("click", () => { if (frame?.requestFullscreen) frame.requestFullscreen(); });
-            close.addEventListener("click", stop);
-            document.querySelectorAll("button.copy[data-copy]").forEach((button) => {
-              button.addEventListener("click", async () => {
-                try { await navigator.clipboard.writeText(button.dataset.copy); button.dataset.state = "copied"; setTimeout(() => { button.dataset.state = ""; }, 1400); } catch {}
-              });
-            });
-          })();
-        </script>
         </div>
       </section>
 
@@ -743,7 +614,7 @@ npm run dev</code></pre>
           <h2>Block your first shot</h2>
           <p class="sub">Free, open source, and running in your browser in under a minute.</p>
           <div class="cta">
-            <a class="btn primary" href="#try">Try it in your browser</a>
+            <a class="btn primary" href="/app/">Try it in your browser</a>
             <a class="btn ghost" href="https://discord.gg/Hp9V5wwgjF">Join the Discord</a>
           </div>
         </div>
@@ -764,74 +635,6 @@ npm run dev</code></pre>
         document.getElementById("controls-link").addEventListener("click", () => {
           document.querySelector("#controls details").open = true;
         });
-        // A started playground takes the screen: steps, window and its bar in view.
-        document.getElementById("playground-start").addEventListener("click", () => {
-          if (!matchMedia("(min-width: 721px) and (hover: hover)").matches) return;
-          const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
-          document.querySelector("#try .demo").scrollIntoView({ block: "start", behavior: still ? "auto" : "smooth" });
-        });
-        // Hero compare: drag (or arrow keys on the hidden range) moves the divider;
-        // the generated take follows the greybox clock so both show the same frame.
-        const compare = document.getElementById("compare");
-        const greybox = compare.querySelector(".cmp-a");
-        const take = compare.querySelector(".cmp-b");
-        const range = compare.querySelector(".cmp-range");
-        const setPos = (pct) => {
-          const p = Math.min(100, Math.max(0, pct));
-          compare.style.setProperty("--pos", p + "%");
-          range.value = String(Math.round(p));
-        };
-        const fromPointer = (event) => {
-          const box = compare.getBoundingClientRect();
-          setPos(((event.clientX - box.left) / box.width) * 100);
-        };
-        compare.addEventListener("pointerdown", (event) => {
-          compare.setPointerCapture(event.pointerId);
-          fromPointer(event);
-        });
-        compare.addEventListener("pointermove", (event) => {
-          if (compare.hasPointerCapture(event.pointerId)) fromPointer(event);
-        });
-        range.addEventListener("input", () => setPos(Number(range.value)));
-        const follow = () => {
-          if (Math.abs(take.currentTime - greybox.currentTime) > 0.08) take.currentTime = greybox.currentTime;
-          if (greybox.paused !== take.paused) (greybox.paused ? take.pause() : take.play().catch(() => {}));
-        };
-        // Tab lists (workflow steps, agent surfaces): click or arrow keys pick a panel.
-        document.querySelectorAll("[role=tablist]").forEach((list) => {
-          const tabs = [...list.querySelectorAll("[role=tab]")];
-          const select = (tab) => tabs.forEach((other) => {
-            const on = other === tab;
-            other.setAttribute("aria-selected", String(on));
-            other.tabIndex = on ? 0 : -1;
-            document.getElementById(other.getAttribute("aria-controls")).hidden = !on;
-          });
-          tabs.forEach((tab, i) => {
-            tab.addEventListener("click", () => select(tab));
-            tab.addEventListener("keydown", (event) => {
-              const move = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[event.key];
-              if (!move) return;
-              event.preventDefault();
-              const next = tabs[(i + move + tabs.length) % tabs.length];
-              select(next);
-              next.focus();
-            });
-          });
-        });
-        // How it works: the open step's clip plays while the section is on screen.
-        const flowView = document.querySelector(".flow-view");
-        let flowSeen = false;
-        const playOpenStep = () => flowView.querySelectorAll("video").forEach((clip) => {
-          if (flowSeen && !clip.closest("[role=tabpanel]").hidden) clip.play().catch(() => {});
-          else clip.pause();
-        });
-        new IntersectionObserver(([entry]) => { flowSeen = entry.isIntersecting; playOpenStep(); }).observe(flowView);
-        document.querySelectorAll(".flow-tabs [role=tab]").forEach((tab) => tab.addEventListener("click", playOpenStep));
-        document.querySelector(".flow-tabs").addEventListener("keydown", () => setTimeout(playOpenStep));
-        greybox.addEventListener("timeupdate", follow);
-        greybox.addEventListener("seeked", follow);
-        greybox.addEventListener("play", follow);
-        greybox.addEventListener("pause", follow);
       })();
     </script>
 
