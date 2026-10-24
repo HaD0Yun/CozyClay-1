@@ -28,7 +28,7 @@ function PromptForm({ prompt, onSubmit }) {
 		<div className="agent-key-controls">
 			<input id={inputId} className="agent-key-input" type={ask.type === "secret" ? "password" : "text"} autoComplete="off" spellCheck="false"
 				placeholder={ask.placeholder ?? ""} value={value} autoFocus onChange={(event) => setValue(event.target.value)} />
-			<button type="submit" className="agent-key-save" disabled={ask.type === "secret" && !value.trim()}>Continue</button>
+			<button type="submit" className="agent-key-save" disabled={ask.type === "secret" && !ask.optional && !value.trim()}>Continue</button>
 		</div>
 	</form>;
 }

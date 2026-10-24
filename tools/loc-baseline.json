@@ -1,7 +1,7 @@
 {
 	"bin/agent/agent-routes.mjs": 804,
 	"bin/agent/agent-runner.mjs": 495,
-	"bin/agent/providers.mjs": 338,
+	"bin/agent/providers.mjs": 255,
 	"bin/agent/session-store.mjs": 324,
 	"bin/agent/supervisor.mjs": 283,
 	"bin/agent/video-adapters.mjs": 334,

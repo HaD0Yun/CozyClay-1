@@ -9,7 +9,7 @@ const BASE_ENV = "CLIPROXY_BASE_URL";
 const KEY_ENV = "CLIPROXY_API_KEY";
 
 /** A server address as typed, cleaned: http(s), no trailing slash, no trailing /v1 (the models add it). */
-function cleanBase(value) {
+export function cleanBase(value) {
 	const url = new URL(String(value ?? "").trim());
 	if (!["http:", "https:"].includes(url.protocol)) throw new Error("The server address must start with http:// or https://.");
 	return url.href.replace(/\/+$/, "").replace(/\/v1$/, "");
@@ -74,6 +74,19 @@ export async function cliproxyProvider({ baseUrl, env = process.env } = {}) {
 	});
 }
 
+/** GET <v1 base>/models: the server's entries ({ id, owned_by? } or bare ids). A refusal throws with its `status`;
+ * a network failure throws fetch's own error. Shared with the custom OpenAI-compatible lane (#885). */
+export async function fetchModelList(v1Base, apiKey, label, signal) {
+	const timeout = AbortSignal.timeout(5000);
+	const response = await fetch(`${v1Base}/models`, {
+		headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
+		signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+	});
+	if (!response.ok) throw Object.assign(new Error(`${label} models request failed: ${response.status}`), { status: response.status });
+	const body = await response.json();
+	return Array.isArray(body?.data) ? body.data : [];
+}
+
 /** The proxy's own /v1/models (id -> owner), fetched once per registry; a failed fetch is asked again next time. */
 export async function registryLiveCliproxy(models, apiKey, state) {
 	if (!state.cliproxyFetch) {
@@ -81,15 +94,10 @@ export async function registryLiveCliproxy(models, apiKey, state) {
 			const provider = models?.getProvider?.("cliproxy");
 			const model = provider?.getModels?.().find((entry) => entry.api === "openai-responses");
 			if (!model?.baseUrl || !apiKey) throw new Error("CLIProxyAPI is not configured");
-			const response = await fetch(`${model.baseUrl}/models`, {
-				headers: { Authorization: `Bearer ${apiKey}` },
-				signal: AbortSignal.timeout(5000),
-			});
-			if (!response.ok) throw new Error(`CLIProxyAPI models request failed: ${response.status}`);
-			const body = await response.json();
+			const data = await fetchModelList(model.baseUrl, apiKey, "CLIProxyAPI");
 			// id -> owned_by: the owner is how CLIProxyAPI routes a model (openai, anthropic, or an
 			// openai-compatibility upstream name), so it picks the wire format for models pi does not know.
-			const live = new Map((Array.isArray(body?.data) ? body.data : [])
+			const live = new Map(data
 				.map((entry) => typeof entry === "string" ? [entry, undefined] : [entry?.id, typeof entry?.owned_by === "string" ? entry.owned_by : undefined])
 				.filter(([id]) => id));
 			state.cliproxyFetchError = null;

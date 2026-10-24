@@ -5,6 +5,7 @@ import { createCredentialStore } from "./credential-store.mjs";
 import { readCredentials } from "./provider-keys.mjs";
 import { cliproxyBase, cliproxyProvider, extendCliproxyProvider, registryLiveCliproxy } from "./cliproxy-provider.mjs";
 export { cliproxyLiveModel } from "./cliproxy-provider.mjs";
+import { OPENAI_COMPATIBLE_ID, openaiCompatibleProvider, refreshOpenAICompatible } from "./openai-compatible-provider.mjs";
 import { rolesByMain } from "./model-roles.mjs";
 export { MODEL_ROLES, fallbackChain, resolveRoleModels } from "./model-roles.mjs";
 
@@ -68,6 +69,8 @@ export const PROVIDERS = [
 	{ id: "minimax", label: "MiniMax", auth: "api_key", env: ["MINIMAX_API_KEY"] }, { id: "minimax-cn", label: "MiniMax (China)", auth: "api_key", env: ["MINIMAX_CN_API_KEY"] },
 	{ id: "openrouter", label: "OpenRouter", auth: "api_key", env: ["OPENROUTER_API_KEY"] },
 	{ id: "cliproxy", label: "CLIProxyAPI", auth: "api_key", env: ["CLIPROXY_API_KEY"] },
+	// #885: LM Studio, Ollama or any OpenAI-compatible server; its address rides the stored credential
+	{ id: OPENAI_COMPATIBLE_ID, label: "OpenAI-compatible server", auth: "api_key", env: [] },
 ];
 
 const factories = {
@@ -84,7 +87,7 @@ export async function loadProvider(id, { baseUrl, env = process.env } = {}) {
 	// API-key lane minus the OAuth login it also advertises (see anthropicLaneProvider).
 	const provider = id === "cliproxy"
 		? await cliproxyProvider({ baseUrl, env })
-		: id === "anthropic" || id === "anthropic-subscription"
+		: id === OPENAI_COMPATIBLE_ID ? await openaiCompatibleProvider() : id === "anthropic" || id === "anthropic-subscription"
 			? await import("./anthropic-subscription.mjs").then((module) => module.anthropicLaneProvider(id))
 			: await import(`@earendil-works/pi-ai/providers/${id}`).then((module) => module[factories[id]]());
 	// pi 0.99 gave the API-key OpenAI lane a ChatGPT sign-in too; CozyClay's ChatGPT sign-in is the
@@ -178,6 +181,8 @@ export async function resolveModel(requested, options = {}) {
 	if (!modelId) throw unknownModel(requested);
 	const models = options.models ?? await createModels(options);
 	if (!providerConfig(provider) && !models.getProvider?.(provider)) throw unknownModel(requested);
+	// a custom server's models are its live /v1/models list, read again when a turn names one not listed yet (#885)
+	if (provider === OPENAI_COMPATIBLE_ID && !models.getModel(provider, modelId)) await refreshOpenAICompatible(models);
 	const model = models.getModel(provider, modelId);
 	if (!model) throw unknownModel(requested);
 	return { provider, modelId, model };
@@ -305,6 +310,10 @@ export async function listAgentModels({ models, codex, auth = defaultAuth, keys 
 			}
 			list = [...list].sort(cliproxyFirst);
 			const error = catalogueState(resolvedModels).cliproxyFetchError; providers.push({ id: provider.id, label: provider.label, signedIn, authSource, models: list, ...(error ? { error } : {}) }); continue;
+		} else if (provider.id === OPENAI_COMPATIBLE_ID && signedIn) {
+			// the server's own /v1/models is the lineup, read on every listing so a model loaded since then shows up
+			const error = await refreshOpenAICompatible(resolvedModels);
+			providers.push({ id: provider.id, label: provider.label, signedIn, authSource, models: catalogModels(resolvedModels, provider.id, getSupportedThinkingLevels), ...(error ? { error } : {}) }); continue;
 		}
 		providers.push({ id: provider.id, label: provider.label, signedIn, authSource, models: list });
 	}
