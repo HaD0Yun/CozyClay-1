@@ -162,16 +162,14 @@
       .titlebar i:nth-child(2) { background: #febc2e; }
       .titlebar i:nth-child(3) { background: #28c840; }
       .titlebar span { flex: 1; text-align: center; margin-right: 52px; font-size: 13px; font-weight: 500; color: var(--muted); }
-      .scene-tabs { display: flex; gap: 2px; margin: 0 auto; padding: 2px; background: #dcdce1; border-radius: 8px; transform: translateX(-26px); }
-      .scene-tabs button { min-height: 28px; padding: 0 12px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-size: 13px; font-weight: 600; cursor: pointer; }
-      .scene-tabs button[aria-pressed="true"] { background: var(--panel); color: var(--ink); box-shadow: 0 1px 2px rgba(0, 0, 0, .12); }
+
 
       .proof { padding: 0 0 104px; }
       .proof figure { margin: 0; }
       .proof video { display: block; width: 100%; height: auto; background: #000; }
       .proof figcaption { margin-top: 16px; text-align: center; }
       /* Before/after compare. --pos is the divider, set by the script below. */
-      .compare { position: relative; aspect-ratio: var(--ratio, 16 / 9); background: #000; cursor: ew-resize; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+      .compare { position: relative; aspect-ratio: 16 / 9; background: #000; cursor: ew-resize; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
       .proof .compare video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
       .compare .cmp-b { clip-path: inset(0 0 0 var(--pos)); }
       .cmp-line { position: absolute; top: 0; bottom: 0; left: var(--pos); width: 2px; margin-left: -1px; background: #fff; pointer-events: none; }
@@ -373,19 +371,6 @@
         .flow-tabs strong, .ai-tabs strong { margin: 0; font-size: 14px; }
         .flow-tabs b { width: 26px; height: 26px; font-size: 13px; }
         .flow-exports { aspect-ratio: auto; padding: 4px 20px; }
-        .scene-tabs { transform: none; margin-left: 8px; }
-        .scene-tabs button { padding: 0 8px; font-size: 12px; }
-        .proof { padding-bottom: 72px; }
-        .cta { width: 100%; }
-        .cta .btn { width: 100%; }
-        .sub { font-size: 17px; margin-bottom: 28px; }
-        .steps, .reads, .shots { grid-template-columns: minmax(0, 1fr); }
-        .card { padding: 24px; }
-        .code { padding: 16px 18px; }
-        .code .copy { position: static; margin-top: 12px; }
-        .exports b { flex-basis: 8em; }
-        .titlebar span { margin-right: 0; }
-        header.site .btn.sm { padding: 0 14px; }
       }
       @media (prefers-reduced-motion: reduce) {
         html { scroll-behavior: auto; }
@@ -441,12 +426,7 @@
         <div class="wrap">
           <figure>
             <div class="window">
-              <div class="titlebar"><i aria-hidden="true"></i><i aria-hidden="true"></i><i aria-hidden="true"></i>
-                <div class="scene-tabs" role="group" aria-label="Example shot">
-                  <button type="button" aria-pressed="true" data-scene="truck">Truck at a red light</button>
-                  <button type="button" aria-pressed="false" data-scene="parkour">Parkour jump</button>
-                </div>
-              </div>
+              <div class="titlebar" aria-hidden="true"><i></i><i></i><i></i><span>CozyClay</span></div>
               <div class="compare" id="compare" style="--pos: 50%">
                 <video class="cmp-a" src="/media/truck-greybox.mp4" poster="/media/truck-greybox-poster.jpg" width="1920" height="1080" autoplay muted loop playsinline preload="metadata"></video>
                 <video class="cmp-b" src="/media/truck-seedance.mp4" poster="/media/truck-seedance-poster.jpg" width="1920" height="1080" autoplay muted loop playsinline preload="metadata" aria-hidden="true"></video>
@@ -500,8 +480,8 @@
                 <figcaption>A street set from boxes and cylinders, with a posed character.</figcaption>
               </figure>
               <figure role="tabpanel" id="flow-p2" aria-labelledby="flow-t2" hidden>
-                <img src="/media/parkour-greybox-poster.jpg" width="1104" height="454" loading="lazy" alt="A clay character mid-jump between two grey pillars." />
-                <figcaption>A jump between two pillars, compiled in the browser.</figcaption>
+                <img src="/media/truck-greybox-poster.jpg" width="1920" height="1080" loading="lazy" alt="A clay driver in a truck cab, mid-gesture with a cigarette, hand on the wheel." />
+                <figcaption>A driver's gestures at a red light, compiled in the browser.</figcaption>
               </figure>
               <figure role="tabpanel" id="flow-p3" aria-labelledby="flow-t3" hidden>
                 <img src="/media/studio-sequencer.jpg" width="1600" height="1000" loading="lazy" alt="The CozyClay viewport with a camera frustum aimed at a clay character, a shot preview and the sequencer with camera cut, rail and crane lanes." />
@@ -818,20 +798,6 @@ npm run dev</code></pre>
           if (Math.abs(take.currentTime - greybox.currentTime) > 0.08) take.currentTime = greybox.currentTime;
           if (greybox.paused !== take.paused) (greybox.paused ? take.pause() : take.play().catch(() => {}));
         };
-        const scenes = {
-          truck: { a: "truck-greybox", b: "truck-seedance", ratio: "16 / 9" },
-          parkour: { a: "parkour-greybox", b: "parkour-seedance", ratio: "1104 / 454" },
-        };
-        document.querySelectorAll(".scene-tabs button").forEach((button) => button.addEventListener("click", () => {
-          const scene = scenes[button.dataset.scene];
-          document.querySelectorAll(".scene-tabs button").forEach((other) => other.setAttribute("aria-pressed", String(other === button)));
-          compare.style.setProperty("--ratio", scene.ratio);
-          for (const [video, name] of [[greybox, scene.a], [take, scene.b]]) {
-            video.poster = "/media/" + name + "-poster.jpg";
-            video.src = "/media/" + name + ".mp4";
-            video.play().catch(() => {});
-          }
-        }));
         // Tab lists (workflow steps, agent surfaces): click or arrow keys pick a panel.
         document.querySelectorAll("[role=tablist]").forEach((list) => {
           const tabs = [...list.querySelectorAll("[role=tab]")];
