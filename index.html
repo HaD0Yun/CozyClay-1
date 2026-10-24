@@ -246,14 +246,13 @@
       .playground iframe { display: block; width: 100%; height: 100%; border: 0; background: #1b1b1b; }
       .playground-cover {
         position: absolute; inset: 0; display: flex; flex-direction: column;
-        align-items: center; justify-content: center; gap: 12px;
-        background: rgba(245, 245, 247, .55); cursor: pointer; border: 0; color: var(--ink);
+        align-items: center; justify-content: flex-end; gap: 12px; padding-bottom: 48px !important;
+        background: linear-gradient(180deg, rgba(0, 0, 0, 0) 35%, rgba(0, 0, 0, .45) 100%); cursor: pointer; border: 0; color: #fff;
         font: inherit; padding: 0; width: 100%;
       }
-      .playground-cover:hover { background: rgba(245, 245, 247, .4); }
       .playground-cover[hidden] { display: none; }
       .playground-cover .btn { pointer-events: none; }
-      .playground-cover small { font-size: 14px; font-weight: 600; color: var(--ink); }
+      .playground-cover small { font-size: 14px; font-weight: 500; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, .5); }
       .playground[data-state="loading"] iframe { opacity: 0; }
       .playground-loading {
         position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
@@ -349,7 +348,7 @@
       @media (max-width: 720px), (hover: none) {
         .playground-cover .btn, .playground-cover small { display: none; }
         .playground-phone { display: block; font-size: 15px; padding: 0 24px; text-align: center; font-weight: 500; }
-        .playground-cover { cursor: default; background: rgba(245, 245, 247, .72); }
+        .playground-cover { cursor: default; background: rgba(245, 245, 247, .78); color: var(--ink); }
         .playground { height: auto; aspect-ratio: 4 / 3; }
         .demo-note { display: none; }
       }
@@ -513,7 +512,7 @@
         <div class="playground" id="playground" style="background-image: url('/media/playground-poster.jpg')">
           <button class="playground-cover" id="playground-start" type="button" aria-label="Start the playground">
             <span class="btn primary">Open the studio here</span>
-            <small>About 2 MB</small>
+            <small>The real studio, in this page · about 4 MB · mouse and keyboard</small>
             <span class="playground-phone">The studio needs a mouse and keyboard. Open this page on a computer, or run <code>npx cozyclay --via site</code>.</span>
           </button>
           <div class="playground-loading">Loading the studio…</div>
@@ -526,7 +525,7 @@
         </div>
         </div>
         </div>
-        <p class="small demo-note">Needs a mouse and keyboard. Right-drag to look, WASD to fly.</p>
+        <p class="small demo-note">Right-drag to look, WASD to fly, W / E / R to move, rotate, scale.</p>
         <script type="module">
           (() => {
             const box = document.getElementById("playground");
