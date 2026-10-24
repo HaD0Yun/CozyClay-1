@@ -16,18 +16,18 @@
     <meta property="og:title" content="CozyClay — open source 3D previs software, in your browser" />
     <meta property="og:description" content="Block a scene, pose characters, author camera moves and cuts, and preview generated motion. Open source, runs in your browser." />
     <meta property="og:url" content="https://cozyclay.org/" />
-    <meta property="og:image" content="https://cozyclay.org/media/cozyclay-demo-poster.jpg" />
+    <meta property="og:image" content="https://cozyclay.org/media/cozyclay-truck-demo-poster.jpg" />
     <meta property="og:image:width" content="1920" />
     <meta property="og:image:height" content="1080" />
-    <meta property="og:image:alt" content="A CozyClay shot mid-wipe: the greybox previs on one half, the generated result on the other." />
+    <meta property="og:image:alt" content="A CozyClay shot mid-wipe: the clay greybox of a truck driver on one half, the Seedance 2.5 generation on the other." />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="CozyClay — open source 3D previs software, in your browser" />
     <meta name="twitter:description" content="Block a scene, pose characters, author camera moves and cuts, and preview generated motion. Open source, runs in your browser." />
-    <meta name="twitter:image" content="https://cozyclay.org/media/cozyclay-demo-poster.jpg" />
+    <meta name="twitter:image" content="https://cozyclay.org/media/cozyclay-truck-demo-poster.jpg" />
 
     <title>CozyClay — open source 3D previs software, in your browser</title>
 
-    <meta property="og:video" content="https://cozyclay.org/media/cozyclay-demo.mp4" />
+    <meta property="og:video" content="https://cozyclay.org/media/truck-seedance.mp4" />
     <meta property="og:video:type" content="video/mp4" />
     <meta property="og:video:width" content="1920" />
     <meta property="og:video:height" content="1080" />
@@ -46,9 +46,10 @@
         "applicationCategory": "DesignApplication",
         "applicationSubCategory": "3D previsualization",
         "operatingSystem": "Any (Chromium-based browser)",
+        "softwareVersion": "%COZYCLAY_VERSION%",
         "description": "CozyClay is an open-source, browser-based 3D staging studio. Block a scene, pose characters, sequence motion prompts on a timeline, and preview generated motion in one local workspace that handles like the Unity Editor.",
-        "image": "https://cozyclay.org/media/cozyclay-demo-poster.jpg",
-        "screenshot": "https://cozyclay.org/media/cozyclay-demo-poster.jpg",
+        "image": "https://cozyclay.org/media/cozyclay-truck-demo-poster.jpg",
+        "screenshot": "https://cozyclay.org/media/cozyclay-truck-demo-poster.jpg",
         "logo": "https://cozyclay.org/media/cozyclay-logo.png",
         "license": "https://github.com/NomaDamas/CozyClay/blob/main/LICENSE",
         "codeRepository": "https://github.com/NomaDamas/CozyClay",
@@ -58,382 +59,465 @@
     </script>
 
     <style>
+      @font-face { font-family: "Instrument Serif"; font-weight: 400; font-display: swap; src: url("/fonts/instrument-serif-latin.woff2") format("woff2"); }
+      @font-face { font-family: "Instrument Serif"; font-style: italic; font-weight: 400; font-display: swap; src: url("/fonts/instrument-serif-italic-latin.woff2") format("woff2"); }
+      @font-face { font-family: "Inter"; font-weight: 100 900; font-display: swap; src: url("/fonts/inter-latin.woff2") format("woff2"); }
+      @font-face { font-family: "JetBrains Mono"; font-weight: 400; font-display: swap; src: url("/fonts/jetbrains-mono-400-latin.woff2") format("woff2"); }
       :root {
-        --bg: #f5f5f7;
-        --alt: #ececf0;
+        --paper: #f5f5f7;
+        --paper-2: #ececf0;
         --panel: #ffffff;
         --line: #d2d2d7;
         --line-strong: #c7c7cc;
-        --ink: #1d1d1f;
+        --ink: #111111;
         --muted: #636366;
-        --accent: #0066cc;
+        --brand: #111111;
+        --brand-deep: #000000;
+        --brand-tint: #e8e8ea;
         --ok: #2f6b3a;
-        --shadow-card: 0 1px 2px rgba(0, 0, 0, .04), 0 8px 24px rgba(0, 0, 0, .06);
+        --serif: "Instrument Serif", "Iowan Old Style", Georgia, serif;
+        --sans: "Inter", -apple-system, BlinkMacSystemFont, "Helvetica Neue", system-ui, sans-serif;
+        --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        --radius: 16px;
+        --shadow-clay: 0 1px 2px rgba(0, 0, 0, .04), 0 8px 24px rgba(0, 0, 0, .06);
         --shadow-window: 0 2px 6px rgba(0, 0, 0, .06), 0 30px 60px rgba(0, 0, 0, .18);
-        --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        --header-h: 64px;
       }
       * { box-sizing: border-box; }
-      html { scroll-behavior: smooth; }
+      html { scroll-behavior: smooth; scroll-padding-top: calc(var(--header-h) + 12px); }
       body {
         margin: 0;
-        background: var(--bg);
+        background: var(--paper);
         color: var(--ink);
-        font: 17px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
+        font: 17px/1.5 var(--sans);
         -webkit-font-smoothing: antialiased;
+        font-feature-settings: "cv11", "ss01", "ss03";
+        letter-spacing: -.011em;
       }
-      a { color: var(--accent); }
+      a { color: var(--brand); }
       button { font-family: inherit; }
-      :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+      img, video { max-width: 100%; }
+      :focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; border-radius: 6px; }
       .wrap { max-width: 1160px; margin: 0 auto; padding: 0 24px; }
       .wrap.narrow { max-width: 820px; }
 
-      /* Type scale: 64 / 36 / 19 / 17 / 14. Nothing else. */
-      h1 { font-size: clamp(40px, 6vw, 64px); line-height: 1.05; letter-spacing: -.02em; font-weight: 700; margin: 0; max-width: 820px; }
-      h1 em { font-style: normal; color: var(--accent); }
-      h2 { font-size: clamp(28px, 3.4vw, 36px); line-height: 1.15; letter-spacing: -.01em; font-weight: 700; margin: 0 0 32px; }
-      h3 { font-size: 19px; font-weight: 600; margin: 0; }
+      h1 { font-family: var(--serif); font-size: clamp(40px, 6vw, 68px); line-height: 1.02; letter-spacing: -.02em; font-weight: 400; margin: 0; max-width: 900px; }
+      h1 em { font-style: italic; color: inherit; }
+      h2 { font-family: var(--serif); font-size: clamp(34px, 4.2vw, 52px); line-height: 1.05; letter-spacing: -.015em; font-weight: 400; margin: 0 0 16px; }
+      h3 { font-size: 19px; line-height: 1.3; font-weight: 600; margin: 0; letter-spacing: -.02em; }
+      .kicker { display: inline-block; margin: 0 0 14px; font: 400 12px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+      .sub { margin: 0 0 40px; max-width: 40em; color: var(--muted); font-size: 19px; }
       .small, figcaption { font-size: 14px; color: var(--muted); }
-      code, pre, kbd { font-family: var(--mono); font-size: 14px; }
+      code, pre, kbd { font-family: var(--mono); font-size: 13.5px; letter-spacing: 0; }
 
+      /* Header: one row at every width. On phones only the brand and the two
+         actions stay; the section links are a scroll away. */
       header.site {
         position: sticky; top: 0; z-index: 10;
         background: rgba(245, 245, 247, .8);
         backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px);
         border-bottom: 1px solid var(--line);
       }
-      header.site .wrap { display: flex; align-items: center; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; padding-top: 10px; padding-bottom: 10px; }
-      .brand { display: flex; align-items: center; gap: 10px; min-height: 44px; font-weight: 600; color: var(--ink); text-decoration: none; }
-      .brand img { width: 32px; height: auto; border-radius: 8px; background: #fff; padding: 3px 2px; }
-      header.site nav { display: flex; align-items: center; gap: 4px 24px; flex-wrap: wrap; font-size: 14px; }
+      header.site .wrap { display: flex; align-items: center; gap: 16px; height: var(--header-h); }
+      .brand { display: flex; align-items: center; gap: 10px; min-height: 44px; font-weight: 600; font-size: 18px; letter-spacing: -.02em; color: var(--ink); text-decoration: none; margin-right: auto; }
+      .brand img { width: 36px; height: auto; }
+      header.site nav { display: flex; align-items: center; gap: 28px; font-size: 15px; }
       header.site nav a { display: flex; align-items: center; min-height: 44px; color: var(--muted); text-decoration: none; }
       header.site nav a:hover { color: var(--ink); }
-      header.site nav a.btn, header.site nav a.btn:hover { color: #fff; font-size: 14px; min-height: 44px; padding: 0 16px; }
+      .actions { display: flex; align-items: center; gap: 8px; }
+      .icon-link { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 999px; color: var(--ink); }
+      .icon-link:hover { background: var(--paper-2); }
 
       .btn {
-        display: inline-flex; align-items: center; justify-content: center;
+        display: inline-flex; align-items: center; justify-content: center; gap: 8px;
         min-height: 48px; padding: 0 24px; border-radius: 8px; border: 1px solid transparent;
-        font-size: 17px; font-weight: 600; text-decoration: none; cursor: pointer;
-        transition: filter .15s, transform .15s;
+        font-size: 17px; font-weight: 600; text-decoration: none; cursor: pointer; white-space: nowrap;
+        transition: background-color .15s, transform .15s, box-shadow .15s;
       }
-      .btn:hover { filter: brightness(1.08); }
-      .btn:active { transform: scale(.98); }
-      .btn.primary { background: var(--accent); color: #fff; }
+      .btn:active { transform: translateY(1px) scale(.99); }
+      .btn.primary { background: var(--brand); color: #fff; }
+      .btn.primary:hover { background: var(--brand-deep); }
       .btn.ghost { background: var(--panel); color: var(--ink); border-color: var(--line-strong); }
+      .btn.ghost:hover { border-color: var(--ink); }
+      .btn.sm { min-height: 40px; padding: 0 18px; font-size: 15px; }
       .cta { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
 
-      .hero { padding: 80px 0 48px; }
-      .hero .wrap { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 24px; }
-      .lede { margin: 0; color: var(--muted); }
-      .cmd {
-        display: inline-flex; align-items: center; gap: 4px; padding: 0 4px 0 14px;
-        background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+      /* Hero: headline left, the pitch and the two ways in on the right. */
+      /* First screen: black stage, the headline and the reel. Scrolling plays
+         it out: the reel rises over the headline and grows to the full width,
+         then the page continues. --p (0..1) is set by the script below. */
+      .stage {
+        position: relative; height: 210vh; color: #f2efe8; --p: 0;
+        background:
+          url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
+          radial-gradient(120% 90% at 50% 35%, #1f1e1c 0%, #161615 55%, #111110 100%);
       }
-      .cmd .copy { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; background: none; border: 0; color: var(--muted); cursor: pointer; }
+      .stage-pin {
+        position: sticky; top: 0; height: 100vh; height: 100svh; overflow: hidden;
+        display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+        padding-top: calc(var(--header-h) + 2vh);
+      }
+      .stage h1 {
+        margin: 0; padding: 0 4vw; width: 100%; max-width: none; text-align: center;
+        font-family: var(--sans); font-size: clamp(44px, 8.6vw, 140px); line-height: 1; letter-spacing: -.06em; font-weight: 600;
+        font-feature-settings: "ss01", "cv11";
+        opacity: calc(.88 * (1 - var(--p) * 1.4));
+        transform: translateY(calc(var(--p) * -12vh)) scale(calc(1 - var(--p) * .12));
+        transform-origin: 50% 0;
+      }
+      .stage-reel {
+        position: relative; z-index: 1; width: min(1280px, 94vw); margin-top: 7vh;
+        transform: translateY(calc(var(--p) * var(--rise, 0px))) scale(calc(.94 + var(--p) * var(--grow, .06)));
+        transform-origin: 50% 0;
+      }
+      .stage .window { border-color: #2c2b29; background: #1a1a19; box-shadow: 0 30px 80px rgba(0, 0, 0, .45); }
+      .stage .titlebar { background: #22211f; border-bottom-color: #2c2b29; }
+      .stage .titlebar span { color: #8a8a90; }
+      .stage-cue {
+        position: absolute; bottom: 3vh; left: 50%; margin-left: -11px; color: #8a8a90;
+        opacity: calc(1 - var(--p) * 5); animation: cue 1.8s ease-in-out infinite;
+      }
+      @keyframes cue { 50% { transform: translateY(6px); } }
+      body.on-stage header.site { background: #151514; border-bottom-color: #262624; }
+      body.on-stage header.site .brand, body.on-stage header.site .icon-link { color: #f2efe8; }
+      body.on-stage header.site nav a { color: #9a9aa0; }
+      body.on-stage header.site nav a:hover { color: #f2efe8; }
+      body.on-stage header.site .btn.primary { background: #f2efe8; color: #0b0b0c; }
+      .hero-grid { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 28px; }
+
+      .stage h1 .line { display: inline-block; white-space: nowrap; }
+      .curved .ch { display: inline-block; white-space: pre; transform-origin: 50% 55%; will-change: transform; }
+      .hero-side { display: flex; flex-direction: column; align-items: center; gap: 22px; max-width: 640px; }
+      .lede { margin: 0; color: var(--muted); font-size: 19px; }
+      .hero-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+      .cmd {
+        display: inline-flex; align-items: center; gap: 4px; padding: 0 4px 0 14px; min-height: 48px;
+        background: var(--panel); border: 1px solid var(--line-strong); border-radius: 8px;
+      }
+      .cmd .copy { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: none; border: 0; color: var(--muted); cursor: pointer; border-radius: 6px; }
+      .cmd .copy:hover { color: var(--ink); background: var(--paper); }
       .cmd .copy .ic-done { display: none; color: var(--ok); }
       .cmd .copy[data-state="copied"] .ic-copy { display: none; }
       .cmd .copy[data-state="copied"] .ic-done { display: block; }
+      .meta-line { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 16px; margin: 0; color: var(--muted); font-size: 14px; }
+      .meta-line a { color: var(--muted); }
+      .meta-line > * + *::before { content: "·"; margin-right: 8px; }
+      .meta-line { gap: 4px 8px; }
 
       .window { border: 1px solid var(--line-strong); border-radius: 12px; overflow: hidden; background: var(--panel); box-shadow: var(--shadow-window); }
       .titlebar { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px; background: #e8e8ed; border-bottom: 1px solid var(--line); }
       .titlebar i { width: 12px; height: 12px; border-radius: 50%; background: #ff5f57; }
       .titlebar i:nth-child(2) { background: #febc2e; }
       .titlebar i:nth-child(3) { background: #28c840; }
-      .titlebar span { flex: 1; text-align: center; margin-right: 52px; font-size: 14px; font-weight: 600; color: var(--muted); }
+      .titlebar span { flex: 1; text-align: center; margin-right: 52px; font-size: 13px; font-weight: 500; color: var(--muted); }
 
-      .proof { padding: 0 0 96px; }
-      .proof figure { margin: 0; }
-      .proof video { display: block; width: 100%; height: auto; background: #000; }
-      .proof figcaption { margin-top: 16px; text-align: center; }
+
+
+      /* Before/after compare. --pos is the divider, set by the script below. */
+      .compare { position: relative; aspect-ratio: 16 / 9; background: #000; cursor: ew-resize; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+      .compare video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+      .compare .cmp-b { clip-path: inset(0 0 0 var(--pos)); }
+      .cmp-line { position: absolute; top: 0; bottom: 0; left: var(--pos); width: 2px; margin-left: -1px; background: #fff; pointer-events: none; }
+      .cmp-knob {
+        position: absolute; top: 50%; left: 50%; width: 44px; height: 44px; margin: -22px 0 0 -22px;
+        display: flex; align-items: center; justify-content: center; border-radius: 50%;
+        background: #fff; color: var(--ink); box-shadow: 0 2px 10px rgba(0, 0, 0, .35);
+      }
+      .cmp-range { position: absolute; width: 1px; height: 1px; margin: 0; padding: 0; opacity: 0; pointer-events: none; }
+      .compare:has(.cmp-range:focus-visible) .cmp-knob { outline: 3px solid var(--brand); outline-offset: 2px; }
+      .compare > span {
+        position: absolute; bottom: 14px; padding: 5px 10px; border-radius: 6px; pointer-events: none;
+        background: rgba(0, 0, 0, .55); color: #fff; font: 400 11px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase;
+        backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+      }
+      .compare .tag-l { left: 14px; }
+      .compare .tag-r { right: 14px; }
 
       section { padding: 88px 0; border-top: 1px solid var(--line); }
-      section.alt { background: var(--alt); }
-      section.hero, section.proof { border-top: 0; }
+      section.alt { background: var(--paper-2); }
+      section.stage { padding: 0; border-top: 0; }
 
-      .cards { display: flex; flex-wrap: wrap; gap: 20px; }
       .card {
-        flex: 1 1 240px; min-width: 0; padding: 24px;
-        background: var(--panel); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow-card);
+        min-width: 0; padding: 28px; background: var(--panel);
+        border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-clay);
       }
-      .card p { margin: 4px 0 0; color: var(--muted); }
-      .card .n { display: block; margin-bottom: 16px; font-size: clamp(28px, 3.4vw, 36px); font-weight: 700; line-height: 1; color: var(--accent); }
-      a.card { color: var(--ink); text-decoration: none; font-size: 19px; font-weight: 600; min-height: 96px; transition: transform .2s; }
-      a.card:hover { transform: translateY(-2px); }
+      .card p { margin: 8px 0 0; color: var(--muted); }
 
-      /* Playground. The ids and data-state values belong to the script below. */
-      .demo { scroll-margin-top: 76px; }
-      .demo .window { min-width: 0; box-shadow: 0 2px 6px rgba(0, 0, 0, .06), 0 24px 48px rgba(0, 0, 0, .14); }
-      .playground {
-        position: relative;
-        /* Header 64 + margin 12 + title bar 40 + bottom bar 52 + 12. */
-        height: clamp(480px, calc(100vh - 180px), 900px);
-        overflow: hidden;
-        background: #1b1b1b center / cover no-repeat;
-      }
-      .playground iframe { display: block; width: 100%; height: 100%; border: 0; background: #1b1b1b; }
-      .playground-cover {
-        position: absolute; inset: 0; display: flex; flex-direction: column;
-        align-items: center; justify-content: center; gap: 12px;
-        background: rgba(245, 245, 247, .55); cursor: pointer; border: 0; color: var(--ink);
-        font: inherit; padding: 0; width: 100%;
-      }
-      .playground-cover:hover { background: rgba(245, 245, 247, .4); }
-      .playground-cover[hidden] { display: none; }
-      .playground-cover .btn { pointer-events: none; }
-      .playground-cover small { font-size: 14px; font-weight: 600; color: var(--ink); }
-      .playground[data-state="loading"] iframe { opacity: 0; }
-      .playground-loading {
-        position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
-        color: #fff; font-size: 14px; background: rgba(0, 0, 0, .45); pointer-events: none;
-      }
-      .playground[data-state="loading"] .playground-loading { display: flex; }
-      .playground-phone { display: none; }
-      .playground-bar {
-        display: none; gap: 8px 12px; align-items: center; flex-wrap: wrap;
-        padding: 10px 14px; border-top: 1px solid var(--line); background: #e8e8ed;
-        font-size: 14px; color: var(--muted);
-      }
-      .playground[data-state="live"] + .playground-bar,
-      .playground[data-state="loading"] + .playground-bar { display: flex; }
-      .playground-bar a { color: var(--muted); }
-      .playground-bar button, button.copy {
-        min-height: 32px; padding: 0 12px; border-radius: 6px; cursor: pointer;
-        background: var(--panel); border: 1px solid var(--line-strong); color: var(--ink); font-size: 14px;
-      }
-      .playground-bar .spacer { flex: 1; }
-      button.copy[data-state="copied"] { border-color: var(--ok); color: var(--ok); }
+      /* Why */
+      .why { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px 64px; align-items: start; }
+      .why h2 { margin: 0; }
+      .why p { margin: 0 0 16px; color: var(--muted); font-size: 19px; }
+      .why p strong { color: var(--ink); font-weight: 600; }
 
-      .demo-note { margin: 24px 0 0; }
+      /* Workflow: pick a step, see it. */
+      .flow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); gap: 24px 40px; align-items: start; }
+      .flow-tabs, .ai-tabs { display: flex; flex-direction: column; gap: 4px; }
+      .flow-tabs button, .ai-tabs button {
+        display: flex; gap: 16px; align-items: flex-start; width: 100%; padding: 16px; text-align: left;
+        background: none; border: 1px solid transparent; border-radius: 12px; color: var(--muted); font-size: 15px; cursor: pointer;
+        transition: background-color .15s, border-color .15s;
+      }
+      .ai-tabs button { display: block; }
+      .flow-tabs button:hover, .ai-tabs button:hover { background: var(--paper-2); }
+      .flow-tabs button[aria-selected="true"], .ai-tabs button[aria-selected="true"] { background: var(--panel); border-color: var(--line); box-shadow: var(--shadow-clay); }
+      .flow-tabs b {
+        flex: none; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px;
+        background: var(--paper-2); color: var(--muted); font-size: 15px;
+      }
+      .flow-tabs button[aria-selected="true"] b { background: var(--brand); color: #fff; }
+      .flow-tabs em { font-style: normal; }
+      .flow-tabs strong, .ai-tabs strong { display: block; margin-bottom: 4px; color: var(--ink); font-size: 17px; font-weight: 600; letter-spacing: -.02em; }
+      .ai-tabs span { display: block; }
+      .flow-view figure { margin: 0; }
+      .flow-view video { display: block; width: 100%; height: auto; aspect-ratio: 1440 / 600; border-radius: var(--radius); border: 1px solid var(--line); background: var(--paper-2); }
+      .flow-view figcaption { margin-top: 12px; }
+      .flow-exports { display: flex; align-items: center; padding: 8px 28px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
+      .flow-exports[hidden] { display: none; }
+      .flow-exports .exports { width: 100%; }
+      .exports { margin: 0; padding: 0; list-style: none; display: grid; }
+      .exports li { display: flex; gap: 14px; align-items: baseline; padding: 14px 0; border-bottom: 1px solid var(--line); }
+      .exports li:last-child { border-bottom: 0; }
+      .exports b { flex: 0 0 9.5em; font-weight: 550; }
+      .exports span { color: var(--muted); font-size: 15px; }
+
+      /* Direct it with AI: pick a surface, get its setup. */
+      .ai { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); gap: 24px 40px; align-items: start; }
+      .ai-view p { margin: 0 0 16px; color: var(--muted); }
+      .ai-view .shortcut { margin: 0; padding: 18px 22px; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; color: var(--ink); line-height: 2; }
+      .ai-view .keys { white-space: nowrap; }
+      .ai-view kbd { padding: 2px 8px; border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 6px; background: var(--paper); }
+
+      .code {
+        position: relative; padding: 18px 92px 18px 22px;
+        background: var(--panel); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow-clay);
+      }
+      .code[hidden] { display: none; }
+      .code pre { margin: 0; overflow-x: auto; line-height: 1.7; }
+      .code .copy { position: absolute; right: 12px; top: 12px; min-height: 36px; padding: 0 14px; border: 0; background: none; color: var(--brand); font-weight: 600; }
+      .code .copy[data-state="copied"] { color: var(--ok); }
 
       /* Quick start */
-      .start { display: flex; flex-wrap: wrap; gap: 32px 40px; }
-      .start-head { flex: 1 1 280px; }
+      .start { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); gap: 32px 56px; align-items: start; }
       .start-head h2 { margin-bottom: 8px; }
       .start-head p { margin: 0 0 8px; color: var(--muted); }
-      .start-head a { display: inline-flex; align-items: center; min-height: 44px; font-size: 14px; text-decoration: none; }
-      .start-body { flex: 999 1 480px; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+      .start-head a { display: inline-flex; align-items: center; min-height: 44px; font-size: 15px; font-weight: 500; text-decoration: none; }
+      .start-body { min-width: 0; display: flex; flex-direction: column; gap: 14px; }
       .seg { align-self: flex-start; display: flex; gap: 2px; padding: 2px; background: #dcdce1; border-radius: 10px; }
       .seg button {
         min-height: 44px; padding: 0 18px; border: 0; border-radius: 8px; background: transparent;
         color: var(--ink); font-size: 14px; font-weight: 600; cursor: pointer; transition: background .15s;
       }
-      .seg button[aria-pressed="true"] { background: var(--panel); box-shadow: 0 1px 2px rgba(0, 0, 0, .12); }
-      .code {
-        position: relative; min-height: 140px; padding: 16px 96px 16px 20px;
-        background: var(--panel); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow-card);
-      }
-      .code[hidden] { display: none; }
-      .code pre { margin: 0; overflow-x: auto; line-height: 1.7; }
-      .code .copy { position: absolute; right: 12px; top: 12px; min-height: 44px; padding: 0 14px; border: 0; background: none; color: var(--accent); font-weight: 600; }
+      .seg button[aria-pressed="true"] { background: var(--panel); color: var(--ink); box-shadow: 0 1px 2px rgba(0, 0, 0, .12); }
 
       table { width: 100%; border-collapse: collapse; }
       th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); }
       th { font-weight: 600; white-space: nowrap; }
       td { color: var(--muted); }
+      td:first-child { font-family: var(--mono); font-size: 14px; color: var(--ink); white-space: nowrap; }
       .scroller { overflow-x: auto; }
 
       details { border-bottom: 1px solid var(--line); padding: 6px 0; }
-      details summary { display: flex; align-items: center; min-height: 44px; cursor: pointer; font-weight: 600; }
-      details p { color: var(--muted); margin: 0 0 12px; }
-      #controls { padding: 0 0 88px; border-top: 0; }
+      details summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 52px; cursor: pointer; font-weight: 600; list-style: none; }
+      details summary::-webkit-details-marker { display: none; }
+      details summary::after { content: "+"; flex: none; font: 400 22px/1 var(--mono); color: var(--muted); transition: transform .2s; }
+      details[open] summary::after { transform: rotate(45deg); }
+      details p { color: var(--muted); margin: 0 0 14px; max-width: 40em; }
+      #controls { padding: 0 0 104px; }
       #controls .scroller { margin: 12px 0; }
-      #faq h2 { margin-bottom: 16px; }
 
-      .closing .wrap { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 24px; }
+      /* Read */
+      .reads { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; }
+      a.card { display: flex; flex-direction: column; color: var(--ink); text-decoration: none; transition: transform .2s, border-color .2s; }
+      a.card:hover { transform: translateY(-3px); border-color: var(--line-strong); }
+      a.card p { flex: 1; font-size: 15px; }
+      a.card .more { margin-top: 20px; color: var(--brand); font-size: 15px; font-weight: 600; }
+
+      .closing { text-align: center; }
+      .closing .wrap { display: flex; flex-direction: column; align-items: center; gap: 24px; }
+      .closing img { width: 88px; height: auto; }
       .closing h2 { margin: 0; }
+      .closing .sub { margin: 0; }
 
-      footer.site { border-top: 1px solid var(--line); padding: 20px 0 32px; color: var(--muted); font-size: 14px; }
-      footer.site .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; }
+      footer.site { border-top: 1px solid var(--line); padding: 32px 0 40px; color: var(--muted); font-size: 14px; }
+      footer.site .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px 24px; }
       footer.site p { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 20px; }
       footer.site a { display: inline-flex; align-items: center; min-height: 44px; color: var(--muted); text-decoration: none; }
       footer.site a:hover { color: var(--ink); }
+      footer.site p.legal { display: block; }
+      footer.site .legal a { display: inline; min-height: 0; text-decoration: underline; text-underline-offset: 2px; }
 
-      @media (max-width: 720px), (hover: none) {
-        .playground-cover .btn, .playground-cover small { display: none; }
-        .playground-phone { display: block; font-size: 14px; padding: 0 24px; text-align: center; }
-        .playground-cover { cursor: default; }
+      @media (max-width: 960px) {
+        .steps, .reads { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .ai, .why, .start, .flow, .hero-grid { grid-template-columns: minmax(0, 1fr); }
+      }
+      @media (max-width: 760px) {
+        header.site nav { display: none; }
       }
       @media (max-width: 720px) {
-        section { padding: 64px 0; }
-        .hero { padding: 56px 0 40px; }
-        .proof { padding-bottom: 64px; }
-        .cta .btn { width: 100%; }
-        .code { padding-right: 20px; padding-top: 60px; }
+        :root { --header-h: 56px; }
+        .stage { height: 170vh; }
+        .stage-pin { justify-content: center; padding-top: var(--header-h); }
+        .stage-reel { margin-top: 6vh; }
+        body { font-size: 16px; }
+        .brand img { width: 32px; }
+        section { padding: 72px 0; }
+        #controls { padding-bottom: 72px; }
+        .hero-actions .btn, .hero-actions .cmd { width: 100%; }
+        .hero-actions .cmd { justify-content: space-between; }
+        .flow-tabs, .ai-tabs { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 4px; }
+        .flow-tabs button, .ai-tabs button { width: auto; padding: 10px 6px; flex-direction: column; align-items: center; gap: 6px; text-align: center; }
+        .flow-tabs em, .ai-tabs span { display: none; }
+        .flow-tabs strong, .ai-tabs strong { margin: 0; font-size: 14px; }
+        .flow-tabs b { width: 26px; height: 26px; font-size: 13px; }
+        .flow-exports { aspect-ratio: auto; padding: 4px 20px; }
       }
       @media (prefers-reduced-motion: reduce) {
+        .stage { height: auto; --p: 0 !important; }
+        .stage-pin { position: relative; height: auto; padding-bottom: 72px; }
+        .stage-reel { transform: none; }
+        .stage-cue { display: none; }
         html { scroll-behavior: auto; }
-        .btn, a.card, .seg button { transition: none; }
+        .btn, a.card, .seg button, details summary::after { transition: none; }
       }
     </style>
   </head>
   <body>
     <header class="site">
       <div class="wrap">
-        <a class="brand" href="/"><img src="/media/cozyclay-logo.png" width="880" height="714" alt="" />CozyClay</a>
-        <nav>
+        <a class="brand" href="/"><img src="/media/cozyclay-mark.png" width="144" height="98" alt="" />CozyClay</a>
+        <nav aria-label="Sections">
           <a href="#how">How it works</a>
-          <a href="#try">Demo</a>
+          <a href="#ai">AI agents</a>
           <a href="#start">Quick start</a>
-          <a href="https://github.com/NomaDamas/CozyClay">GitHub</a>
-          <a class="btn primary" href="#try">Try it</a>
         </nav>
+        <div class="actions">
+          <a class="icon-link" href="https://github.com/NomaDamas/CozyClay" aria-label="CozyClay on GitHub">
+            <svg width="22" height="22" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          </a>
+          <a class="btn primary sm" href="/app/">Try it</a>
+        </div>
       </div>
     </header>
 
     <main>
-      <section class="hero">
-        <div class="wrap">
-          <h1>Block the shot before you <em>pay to render it</em></h1>
-          <p class="lede">Free, open source previs in your browser.</p>
-          <div class="cta">
-            <a class="btn primary" href="#try">Try it in your browser</a>
-            <a class="btn ghost" href="https://github.com/NomaDamas/CozyClay">View on GitHub</a>
+      <section class="stage" id="stage">
+        <div class="stage-pin">
+          <h1 class="curved" aria-label="Previs the shot"><span class="line">Previs the shot</span></h1>
+          <div class="stage-reel">
+            <div class="window">
+              <div class="compare" id="compare" style="--pos: 50%">
+                <video class="cmp-a" src="/media/truck-greybox.mp4" poster="/media/truck-greybox-poster.jpg" width="1920" height="1080" autoplay muted loop playsinline preload="metadata"></video>
+                <video class="cmp-b" src="/media/truck-seedance.mp4" poster="/media/truck-seedance-poster.jpg" width="1920" height="1080" autoplay muted loop playsinline preload="metadata" aria-hidden="true"></video>
+                <div class="cmp-line" aria-hidden="true"><span class="cmp-knob"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l-6 6 6 6M15 6l6 6-6 6"/></svg></span></div>
+                <input class="cmp-range" type="range" min="0" max="100" step="1" value="50" aria-label="Compare the CozyClay greybox with the Seedance 2.5 take" />
+                <span class="tag-l" aria-hidden="true">CozyClay</span>
+                <span class="tag-r" aria-hidden="true">Seedance 2.5</span>
+              </div>
+            </div>
           </div>
-          <span class="cmd">
-            <code>npx cozyclay --via site</code>
-            <button type="button" class="copy" data-copy="npx cozyclay --via site" aria-label="Copy command">
-              <svg class="ic-copy" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15V6a2 2 0 0 1 2-2h9"></path></svg>
-              <svg class="ic-done" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg>
-            </button>
-          </span>
+          <span class="stage-cue" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
         </div>
       </section>
 
-      <section class="proof">
-        <div class="wrap">
-          <figure>
-            <div class="window">
-              <div class="titlebar" aria-hidden="true"><i></i><i></i><i></i><span>CozyClay</span></div>
-              <video
-                src="/media/cozyclay-demo.mp4"
-                poster="/media/cozyclay-demo-poster.jpg"
-                width="1920" height="1080"
-                autoplay muted loop playsinline preload="metadata"
-              ></video>
-            </div>
-            <figcaption>Greybox left, generated right. Same camera, every cut.</figcaption>
-          </figure>
+      <section id="why" class="alt">
+        <div class="wrap why">
+          <div>
+            <span class="kicker">Why</span>
+            <h2>A text prompt cannot hold a whole scene</h2>
+          </div>
+          <div>
+            <p>AI video costs money per take, and one miss means paying again. A prompt cannot say where everyone stands, how they move, where the camera is and when it cuts.</p>
+            <p><strong>Make those decisions first, in 3D, where they are cheap to change.</strong> The video model then gets the shot as a first frame, a greybox reference clip and a prompt that describes the real framing. It follows the blocking instead of guessing.</p>
+          </div>
         </div>
       </section>
 
       <section id="how">
         <div class="wrap">
-          <h2>How it works</h2>
-          <div class="cards">
-            <div class="card">
-              <span class="n">1</span>
-              <h3>Block the scene</h3>
-              <p>Set pieces and characters.</p>
+          <span class="kicker">How it works</span>
+          <h2>Stage, move, shoot, export</h2>
+          <p class="sub">One local workspace that handles like a 3D editor, from the empty deck to the files a video model reads.</p>
+          <div class="flow">
+            <div class="flow-tabs" role="tablist" aria-label="Workflow steps">
+              <button type="button" role="tab" id="flow-t1" aria-controls="flow-p1" aria-selected="true">
+                <b>1</b><span><strong>Stage</strong><em>Build the set from primitives. Add rigged characters, or capsule stand-ins.</em></span>
+              </button>
+              <button type="button" role="tab" id="flow-t2" aria-controls="flow-p2" aria-selected="false" tabindex="-1">
+                <b>2</b><span><strong>Move</strong><em>Describe the action. The compiler bakes every frame; QA checks collisions, foot slide and reach.</em></span>
+              </button>
+              <button type="button" role="tab" id="flow-t3" aria-controls="flow-p3" aria-selected="false" tabindex="-1">
+                <b>3</b><span><strong>Shoot</strong><em>Shots on a timeline, dolly rails and cranes, a look through the lens.</em></span>
+              </button>
+              <button type="button" role="tab" id="flow-t4" aria-controls="flow-p4" aria-selected="false" tabindex="-1">
+                <b>4</b><span><strong>Export</strong><em>Everything the video model needs, in one pack. Every edit is one undo step.</em></span>
+              </button>
             </div>
-            <div class="card">
-              <span class="n">2</span>
-              <h3>Set the camera</h3>
-              <p>Moves and cuts on a timeline.</p>
-            </div>
-            <div class="card">
-              <span class="n">3</span>
-              <h3>Hand off the shot</h3>
-              <p>Export the move, not a prompt.</p>
+            <div class="flow-view">
+              <figure role="tabpanel" id="flow-p1" aria-labelledby="flow-t1">
+                <video src="/media/step-stage.mp4" poster="/media/step-stage-poster.jpg" width="1440" height="600" muted loop playsinline preload="none" aria-label="A whole street built from cubes and cylinders in CozyClay."></video>
+                <figcaption>A whole street from cubes and cylinders, railings and lamps included.</figcaption>
+              </figure>
+              <figure role="tabpanel" id="flow-p2" aria-labelledby="flow-t2" hidden>
+                <video src="/media/step-move.mp4" poster="/media/step-move-poster.jpg" width="1440" height="600" muted loop playsinline preload="none" aria-label="A request to the agent, then the clay character walks to a ball and pushes it with both hands."></video>
+                <figcaption>Ask the agent; the character walks to the ball and pushes it with both hands.</figcaption>
+              </figure>
+              <figure role="tabpanel" id="flow-p3" aria-labelledby="flow-t3" hidden>
+                <video src="/media/step-shoot.mp4" poster="/media/step-shoot-poster.jpg" width="1440" height="600" muted loop playsinline preload="none" aria-label="The shot camera riding a four-point rail while the crane rises, with its live preview."></video>
+                <figcaption>The camera rides a rail while the crane takes it up, previewed live.</figcaption>
+              </figure>
+              <div role="tabpanel" id="flow-p4" aria-labelledby="flow-t4" class="flow-exports" hidden>
+                <ul class="exports" aria-label="Export formats">
+                  <li><b>Keyframe pack</b><span>First and last frame, greybox clip, camera, prompt</span></li>
+                  <li><b>Video</b><span>The shot as an mp4</span></li>
+                  <li><b>Passes</b><span>Depth and normal</span></li>
+                  <li><b>Contact sheet</b><span>The shots side by side</span></li>
+                  <li><b>OTIO cut list</b><span>The edit, for your editing software</span></li>
+                  <li><b>Storyboard</b><span>Panels with captions and an animatic</span></li>
+                </ul>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      <section id="try" class="alt">
+      <section id="ai">
         <div class="wrap">
-        <h2>Try it</h2>
-        <div class="demo">
-        <div class="window">
-        <div class="titlebar" aria-hidden="true"><i></i><i></i><i></i><span>CozyClay</span></div>
-        <div class="playground" id="playground" style="background-image: url('/media/playground-poster.jpg')">
-          <button class="playground-cover" id="playground-start" type="button" aria-label="Start the playground">
-            <span class="btn primary">Open the studio here</span>
-            <small>About 2 MB</small>
-            <span class="playground-phone">Needs a mouse and keyboard. Come back on a computer, or run <code>npx cozyclay --via site</code>.</span>
-          </button>
-          <div class="playground-loading">Loading the studio…</div>
-        </div>
-        <div class="playground-bar">
-          <span class="spacer"></span>
-          <button type="button" id="playground-full">Fullscreen</button>
-          <a href="/app/" target="_blank" rel="noopener">Open studio ↗</a>
-          <button type="button" id="playground-close">Close</button>
-        </div>
-        </div>
-        </div>
-        <p class="small demo-note">Needs a mouse and keyboard.</p>
-        <script type="module">
-          (() => {
-            const box = document.getElementById("playground");
-            const section = document.getElementById("try");
-            const start = document.getElementById("playground-start");
-            const full = document.getElementById("playground-full");
-            const close = document.getElementById("playground-close");
-            const SRC = "/app/?embed=playground";
-            const canPlay = () => matchMedia("(min-width: 721px) and (hover: hover)").matches;
-            let frame = null;
-            let cancelReady = () => {};
-            const stop = () => {
-              cancelReady();
-              if (frame) frame.remove();
-              frame = null;
-              box.dataset.state = "";
-              start.hidden = false;
-              section.classList.remove("playground-live");
-            };
-            start.addEventListener("click", () => {
-              if (!canPlay()) return;
-              if (frame) stop();
-              frame = document.createElement("iframe");
-              frame.src = SRC;
-              frame.title = "CozyClay playground";
-              frame.allow = "fullscreen; pointer-lock";
-              frame.loading = "eager";
-              box.appendChild(frame);
-              box.dataset.state = "loading";
-              start.hidden = true;
-              const ready = () => {
-                if (box.dataset.state !== "loading") return;
-                cancelReady();
-                box.dataset.state = "live";
-                section.classList.add("playground-live");
-              };
-              const onReady = (event) => { if (event.data?.type === "cozyclay:playground-ready" && event.source === frame?.contentWindow && event.origin === window.location.origin) ready(); };
-              window.addEventListener("message", onReady);
-              const readyTimeout = setTimeout(ready, 15000);
-              cancelReady = () => { clearTimeout(readyTimeout); window.removeEventListener("message", onReady); };
-              if (window.posthog?.capture) window.posthog.capture("landing:playground_started");
-            });
-            full.addEventListener("click", () => { if (frame?.requestFullscreen) frame.requestFullscreen(); });
-            close.addEventListener("click", stop);
-            document.querySelectorAll("button.copy[data-copy]").forEach((button) => {
-              button.addEventListener("click", async () => {
-                try { await navigator.clipboard.writeText(button.dataset.copy); button.dataset.state = "copied"; setTimeout(() => { button.dataset.state = ""; }, 1400); } catch {}
-              });
-            });
-          })();
-        </script>
-        </div>
-      </section>
-
-      <section id="what">
-        <div class="wrap">
-          <h2>What you can do</h2>
-          <div class="cards">
-            <div class="card">
-              <h3>Stage a scene</h3>
-              <p>Primitives, imported models, plan view.</p>
+          <span class="kicker">Direct it with AI</span>
+          <h2>Your agent builds the scene while you watch</h2>
+          <p class="sub">The same scene can be driven from three places, live in the viewport. Bring ChatGPT, Anthropic, OpenAI, Gemini, MiniMax, OpenRouter or CLIProxyAPI.</p>
+          <div class="ai">
+            <div class="ai-tabs" role="tablist" aria-label="Ways to drive CozyClay">
+              <button type="button" role="tab" id="ai-t1" aria-controls="ai-p1" aria-selected="true"><strong>Agent panel</strong><span>In the studio</span></button>
+              <button type="button" role="tab" id="ai-t2" aria-controls="ai-p2" aria-selected="false" tabindex="-1"><strong>MCP server</strong><span>Claude, Cursor, any client</span></button>
+              <button type="button" role="tab" id="ai-t3" aria-controls="ai-p3" aria-selected="false" tabindex="-1"><strong>Terminal</strong><span>Coding agents</span></button>
             </div>
-            <div class="card">
-              <h3>Move through the set</h3>
-              <p>Fly, walk, orbit, frame.</p>
-            </div>
-            <div class="card">
-              <h3>Author the camera</h3>
-              <p>Lens, dolly, crane, cuts.</p>
-            </div>
-            <div class="card">
-              <h3>Generate motion</h3>
-              <p>Poses, Prompt Blocks, IK fixes.</p>
+            <div class="ai-view">
+              <div role="tabpanel" id="ai-p1" aria-labelledby="ai-t1">
+                <p>Chat beside the viewport and watch each change land. Sign in with ChatGPT or use your own key. Every change the agent makes is one undo step.</p>
+                <p class="shortcut">Open the studio, then press <span class="keys"><kbd>Cmd/Ctrl</kbd> + <kbd>B</kbd></span></p>
+              </div>
+              <div role="tabpanel" id="ai-p2" aria-labelledby="ai-t2" hidden>
+                <p>Add CozyClay to Claude Desktop, Claude Code, Cursor or any MCP client. The agent edits the scene in the studio you have open.</p>
+                <div class="code">
+                  <pre><code>{
+  "mcpServers": {
+    "cozyclay": {
+      "command": "npx",
+      "args": ["-y", "cozyclay", "mcp"]
+    }
+  }
+}</code></pre>
+                  <button type="button" class="copy" data-copy='{ "mcpServers": { "cozyclay": { "command": "npx", "args": ["-y", "cozyclay", "mcp"] } } }'>Copy</button>
+                </div>
+              </div>
+              <div role="tabpanel" id="ai-p3" aria-labelledby="ai-t3" hidden>
+                <p>Coding agents drive a running studio from the shell, JSON in and out.</p>
+                <div class="code">
+                  <pre><code>npx cozyclay
+cclay live status --wait</code></pre>
+                  <button type="button" class="copy" data-copy="npx cozyclay&#10;cclay live status --wait">Copy</button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -442,9 +526,10 @@
       <section id="start" class="alt">
         <div class="wrap start">
           <div class="start-head">
-            <h2>Quick start</h2>
-            <p>Node.js 22.19+ and a Chromium browser.</p>
-            <a href="#controls" id="controls-link">Full control list</a>
+            <span class="kicker">Quick start</span>
+            <h2>One command</h2>
+            <p>Node.js 22.19+ and a Chromium browser. The studio opens at <code>127.0.0.1:5180/app/</code>.</p>
+            <a href="#controls" id="controls-link">Full control list →</a>
           </div>
           <div class="start-body">
             <div class="seg" id="start-tabs">
@@ -462,6 +547,7 @@ npm install
 npm run dev</code></pre>
               <button type="button" class="copy" data-copy="git clone https://github.com/NomaDamas/CozyClay.git&#10;cd CozyClay&#10;npm install&#10;npm run dev">Copy</button>
             </div>
+            <p class="small">Asking an AI agent to set it up? Give it the repository link; its instructions are in <a href="https://github.com/NomaDamas/CozyClay/blob/main/INSTALL_FOR_AGENTS.md">INSTALL_FOR_AGENTS.md</a>.</p>
           </div>
         </div>
       </section>
@@ -493,48 +579,41 @@ npm run dev</code></pre>
 
       <section id="read">
         <div class="wrap">
+          <span class="kicker">Guides</span>
           <h2>Read</h2>
-          <div class="cards">
-            <a class="card" href="/greybox-to-video/">Greybox to AI video</a>
-            <a class="card" href="/seedance-camera-control/">Seedance 2.5 camera control</a>
-            <a class="card" href="/previs-software/">Previs software compared</a>
-            <a class="card" href="/ai-camera-control/">Camera control for AI video</a>
+          <div class="reads">
+            <a class="card" href="/greybox-to-video/">
+              <h3>Greybox to AI video</h3>
+              <p>Why a grey blockout is the most reliable input for a video model, and the block-then-generate loop.</p>
+              <span class="more">Read →</span>
+            </a>
+            <a class="card" href="/seedance-camera-control/">
+              <h3>Seedance 2.5 camera control</h3>
+              <p>Getting the same camera on every take with a reference clip.</p>
+              <span class="more">Read →</span>
+            </a>
+            <a class="card" href="/previs-software/">
+              <h3>Previs software compared</h3>
+              <p>Free, open source and browser-based previs tools side by side.</p>
+              <span class="more">Read →</span>
+            </a>
+            <a class="card" href="/ai-camera-control/">
+              <h3>Camera control for AI video</h3>
+              <p>Why camera prompts drift and what the models actually accept.</p>
+              <span class="more">Read →</span>
+            </a>
           </div>
         </div>
       </section>
 
-      <section id="faq">
-        <div class="wrap narrow">
-        <h2>FAQ</h2>
-        <details>
-          <summary>What is CozyClay?</summary>
-          <p>Open source previs software in a browser: block a scene, pose characters, author camera moves and cuts, preview motion.</p>
-        </details>
-        <details>
-          <summary>Previs or previz?</summary>
-          <p>Same thing. Previsualization: the rough 3D pass where a shot gets blocked before anyone pays for final assets or renders.</p>
-        </details>
-        <details>
-          <summary>Can I use it for camera control in AI video?</summary>
-          <p>That is why it exists. Block the shot in 3D, then hand the camera move to the video model instead of describing it in a prompt. See <a href="/ai-camera-control/">camera control for AI video</a>.</p>
-        </details>
-        <details>
-          <summary>Do I need Blender or Unity?</summary>
-          <p>No. It runs in a Chromium browser. Controls follow Unity conventions, nothing to install.</p>
-        </details>
-        <details>
-          <summary>Is it free? Does it phone home?</summary>
-          <p>Free, AGPL-3.0, runs on your machine and works offline. Project content is never uploaded. The npm package sends anonymous usage metrics; <code>cclay telemetry off</code> disables them.</p>
-        </details>
-        </div>
-      </section>
-
-      <section class="closing alt">
+      <section class="closing">
         <div class="wrap">
+          <img src="/media/cozyclay-mark.png" width="144" height="98" alt="" loading="lazy" />
           <h2>Block your first shot</h2>
+          <p class="sub">Free, open source, and running in your browser in under a minute.</p>
           <div class="cta">
-            <a class="btn primary" href="#try">Try it in your browser</a>
-            <a class="btn ghost" href="https://github.com/NomaDamas/CozyClay">View on GitHub</a>
+            <a class="btn primary" href="/app/">Try it in your browser</a>
+            <a class="btn ghost" href="https://discord.gg/Hp9V5wwgjF">Join the Discord</a>
           </div>
         </div>
       </section>
@@ -554,24 +633,165 @@ npm run dev</code></pre>
         document.getElementById("controls-link").addEventListener("click", () => {
           document.querySelector("#controls details").open = true;
         });
-        // A started playground takes the screen: steps, window and its bar in view.
-        document.getElementById("playground-start").addEventListener("click", () => {
-          if (!matchMedia("(min-width: 721px) and (hover: hover)").matches) return;
-          const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
-          document.querySelector("#try .demo").scrollIntoView({ block: "start", behavior: still ? "auto" : "smooth" });
+        document.querySelectorAll("button.copy[data-copy]").forEach((button) => {
+          button.addEventListener("click", async () => {
+            try { await navigator.clipboard.writeText(button.dataset.copy); button.dataset.state = "copied"; setTimeout(() => { button.dataset.state = ""; }, 1400); } catch {}
+          });
         });
+        // Hero compare: drag (or arrow keys on the hidden range) moves the divider;
+        // the generated take follows the greybox clock so both show the same frame.
+        const compare = document.getElementById("compare");
+        const greybox = compare.querySelector(".cmp-a");
+        const take = compare.querySelector(".cmp-b");
+        const range = compare.querySelector(".cmp-range");
+        const setPos = (pct) => {
+          const p = Math.min(100, Math.max(0, pct));
+          compare.style.setProperty("--pos", p + "%");
+          range.value = String(Math.round(p));
+        };
+        const fromPointer = (event) => {
+          const box = compare.getBoundingClientRect();
+          setPos(((event.clientX - box.left) / box.width) * 100);
+        };
+        compare.addEventListener("pointerdown", (event) => {
+          compare.setPointerCapture(event.pointerId);
+          fromPointer(event);
+        });
+        compare.addEventListener("pointermove", (event) => {
+          if (compare.hasPointerCapture(event.pointerId)) fromPointer(event);
+        });
+        range.addEventListener("input", () => setPos(Number(range.value)));
+        // The greybox is the clock. Every frame the take is checked against it and
+        // re-seeked when it drifts more than about one frame; both files have a
+        // keyframe every second, so the seek lands at once. A short cooldown lets
+        // a seek finish before the next check. The take holds while the greybox
+        // buffers.
+        let settleUntil = 0;
+        const syncTake = () => {
+          if (greybox.paused !== take.paused) (greybox.paused ? take.pause() : take.play().catch(() => {}));
+          if (take.seeking || performance.now() < settleUntil) return;
+          if (Math.abs(take.currentTime - greybox.currentTime) > 0.045) {
+            take.currentTime = greybox.currentTime;
+            settleUntil = performance.now() + 400;
+          }
+        };
+        const tick = () => {
+          if (!greybox.paused) syncTake();
+          if (greybox.requestVideoFrameCallback) greybox.requestVideoFrameCallback(tick);
+          else requestAnimationFrame(tick);
+        };
+        tick();
+        greybox.addEventListener("waiting", () => take.pause());
+        // Tab lists (workflow steps, agent surfaces): click or arrow keys pick a panel.
+        document.querySelectorAll("[role=tablist]").forEach((list) => {
+          const tabs = [...list.querySelectorAll("[role=tab]")];
+          const select = (tab) => tabs.forEach((other) => {
+            const on = other === tab;
+            other.setAttribute("aria-selected", String(on));
+            other.tabIndex = on ? 0 : -1;
+            document.getElementById(other.getAttribute("aria-controls")).hidden = !on;
+          });
+          tabs.forEach((tab, i) => {
+            tab.addEventListener("click", () => select(tab));
+            tab.addEventListener("keydown", (event) => {
+              const move = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[event.key];
+              if (!move) return;
+              event.preventDefault();
+              const next = tabs[(i + move + tabs.length) % tabs.length];
+              select(next);
+              next.focus();
+            });
+          });
+        });
+        // How it works: the open step's clip plays while the section is on screen.
+        const flowView = document.querySelector(".flow-view");
+        let flowSeen = false;
+        const playOpenStep = () => flowView.querySelectorAll("video").forEach((clip) => {
+          if (flowSeen && !clip.closest("[role=tabpanel]").hidden) clip.play().catch(() => {});
+          else clip.pause();
+        });
+        new IntersectionObserver(([entry]) => { flowSeen = entry.isIntersecting; playOpenStep(); }).observe(flowView);
+        document.querySelectorAll(".flow-tabs [role=tab]").forEach((tab) => tab.addEventListener("click", playOpenStep));
+        document.querySelector(".flow-tabs").addEventListener("keydown", () => setTimeout(playOpenStep));
+        // Hero headline: the letters sit on the front of a cylinder, so the
+        // middle bulges toward the viewer and the ends fall away.
+        const headline = document.querySelector("h1.curved");
+        headline.querySelectorAll(".line").forEach((line) => {
+          const text = line.textContent;
+          line.textContent = "";
+          line.setAttribute("aria-hidden", "true");
+          for (const char of text) {
+            const span = document.createElement("span");
+            span.className = "ch";
+            span.textContent = char;
+            line.appendChild(span);
+          }
+        });
+        const bend = () => {
+          const chars = [...headline.querySelectorAll(".ch")];
+          chars.forEach((c) => { c.style.transform = ""; });
+          const box = headline.getBoundingClientRect();
+          const centre = box.left + box.width / 2;
+          const half = Math.max(...[...headline.querySelectorAll(".line")].map((l) => l.getBoundingClientRect().width)) / 2;
+          chars.forEach((c) => {
+            const r = c.getBoundingClientRect();
+            const u = Math.max(-1, Math.min(1, (r.left + r.width / 2 - centre) / half));
+            const depth = Math.sqrt(1 - 0.75 * u * u);
+            c.style.transform = "scale(" + (0.84 + 0.16 * depth).toFixed(3) + ")";
+          });
+        };
+        bend();
+        document.fonts.ready.then(bend);
+        addEventListener("resize", bend);
+        // First screen: map the scroll through the stage to --p, and size the
+        // reel's rise and growth so it ends centred at the full width.
+        const stage = document.getElementById("stage");
+        const reel = stage.querySelector(".stage-reel");
+        const header = document.querySelector("header.site");
+        const still = matchMedia("(prefers-reduced-motion: reduce)");
+        const measure = () => {
+          const pin = stage.querySelector(".stage-pin");
+          const start = 0.94;
+          const width = reel.offsetWidth;
+          const full = Math.min(innerWidth * 0.98, (innerHeight - header.offsetHeight - 24) * 16 / 9 + 0);
+          const end = Math.max(start, full / width);
+          stage.style.setProperty("--grow", (end - start).toFixed(3));
+          const top = reel.offsetTop;
+          const target = header.offsetHeight + Math.max(12, (innerHeight - header.offsetHeight - reel.offsetHeight * end) / 2);
+          stage.style.setProperty("--rise", (target - top) + "px");
+          void pin;
+        };
+        let queued = false;
+        const onScroll = () => {
+          queued = false;
+          const box = stage.getBoundingClientRect();
+          const span = stage.offsetHeight - innerHeight;
+          const p = still.matches || span <= 0 ? 0 : Math.min(1, Math.max(0, -box.top / span));
+          stage.style.setProperty("--p", p.toFixed(4));
+          document.body.classList.toggle("on-stage", box.bottom > header.offsetHeight);
+        };
+        const queue = () => { if (!queued) { queued = true; requestAnimationFrame(onScroll); } };
+        measure();
+        onScroll();
+        addEventListener("scroll", queue, { passive: true });
+        addEventListener("resize", () => { measure(); queue(); });
+        greybox.addEventListener("seeked", syncTake);
+        greybox.addEventListener("play", syncTake);
+        greybox.addEventListener("pause", syncTake);
       })();
     </script>
 
     <footer class="site">
       <div class="wrap">
         <p>
-          <a href="https://github.com/NomaDamas/CozyClay">Source (AGPL)</a>
+          <a href="https://github.com/NomaDamas/CozyClay">GitHub (AGPL)</a>
           <a href="https://www.npmjs.com/package/cozyclay">npm</a>
+          <a href="https://github.com/NomaDamas/CozyClay/blob/main/CHANGELOG.md">Changelog</a>
+          <a href="https://discord.gg/Hp9V5wwgjF">Discord</a>
           <a href="/privacy/">Privacy</a>
         </p>
-        <p>
-          CozyClay is not affiliated with or endorsed by NVIDIA or Unity Technologies.
+        <p class="legal">
+          Made by <a href="https://github.com/NomaDamas">NomaDamas</a>. Not affiliated with or endorsed by NVIDIA or Unity Technologies.
         </p>
       </div>
     </footer>
