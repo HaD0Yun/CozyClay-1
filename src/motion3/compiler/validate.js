@@ -116,7 +116,7 @@ function validateFlow(flow, err, unknown) {
 	const o = flow.overlap;
 	if (o !== undefined && typeof o !== "boolean" && !(Number.isFinite(o) && o >= 0 && o <= 2)) err(`spec.flow.overlap must be true, false or a scale 0..2, got ${fmt(o)}`);
 	const h = flow.headLead;
-	if (h !== undefined && typeof h !== "boolean" && !(Number.isFinite(h) && h >= 0 && h <= 12)) err(`spec.flow.headLead must be true, false or 0..12 frames, got ${fmt(h)}`);
+	if (h !== undefined && typeof h !== "boolean" && !(Number.isInteger(h) && h >= 0 && h <= 12)) err(`spec.flow.headLead must be true, false or 0..12 whole frames, got ${fmt(h)}`);
 	const frames = v => Number.isFinite(v) && v >= 0 && v <= 6, lag = flow.lag, LAG = "false, 0..6 frames or { spine?, head?, arms? }";
 	if (lag === undefined || lag === false || frames(lag)) return;
 	if (!lag || typeof lag !== "object" || Array.isArray(lag)) return err(`spec.flow.lag must be ${LAG}, got ${fmt(lag)}`);

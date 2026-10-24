@@ -59,7 +59,7 @@ export function flowOptions(flow, seed = "", hands = { l: [], r: [] }) {
 	const f = flow ?? {}, lag = f.lag === false ? 0 : f.lag;
 	const each = typeof lag === "number" ? { spine: lag, head: lag, arms: lag } : { ...FLOW_LAG, ...(lag ?? {}) };
 	const overlap = f.overlap === false ? 0 : typeof f.overlap === "number" ? f.overlap : 1;
-	const headLead = f.headLead === false ? 0 : typeof f.headLead === "number" ? f.headLead : HEAD_LEAD;
+	const headLead = f.headLead === false ? 0 : typeof f.headLead === "number" ? Math.round(f.headLead) : HEAD_LEAD;
 	return { smooth: f.smooth !== false, lag: each, overlap, headLead, seed, hands };
 }
 

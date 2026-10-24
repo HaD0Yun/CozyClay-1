@@ -38,6 +38,13 @@ const turned = stand(), still = stand({ headLead: false }), kinds = r => json(r.
 console.log(`  standing turn: lead on ${json(turned.observations.life.lead)}, off ${json(still.observations.life.lead)}; qa ${kinds(turned)} / ${kinds(still)}`);
 expect("a standing turn: the head turns at least 3 frames before the pelvis, QA unchanged", turned.observations.life.lead?.[0] >= 3 && kinds(turned) === kinds(still), json(turned.observations.life.lead));
 
+// a turn and back reads a lead too (its heading spans 90 degrees, its net turn is 0); a straight walk's sway is no turn
+const there = run({ schema: "cozyclay.motion-spec.v1", fps: 24, frames: 120,
+	use: [{ skill: "standIdle", f0: 0, args: { at: [0, 0], heading: 0 } }], keys: [{ f: 10, set: { yaw: 0 } }, { f: 40, set: { yaw: 90 } }, { f: 80, set: { yaw: 0 } }] }).observations.life.lead;
+const straight = run({ ...turnWalk(), use: [{ skill: "standIdle", f0: 0, args: { at: [0, 0], heading: 0 } }, { skill: "walkTo", f0: 6, args: { to: [0, 6] } }] }).observations.life.lead;
+expect("a turn and back reads its lead; a straight walk reads none", there?.[0] >= 3 && straight === null, json([there, straight]));
+expect("headLead takes whole frames only", (() => { try { run(turnWalk({ flow: { headLead: 2.5 } })); return false; } catch (e) { return /headLead must be true, false or 0\.\.12 whole frames/.test(e.message); } })());
+
 // a look the keys set during the walk wins: the head yaw is exactly what it is without the lead
 const keys = [{ f: 40, set: { head_yaw: 20 } }, { f: 90, set: { head_yaw: -10 } }];
 const looked = run(turnWalk({ keys })), lookedOff = run(turnWalk({ keys, flow: { headLead: false } }));
