@@ -28,6 +28,7 @@ export const ZH_DOMAINS = {
 	"Discard unsaved changes and start a new project?": "放弃未保存的更改并新建项目？",
 	"That starter scene is not in this build": "此版本中没有该起始场景",
 	"Could not open the project": "无法打开项目",
+	"This browser would not read that file. Open it once more.": "此浏览器未能读取该文件，请再打开一次。",
 	"Project access was not granted — allow access and try again.": "未获得项目访问权限 — 请允许访问后重试。",
 	"SCENE 01": "场景 01",
 	"Draw the selected Shot's rail in the Top-View": "在顶视图中绘制所选镜头的轨道",
