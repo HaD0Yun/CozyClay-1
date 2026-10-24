@@ -63,14 +63,13 @@ export const PROVIDERS = [
 	{ id: "anthropic-subscription", label: "Claude (Anthropic)", auth: "oauth", env: [] },
 	{ id: "openai", label: "OpenAI", auth: "api_key", env: ["OPENAI_API_KEY"] },
 	{ id: "google", label: "Google Gemini", auth: "api_key", env: ["GEMINI_API_KEY", "GOOGLE_API_KEY"] },
+	{ id: "minimax", label: "MiniMax", auth: "api_key", env: ["MINIMAX_API_KEY"] }, { id: "minimax-cn", label: "MiniMax (China)", auth: "api_key", env: ["MINIMAX_CN_API_KEY"] },
 	{ id: "openrouter", label: "OpenRouter", auth: "api_key", env: ["OPENROUTER_API_KEY"] },
 	{ id: "cliproxy", label: "CLIProxyAPI", auth: "api_key", env: ["CLIPROXY_API_KEY"] },
 ];
 
 const factories = {
-	"openai-codex": "openaiCodexProvider",
-	openai: "openaiProvider",
-	google: "googleProvider",
+	"openai-codex": "openaiCodexProvider", openai: "openaiProvider", google: "googleProvider", minimax: "minimaxProvider", "minimax-cn": "minimaxCnProvider",
 	openrouter: "openrouterProvider",
 };
 
