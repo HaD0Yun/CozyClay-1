@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 3.1.4 - 2026-10-24
+
+Starring CozyClay from the terminal takes one key when the GitHub CLI is signed in.
+
+CLI
+
+- The one-time star question on exit stars NomaDamas/CozyClay through `gh`
+  when `gh` is installed and signed in: answer `y` and it is done, with no
+  browser. An account that already starred the repo is not asked. Without
+  `gh` the question opens the repo page as before, and `--no-star`,
+  `COZYCLAY_NO_STAR` and CI still turn it off.
+
 ## 3.1.3 - 2026-10-24
 
 More ways to connect a model (Claude Pro/Max, OpenAI-compatible servers, MiniMax M3.1 Flash), a Simplified Chinese UI, and easier project opening.
