@@ -143,9 +143,10 @@
       .cta { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
 
       /* Hero: headline left, the pitch and the two ways in on the right. */
-      .hero { padding: 112px 0 56px; }
+      .hero { padding: 24px 0 32px; overflow: hidden; }
+      .hero .wrap { max-width: none; padding: 0 2vw; }
       .hero-grid { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 28px; }
-      .hero h1 { max-width: none; font-size: clamp(56px, 13vw, 168px); line-height: .98; letter-spacing: -.025em; font-weight: 400; }
+      .hero h1 { max-width: none; font-size: 21.5vw; opacity: .88; margin: 0; letter-spacing: -.045em !important; line-height: .98; letter-spacing: -.025em; font-weight: 400; }
       .hero h1 em { display: inline-block; white-space: nowrap; }
       .hero h1 .line { display: inline-block; white-space: nowrap; }
       .hero h1.curved { padding: .06em 0; }
@@ -325,7 +326,7 @@
         .brand img { width: 32px; }
         section { padding: 72px 0; }
         #controls { padding-bottom: 72px; }
-        .hero { padding: 48px 0 32px; }
+        .hero { padding: 16px 0 20px; }
         .hero-actions .btn, .hero-actions .cmd { width: 100%; }
         .hero-actions .cmd { justify-content: space-between; }
         .flow-tabs, .ai-tabs { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 4px; }
