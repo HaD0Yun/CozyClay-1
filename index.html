@@ -635,6 +635,73 @@ npm run dev</code></pre>
         document.getElementById("controls-link").addEventListener("click", () => {
           document.querySelector("#controls details").open = true;
         });
+        document.querySelectorAll("button.copy[data-copy]").forEach((button) => {
+          button.addEventListener("click", async () => {
+            try { await navigator.clipboard.writeText(button.dataset.copy); button.dataset.state = "copied"; setTimeout(() => { button.dataset.state = ""; }, 1400); } catch {}
+          });
+        });
+        // Hero compare: drag (or arrow keys on the hidden range) moves the divider;
+        // the generated take follows the greybox clock so both show the same frame.
+        const compare = document.getElementById("compare");
+        const greybox = compare.querySelector(".cmp-a");
+        const take = compare.querySelector(".cmp-b");
+        const range = compare.querySelector(".cmp-range");
+        const setPos = (pct) => {
+          const p = Math.min(100, Math.max(0, pct));
+          compare.style.setProperty("--pos", p + "%");
+          range.value = String(Math.round(p));
+        };
+        const fromPointer = (event) => {
+          const box = compare.getBoundingClientRect();
+          setPos(((event.clientX - box.left) / box.width) * 100);
+        };
+        compare.addEventListener("pointerdown", (event) => {
+          compare.setPointerCapture(event.pointerId);
+          fromPointer(event);
+        });
+        compare.addEventListener("pointermove", (event) => {
+          if (compare.hasPointerCapture(event.pointerId)) fromPointer(event);
+        });
+        range.addEventListener("input", () => setPos(Number(range.value)));
+        const follow = () => {
+          if (Math.abs(take.currentTime - greybox.currentTime) > 0.08) take.currentTime = greybox.currentTime;
+          if (greybox.paused !== take.paused) (greybox.paused ? take.pause() : take.play().catch(() => {}));
+        };
+        // Tab lists (workflow steps, agent surfaces): click or arrow keys pick a panel.
+        document.querySelectorAll("[role=tablist]").forEach((list) => {
+          const tabs = [...list.querySelectorAll("[role=tab]")];
+          const select = (tab) => tabs.forEach((other) => {
+            const on = other === tab;
+            other.setAttribute("aria-selected", String(on));
+            other.tabIndex = on ? 0 : -1;
+            document.getElementById(other.getAttribute("aria-controls")).hidden = !on;
+          });
+          tabs.forEach((tab, i) => {
+            tab.addEventListener("click", () => select(tab));
+            tab.addEventListener("keydown", (event) => {
+              const move = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[event.key];
+              if (!move) return;
+              event.preventDefault();
+              const next = tabs[(i + move + tabs.length) % tabs.length];
+              select(next);
+              next.focus();
+            });
+          });
+        });
+        // How it works: the open step's clip plays while the section is on screen.
+        const flowView = document.querySelector(".flow-view");
+        let flowSeen = false;
+        const playOpenStep = () => flowView.querySelectorAll("video").forEach((clip) => {
+          if (flowSeen && !clip.closest("[role=tabpanel]").hidden) clip.play().catch(() => {});
+          else clip.pause();
+        });
+        new IntersectionObserver(([entry]) => { flowSeen = entry.isIntersecting; playOpenStep(); }).observe(flowView);
+        document.querySelectorAll(".flow-tabs [role=tab]").forEach((tab) => tab.addEventListener("click", playOpenStep));
+        document.querySelector(".flow-tabs").addEventListener("keydown", () => setTimeout(playOpenStep));
+        greybox.addEventListener("timeupdate", follow);
+        greybox.addEventListener("seeked", follow);
+        greybox.addEventListener("play", follow);
+        greybox.addEventListener("pause", follow);
       })();
     </script>
 
