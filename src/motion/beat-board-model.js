@@ -10,15 +10,15 @@ import { ko } from "../locale.js";
 const MAX_ROWS = 3;
 
 const LABELS = {
-	walk: ["Walk", "걷기"], walkTo: ["Walk", "걷기"], keys: ["Keys", "키 포즈"], standIdle: ["Stand", "서 있기"],
-	sitInSeat: ["Sit", "앉기"], exitCar: ["Exit car", "차에서 내리기"], reachGrip: ["Reach and grip", "뻗어 잡기"],
-	smokeCigarette: ["Smoke", "담배"],
+	walk: ["Walk", "걷기", "行走"], walkTo: ["Walk", "걷기", "行走"], keys: ["Keys", "키 포즈", "关键姿势"], standIdle: ["Stand", "서 있기", "站立"],
+	sitInSeat: ["Sit", "앉기", "坐下"], exitCar: ["Exit car", "차에서 내리기", "下车"], reachGrip: ["Reach and grip", "뻗어 잡기", "伸手抓取"],
+	smokeCigarette: ["Smoke", "담배", "吸烟"],
 };
 
 /** A short, readable name for a beat (the timeline's skill or generator name). */
 export function beatLabel(beat) {
 	const pair = LABELS[beat];
-	return pair ? ko(pair[0], pair[1]) : String(beat ?? "");
+	return pair ? ko(pair[0], pair[1], pair[2]) : String(beat ?? "");
 }
 
 const overlaps = (a0, a1, b0, b1) => a0 <= b1 && b0 <= a1;

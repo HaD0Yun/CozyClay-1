@@ -1,7 +1,7 @@
 import { useContext, useEffect, useRef } from "react";
 import { AppContext } from "../app-context.js";
 import Foldout from "./Foldout.jsx";
-import { ko, isKo } from "../locale.js";
+import { ko } from "../locale.js";
 import { Field, Vector3Row } from "../ui.jsx";
 import { sceneObjectNameDisplayKo } from "../app-stage.jsx";
 import { MESH_KIND, CUTOUT_KIND, EMPTY_KIND, SCULPT_KIND, CUTOUT_DEFAULT_HEIGHT, OBJECT_COLORS, normalizeObjectColor } from "../scene-objects.js";
@@ -54,15 +54,7 @@ export default function ObjectTransformPanel({
 								</p>
 								<label className="check snap-toggle details-toggle-row">
 									<span>
-									{isKo ? (
-										<>
-											그리드 스냅 — <kbd>Ctrl</kbd>을 누르면 반대로 작동
-										</>
-									) : (
-										<>
-											Snap to grid — hold <kbd>Ctrl</kbd> to invert
-										</>
-									)}
+									{ko(<>Snap to grid — hold <kbd>Ctrl</kbd> to invert</>, <>그리드 스냅 — <kbd>Ctrl</kbd>을 누르면 반대로 작동</>, <>网格吸附 — 按住 <kbd>Ctrl</kbd> 反向</>)}
 									</span>
 									<input type="checkbox" checked={snapEnabled} onChange={(event) => setSnapEnabled(event.target.checked)} />
 								</label>
@@ -184,9 +176,9 @@ export default function ObjectTransformPanel({
 											/>
 										</Field>
 										<p className="inspector-hint">
-											{isKo
-												? `높이를 바꾸면 너비는 사진 비율(${(selectedSceneObject.aspect ?? 1).toFixed(2)})을 따라갑니다. 너비만 따로 정하거나 기즈모의 가로축을 끌면 사진이 늘어납니다. 사진 속에서 크기를 알 수 있는 것(문 2 m, 사람 1.8 m)에 맞추세요.`
-												: `Width follows the picture's aspect (${(selectedSceneObject.aspect ?? 1).toFixed(2)}) as you change the height. Set it on its own — or drag the gizmo's X axis — to stretch the picture. Measure against something you know: a door is 2 m, a person 1.8 m.`}
+											{ko(`Width follows the picture's aspect (${(selectedSceneObject.aspect ?? 1).toFixed(2)}) as you change the height. Set it on its own — or drag the gizmo's X axis — to stretch the picture. Measure against something you know: a door is 2 m, a person 1.8 m.`,
+												`높이를 바꾸면 너비는 사진 비율(${(selectedSceneObject.aspect ?? 1).toFixed(2)})을 따라갑니다. 너비만 따로 정하거나 기즈모의 가로축을 끌면 사진이 늘어납니다. 사진 속에서 크기를 알 수 있는 것(문 2 m, 사람 1.8 m)에 맞추세요.`,
+												`改变高度时，宽度会跟随图片比例（${(selectedSceneObject.aspect ?? 1).toFixed(2)}）。单独设置宽度 — 或拖动变换控件的 X 轴 — 会拉伸图片。请参照已知尺寸：门约 2 m，人约 1.8 m。`)}
 										</p>
 										{Math.abs((selectedSceneObject.stretch ?? 1) - 1) > 0.005 && (
 											<p className="inspector-hint">
@@ -196,9 +188,9 @@ export default function ObjectTransformPanel({
 													data-field="cutout-unstretch"
 													onClick={() => run(...updateArgs({ stretch: 1 }))}
 												>
-													{isKo
-														? `사진 비율로 되돌리기 (지금 ${((selectedSceneObject.stretch ?? 1) * 100).toFixed(0)}%)`
-														: `Back to the picture's proportions (now ${((selectedSceneObject.stretch ?? 1) * 100).toFixed(0)}%)`}
+													{ko(`Back to the picture's proportions (now ${((selectedSceneObject.stretch ?? 1) * 100).toFixed(0)}%)`,
+														`사진 비율로 되돌리기 (지금 ${((selectedSceneObject.stretch ?? 1) * 100).toFixed(0)}%)`,
+														`恢复图片原始比例（当前 ${((selectedSceneObject.stretch ?? 1) * 100).toFixed(0)}%）`)}
 												</button>
 											</p>
 										)}
@@ -223,9 +215,9 @@ export default function ObjectTransformPanel({
 											/>
 											<p className="inspector-hint">
 												{matteStats.painted
-													? isKo
-														? `사진의 ${Math.round(matteStats.coverage * 100)}%가 선택됨 — 보라색이 지워집니다.`
-														: `${Math.round(matteStats.coverage * 100)}% of the picture marked — purple is what goes.`
+													? ko(`${Math.round(matteStats.coverage * 100)}% of the picture marked — purple is what goes.`,
+														`사진의 ${Math.round(matteStats.coverage * 100)}%가 선택됨 — 보라색이 지워집니다.`,
+														`已标记图片的 ${Math.round(matteStats.coverage * 100)}% — 紫色部分将被移除。`)
 													: ko(
 															"Drag over the background — the cut grows out from wherever the brush touches.",
 															"배경 위를 드래그하세요 — 브러시가 닿은 곳에서 같은 배경으로 번져 나가며 잘립니다.",
@@ -421,11 +413,9 @@ export default function ObjectTransformPanel({
 											onClick={() => {
 												const added = matteEditorRef.current?.autoDetect(matteTolerance) ?? 0;
 												if (!added) {
-													app.notify(
-														isKo
-															? "자동 인식이 더 칠할 곳을 찾지 못했어요 — 허용치를 높이거나 직접 칠하세요"
-															: "Auto-detect found nothing new to paint — raise the tolerance, or paint it by hand",
-													);
+													app.notify(ko("Auto-detect found nothing new to paint — raise the tolerance, or paint it by hand",
+														"자동 인식이 더 칠할 곳을 찾지 못했어요 — 허용치를 높이거나 직접 칠하세요",
+														"自动识别没有发现可继续涂抹的区域 — 请提高容差或手动涂抹"));
 												}
 											}}
 										>
@@ -440,9 +430,9 @@ export default function ObjectTransformPanel({
 											{matteBusy
 												? ko("Removing…", "지우는 중…")
 												: matteStats.painted
-													? isKo
-														? `보라색 부분 지우기 — 사진의 ${Math.round(matteStats.coverage * 100)}%`
-														: `Remove what is purple — ${Math.round(matteStats.coverage * 100)}% of the picture`
+													? ko(`Remove what is purple — ${Math.round(matteStats.coverage * 100)}% of the picture`,
+														`보라색 부분 지우기 — 사진의 ${Math.round(matteStats.coverage * 100)}%`,
+														`移除紫色部分 — 占图片 ${Math.round(matteStats.coverage * 100)}%`)
 													: ko("Nothing is marked yet", "아직 선택된 부분이 없습니다")}
 										</button>
 										<p className="inspector-hint">
@@ -476,7 +466,7 @@ export default function ObjectTransformPanel({
 												key={color}
 												className={"object-color" + (selectedSceneObject.color === color ? " active" : "")}
 												style={{ background: color }}
-												aria-label={isKo ? `색상 ${color}` : `Colour ${color}`}
+												aria-label={ko(`Colour ${color}`, `색상 ${color}`, `颜色 ${color}`)}
 												aria-pressed={selectedSceneObject.color === color}
 												onClick={(event) => {
 													run(...updateArgs({ color }));
@@ -495,7 +485,7 @@ export default function ObjectTransformPanel({
 												key={color}
 												className={"object-color" + (selectedSceneObject.color === color ? " active" : "")}
 												style={{ background: color }}
-												aria-label={isKo ? `최근 색상 ${color}` : `Recent colour ${color}`}
+												aria-label={ko(`Recent colour ${color}`, `최근 색상 ${color}`, `最近颜色 ${color}`)}
 												aria-pressed={selectedSceneObject.color === color}
 												onClick={(event) => {
 													run(...updateArgs({ color }));

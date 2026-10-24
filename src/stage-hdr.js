@@ -23,11 +23,11 @@ const HDR_TYPES = Object.freeze(["image/vnd.radiance", "image/x-exr", "image/png
  * default camera); hdrRotation turns it about +y.
  */
 export const HDR_BUILTINS = Object.freeze([
-	{ id: "builtin:night-street", name: "Night street", ko: "밤거리", brightest: [0.72, 0.2, 0.66],
+	{ id: "builtin:night-street", name: "Night street", ko: "밤거리", zh: "夜晚街道", brightest: [0.72, 0.2, 0.66],
 		note: "dark blue night sky, a building skyline with lit windows, two warm sodium street lamps (front right and back left) pooling light on wet asphalt, a dim moon" },
-	{ id: "builtin:overcast-field", name: "Overcast field", ko: "흐린 들판", brightest: [-0.35, 0.66, -0.67],
+	{ id: "builtin:overcast-field", name: "Overcast field", ko: "흐린 들판", zh: "阴天田野", brightest: [-0.35, 0.66, -0.67],
 		note: "bright soft grey overcast sky (brighter overhead), a faint sun glow behind the clouds back left, a distant tree line and a green field" },
-	{ id: "builtin:studio-softbox", name: "Studio softbox", ko: "스튜디오 소프트박스", brightest: [-0.6, 0.4, 0.7],
+	{ id: "builtin:studio-softbox", name: "Studio softbox", ko: "스튜디오 소프트박스", zh: "影棚柔光箱", brightest: [-0.6, 0.4, 0.7],
 		note: "dark grey photo studio: a large white softbox front left, a tall strip light right, a soft overhead panel and a rim panel behind" },
 ].map((entry) => Object.freeze({ ...entry, brightest: Object.freeze(entry.brightest) })));
 const BUILTIN_IDS = new Set(HDR_BUILTINS.map((entry) => entry.id));

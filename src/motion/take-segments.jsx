@@ -3,7 +3,7 @@
 // outer green grips to trim, right-click a segment to drop it. Each gesture previews here and
 // commits ONE timing command on release (commands/motion-timing.js), so each is one Undo.
 import { useRef, useState } from "react";
-import { isKo, ko } from "../locale.js";
+import { ko } from "../locale.js";
 import { frameFromClientX } from "./timeline-coordinates.js";
 import { createTakeEdit, segmentSpeedForFrames, takeEditLayout, TRIM_MIN_FRAMES } from "../motion3/take-edit.js";
 
@@ -97,9 +97,9 @@ export function TakeSegmentClips({ motion, frame, frameCount, displayFrameCount,
 				key={segment.id}
 				className={"tl-motion-clip" + (preview?.kind === "trim" ? " trimming" : "") + (segment.previewSpeed !== undefined ? " retiming" : "") + (!single && selected?.id === segment.id ? " selected" : "")}
 				style={{ "--tl-f-start": clipPct(Math.min(segment.timelineStart, displayFrameCount)), "--tl-f-end": clipPct(Math.min(segment.timelineEnd + 1, displayFrameCount)) }}
-				title={segment.preview ? undefined : isKo
-					? `전신 구간 ${index + 1} — ${segment.speed}× · ${segment.timelineFrames}프레임. 재생 헤드에서 컷 · 주황 그립을 끌어 배속 조절 · 우클릭으로 구간 삭제`
-					: `Full-Body segment ${index + 1} — ${segment.speed}× · ${segment.timelineFrames} frames. Cut at the playhead; drag the amber grip to retime; right-click to delete`}
+				title={segment.preview ? undefined : ko(`Full-Body segment ${index + 1} — ${segment.speed}× · ${segment.timelineFrames} frames. Cut at the playhead; drag the amber grip to retime; right-click to delete`,
+					`전신 구간 ${index + 1} — ${segment.speed}× · ${segment.timelineFrames}프레임. 재생 헤드에서 컷 · 주황 그립을 끌어 배속 조절 · 우클릭으로 구간 삭제`,
+					`全身片段 ${index + 1} — ${segment.speed}× · ${segment.timelineFrames} 帧。在播放头处切分；拖动橙色把手调整速度；右键删除`)}
 				onContextMenu={segment.preview || single ? undefined : e => { e.preventDefault(); e.stopPropagation(); motion.remove(segment.id); }}
 			>
 				{index === 0 && grips && grip("start", ko("Trim take start", "테이크 시작점 자르기"), trimState("start"), trimReset)}
@@ -128,7 +128,7 @@ export function TakeSegmentTools({ motion, frame }) {
 		</button>
 		{selected && (
 			<label className="tl-motion-speed-editor">
-				<span>{ko(`Segment ${index + 1} speed`, `구간 ${index + 1} 배속`)}</span>
+				<span>{ko(`Segment ${index + 1} speed`, `구간 ${index + 1} 배속`, `片段 ${index + 1} 速度`)}</span>
 				<input type="range" min="0.1" max="4" step="0.1" value={draft ?? selected.speed} aria-label={ko("Selected Full-Body segment speed", "선택한 전신 구간 배속")}
 					onChange={e => setDraft(e.currentTarget.valueAsNumber)} onPointerUp={e => commit(e.currentTarget.valueAsNumber)} onKeyUp={e => commit(e.currentTarget.valueAsNumber)} />
 				<input type="number" min="0.1" max="4" step="0.1" value={selected.speed} aria-label={ko("Selected Full-Body segment speed value", "선택한 전신 구간 배속 값")}

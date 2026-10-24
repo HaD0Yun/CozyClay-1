@@ -47,7 +47,7 @@ function ExportStatus({ status, label, recording }) {
 	const detail = [
 		message,
 		retryable && ko("Retry keeps the original shot, camera, range and settings; it does not change your edits.", "다시 시도하면 원래 샷·카메라·범위·설정을 사용하며 편집 내용은 바꾸지 않아요."),
-		handedOff > 0 && ko(`${handedOff} file(s) already handed off. Retry skips those files.`, `파일 ${handedOff}개는 이미 전달했어요. 다시 시도할 때 해당 파일은 건너뛰어요.`),
+		handedOff > 0 && ko(`${handedOff} file(s) already handed off. Retry skips those files.`, `파일 ${handedOff}개는 이미 전달했어요. 다시 시도할 때 해당 파일은 건너뛰어요.`, `已交付 ${handedOff} 个文件。重试时会跳过这些文件。`),
 		busy && stage === "mux" && ko("Finalizing MP4; this stage cannot be interrupted.", "MP4 마무리 중이에요. 이 단계는 중단할 수 없어요."),
 	].filter(Boolean).join(" ");
 	return (
@@ -86,9 +86,9 @@ function ExportStatus({ status, label, recording }) {
 function relativeTime(ms) {
 	const minutes = Math.floor(ms / 60000);
 	if (minutes < 1) return ko("just now", "방금");
-	if (minutes < 60) return ko(`${minutes} min ago`, `${minutes}분 전`);
+	if (minutes < 60) return ko(`${minutes} min ago`, `${minutes}분 전`, `${minutes} 分钟前`);
 	const hours = Math.floor(minutes / 60);
-	return ko(`${hours} h ago`, `${hours}시간 전`);
+	return ko(`${hours} h ago`, `${hours}시간 전`, `${hours} 小时前`);
 }
 
 // "Saved 2 min ago" once a save completes in this session; otherwise the
@@ -109,7 +109,7 @@ export function SaveState({ status }) {
 		return () => clearInterval(timer);
 	}, [savedAt]);
 	const text = savedAt !== null && status.state === "saved" && !status.dirty
-		? ko(`Saved ${relativeTime(now - savedAt)}`, `저장됨 · ${relativeTime(now - savedAt)}`)
+		? ko(`Saved ${relativeTime(now - savedAt)}`, `저장됨 · ${relativeTime(now - savedAt)}`, `已保存 · ${relativeTime(now - savedAt)}`)
 		: status.text;
 	return (
 		<span

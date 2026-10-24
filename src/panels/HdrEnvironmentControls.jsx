@@ -5,6 +5,7 @@ import { HDR_BUILTINS } from "../stage-hdr.js";
 import { hdrEnvironmentCatalogue, importHdrFile, refreshHdrLibrary, subscribeHdrLibrary } from "../stage-hdr-library.js";
 
 const KO_NAMES = Object.fromEntries(HDR_BUILTINS.map(({ id, ko: name }) => [id, name]));
+const ZH_NAMES = Object.fromEntries(HDR_BUILTINS.map(({ id, zh: name }) => [id, name]));
 
 /**
  * The Light panel's HDR environment: load a .hdr / .exr / equirectangular
@@ -34,7 +35,7 @@ export default function HdrEnvironmentControls({ lighting, run, setLighting }) {
 		}
 	};
 	const options = [{ value: "", label: ko("None (the look's sky)", "없음 (룩의 하늘)") },
-		...environments.map(({ id, name, source }) => ({ value: id, label: source === "builtin" ? ko(name, KO_NAMES[id] ?? name) : name }))];
+		...environments.map(({ id, name, source }) => ({ value: id, label: source === "builtin" ? ko(name, KO_NAMES[id] ?? name, ZH_NAMES[id] ?? name) : name }))];
 	return (
 		<div data-testid="hdr-environment">
 			<Field label={ko("HDR environment", "HDR 환경")}>

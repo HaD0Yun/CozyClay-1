@@ -3,7 +3,7 @@
 // (PROXY_FIGURE_MODEL) is a placement-only stand-in with no bones at all, so
 // those tools refuse it by name instead of failing on a missing rig.
 import { isProxyFigure } from "./scenes.js";
-import { isKo } from "./locale.js";
+import { isKo, isZh } from "./locale.js";
 import { StudioProtocolError } from "./studio-agent-protocol.js";
 
 export const CHARACTER_CAPABILITIES = Object.freeze(["rig", "ik", "pose", "motion"]);
@@ -45,29 +45,30 @@ export function characterCapabilities(character) {
 
 // The noun each refusal names. A feature id not listed here is used verbatim.
 const FEATURE_LABELS = {
-	rig: ["the rig", "리그"],
-	ik: ["IK", "IK"],
-	pose: ["Pose mode", "포즈 모드"],
-	motion: ["Compiled motion", "모션 컴파일"],
-	take: ["Loading a take", "테이크 불러오기"],
+	rig: ["the rig", "리그", "骨骼"],
+	ik: ["IK", "IK", "IK"],
+	pose: ["Pose mode", "포즈 모드", "姿势模式"],
+	motion: ["Compiled motion", "모션 컴파일", "编译动作"],
+	take: ["Loading a take", "테이크 불러오기", "加载动作片段"],
 };
 
 // A character's kind (rig or capsule figure) is fixed at creation; character.update refuses a kind change.
 export const KIND_FIXED_REFUSAL = Object.freeze({
 	en: "A character's kind is chosen when it is created; add a new character instead.",
 	ko: "캐릭터 종류는 만들 때 정합니다. 새 캐릭터를 추가하세요.",
+	zh: "角色的类型在创建时确定；请改为添加新角色。",
 });
 
-export function kindRefusal(feature, ko = false) {
-	const label = FEATURE_LABELS[feature]?.[ko ? 1 : 0] ?? feature;
-	return ko
-		? `캡슐 인물은 리그가 없어요 - ${label}는 리그 캐릭터에서만 됩니다.`
-		: `Capsule figures have no rig - ${label} works on rigged characters only.`;
+export function kindRefusal(feature, ko = false, zh = false) {
+	const label = FEATURE_LABELS[feature]?.[ko ? 1 : zh ? 2 : 0] ?? feature;
+	if (ko) return `캡슐 인물은 리그가 없어요 - ${label}는 리그 캐릭터에서만 됩니다.`;
+	if (zh) return `胶囊人物没有骨骼 — ${label}仅适用于带骨骼的角色。`;
+	return `Capsule figures have no rig - ${label} works on rigged characters only.`;
 }
 
 /** Throw TARGET_NOT_READY when `character` is a capsule figure. The protocol
  * message is English (the agent reads it); `uiMessage` is the locale's. */
 export function refuseRigOnly(character, feature) {
 	if (!isProxyFigure(character)) return;
-	throw Object.assign(new StudioProtocolError("TARGET_NOT_READY", kindRefusal(feature, false)), { uiMessage: kindRefusal(feature, isKo) });
+	throw Object.assign(new StudioProtocolError("TARGET_NOT_READY", kindRefusal(feature, false)), { uiMessage: kindRefusal(feature, isKo, isZh) });
 }

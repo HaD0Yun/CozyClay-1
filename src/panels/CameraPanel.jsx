@@ -1,5 +1,5 @@
 import Foldout from "./Foldout.jsx";
-import { ko, isKo } from "../locale.js";
+import { ko } from "../locale.js";
 import { Field } from "../ui.jsx";
 import { VIDEO_MODEL_PRESETS } from "../model-presets.js";
 import { useBus } from "../app-context.js";
@@ -21,7 +21,7 @@ export default function CameraPanel({ isCameraSelection, shot, moveSequence, cam
 						) : (
 							<p className="inspector-hint v2-details-hint">
 								{cameraKeys.length === 1
-									? (isKo ? `프레임 ${cameraKeys[0].frame}부터 고정 샷이에요. 샷 블록 아래 빈 줄을 클릭해 움직임을 추가하세요.` : `Locked-off hold from frame ${cameraKeys[0].frame}. Click the empty lower strip of a Shot block to add a move.`)
+									? ko(`Locked-off hold from frame ${cameraKeys[0].frame}. Click the empty lower strip of a Shot block to add a move.`, `프레임 ${cameraKeys[0].frame}부터 고정 샷이에요. 샷 블록 아래 빈 줄을 클릭해 움직임을 추가하세요.`, `从第 ${cameraKeys[0].frame} 帧起为固定机位。点击镜头块下方的空条添加运动。`)
 									: ko("Click a Shot block's lower strip to key the current framing at that frame.", "샷 블록 아래 빈 줄을 클릭하면 해당 프레임에 현재 프레이밍을 저장합니다.")}
 							</p>
 						)}
@@ -29,7 +29,7 @@ export default function CameraPanel({ isCameraSelection, shot, moveSequence, cam
 						<h3 className="move-head v2-details-subsection-title">{ko("Follow cam", "팔로우 카메라")}</h3>
 						<p className="camera-editor-pointer">
 							{activeShot
-								? ko(`Editing ${activeShot.name} in the timeline camera bar below.`, `아래 타임라인 카메라 바에서 ${activeShot.name}을 편집합니다.`)
+								? ko(`Editing ${activeShot.name} in the timeline camera bar below.`, `아래 타임라인 카메라 바에서 ${activeShot.name}을 편집합니다.`, `在下方时间线摄影机栏中编辑 ${activeShot.name}。`)
 								: ko("Select a Shot block below to edit its camera.", "아래에서 샷 블록을 선택하면 카메라를 편집할 수 있습니다.")}
 						</p>
 

@@ -168,8 +168,8 @@ export function studioActionRefusal(code, message, uiMessage) {
 }
 // A localized toast producer is evaluated twice, without showing it twice:
 // once for the existing UI and once in English for command evidence.
-export function resolveStudioToast(value, isKo, ko) {
-	return typeof value === "function" ? { uiMessage: value(isKo, ko), message: value(false, en => en) } : { uiMessage: value, message: value };
+export function resolveStudioToast(value, isKo, ko, isZh = false) {
+	return typeof value === "function" ? { uiMessage: value(isKo, ko, isZh), message: value(false, en => en, false) } : { uiMessage: value, message: value };
 }
 const unknown = (id, known) => fail("INVALID_ARGUMENT", `Unknown Studio action "${id}". Known actions: ${known.join(", ")}. List them with inspect_studio { scope: "actions" }.`);
 

@@ -45,8 +45,8 @@ export function reduceBoard(board, event) {
 		return { ...board, after, order: known ? board.order : [...board.order, taskId], tasks: { ...board.tasks, [taskId]: task } };
 	};
 	const note = (taskId, text) => (board.tasks[taskId] ? patch(taskId, { notes: [...board.tasks[taskId].notes, text].slice(-4) }) : { ...board, after });
-	if (event.type === "task.sceneChanged") return note(event.taskId, ko(`The scene changed during a reload: ${event.keys.join(", ")}`, `새로고침 중에 장면이 바뀜: ${event.keys.join(", ")}`));
-	if (event.type === "task.userEdit") return note(event.taskId, ko(`You changed ${event.keys.join(", ")}; the task reads it again`, `${event.keys.join(", ")}을(를) 직접 바꿈: 작업이 다시 읽어요`));
+	if (event.type === "task.sceneChanged") return note(event.taskId, ko(`The scene changed during a reload: ${event.keys.join(", ")}`, `새로고침 중에 장면이 바뀜: ${event.keys.join(", ")}`, `重新加载期间场景发生变化：${event.keys.join(", ")}`));
+	if (event.type === "task.userEdit") return note(event.taskId, ko(`You changed ${event.keys.join(", ")}; the task reads it again`, `${event.keys.join(", ")}을(를) 직접 바꿈: 작업이 다시 읽어요`, `你修改了 ${event.keys.join(", ")}；任务会重新读取`));
 	if (event.type === "task.undone") return board.tasks[event.taskId] ? patch(event.taskId, { undone: true }) : board;
 	if (typeof event.type === "string" && event.type.startsWith("task.") && event.taskId && event.status) {
 		const { type, at, eventSeq, ...view } = event;
@@ -63,7 +63,7 @@ export function seedBoard(board, tasks = []) {
 /** The line a running card shows: the last tool it started, or the compile it waits for. */
 export function progressLine(frame, labelOf = call => call.name) {
 	if (frame?.type === "tool.start") return labelOf(frame);
-	if (frame?.type === "error") return ko(`Error: ${frame.message ?? frame.code}`, `오류: ${frame.message ?? frame.code}`);
+	if (frame?.type === "error") return ko(`Error: ${frame.message ?? frame.code}`, `오류: ${frame.message ?? frame.code}`, `错误：${frame.message ?? frame.code}`);
 	return null;
 }
 
@@ -71,7 +71,7 @@ export function progressLine(frame, labelOf = call => call.name) {
 export function taskReason(reason) {
 	// Greedy to the last ")": a title may hold parentheses of its own.
 	const after = /(?:waits for|held by) task \S+ \((.+)\)/.exec(String(reason ?? ""))?.[1];
-	if (after) return ko(`Starts after "${after}"`, `'${after}' 끝나면 시작`);
+	if (after) return ko(`Starts after "${after}"`, `'${after}' 끝나면 시작`, `在“${after}”之后开始`);
 	if (/scope is held/.test(String(reason ?? ""))) return ko("Starts when another task frees its part", "다른 작업이 끝나면 시작");
 	return reason ?? "";
 }

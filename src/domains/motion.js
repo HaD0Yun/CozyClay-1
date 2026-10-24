@@ -31,7 +31,7 @@ import * as THREE from "three";
 import { StudioProtocolError } from "../studio-agent-protocol.js";
 import { applyTakeFrame } from "../motion3/playback.js";
 import { advancePlayback, installPlaybackApplier } from "./playback.js";
-import { isKo, ko } from "../locale.js";
+import { ko } from "../locale.js";
 import { isProxyFigure } from "../scenes.js";
 import { refuseRigOnly } from "../character-kind.js";
 import { DEFAULT_POSE, restoreBindPositions, applyPose, applyHipsOffset } from "../poses.js";
@@ -439,9 +439,9 @@ export function useMotion(appContext) {
 		ikPreDragRef.current = null;
 		if (pending.rig) appContext.shared.poseMemberAtFrame(pending.rig, motion, pending.state, appContext.shared.tlFrame, IK_CORRECTION_BLEND_FRAMES);
 		setIkTick((value) => value + 1);
-		appContext.notify(isKo
-			? `IK 보정을 ${pending.startFrame}–${pending.endFrame}프레임에 적용했어요`
-			: `Applied IK correction across frames ${pending.startFrame}–${pending.endFrame}`);
+		appContext.notify(ko(`Applied IK correction across frames ${pending.startFrame}–${pending.endFrame}`,
+			`IK 보정을 ${pending.startFrame}–${pending.endFrame}프레임에 적용했어요`,
+			`已在第 ${pending.startFrame}–${pending.endFrame} 帧应用 IK 修正`));
 		return true;
 	}
 
@@ -496,8 +496,8 @@ export function useMotion(appContext) {
 			setRangePinSelection(resolved.pin.id);
 			setRangePinPreview({ draft: { ...draft, id: resolved.pin.id }, track: resolved.pin.track, target: resolved.targetWorld.toArray(), conflictFrames: [], overlapError: "" });
 			appContext.shared.setTlPlaying(false);
-			appContext.notify(isKo ? `${resolved.pin.track} 고정을 적용했어요 · ${resolved.pin.startFrame}–${resolved.pin.endFrame}프레임` : `Applied ${resolved.pin.track} pin · frames ${resolved.pin.startFrame}–${resolved.pin.endFrame}`);
-		} catch (error) { appContext.notify(ko(`Could not apply pin — ${error.message}`, `고정을 적용하지 못했어요 — ${error.message}`)); }
+			appContext.notify(ko(`Applied ${resolved.pin.track} pin · frames ${resolved.pin.startFrame}–${resolved.pin.endFrame}`, `${resolved.pin.track} 고정을 적용했어요 · ${resolved.pin.startFrame}–${resolved.pin.endFrame}프레임`, `已应用 ${resolved.pin.track} 固定 · 第 ${resolved.pin.startFrame}–${resolved.pin.endFrame} 帧`));
+		} catch (error) { appContext.notify(ko(`Could not apply pin — ${error.message}`, `고정을 적용하지 못했어요 — ${error.message}`, `无法应用固定 — ${error.message}`)); }
 	}
 	function deleteRangePin(pinId) {
 		const state = ensureRangePinState(appContext.shared.ikStateRef.current), pin = state.pins.get(pinId);
@@ -512,7 +512,7 @@ export function useMotion(appContext) {
 		liveState.pinResiduals.delete(pinId);
 		liveState.tracked = new Set([...liveState.keys.values()].flatMap((entry) => [...entry.keys()]));
 		setRangePinSelection(null); setRangePinPreview(null); setIkTick((value) => value + 1);
-		appContext.notify(isKo ? `${pin.track} 고정을 삭제했어요` : `Deleted ${pin.track} pin`);
+		appContext.notify(ko(`Deleted ${pin.track} pin`, `${pin.track} 고정을 삭제했어요`, `已删除 ${pin.track} 固定`));
 	}
 
 	/** Deep copy of an IK state's key map: frame → Map(trackId → {q,p}), with
@@ -881,7 +881,7 @@ export function useMotion(appContext) {
 	function ikAddKeyframe() {
 		if (!ikChains) return;
 		if (!keyIkPoseAtPlayhead()) return;
-		appContext.notify(isKo ? `${appContext.shared.tlFrame}프레임에 전신 IK 키를 추가했어요` : `Full-body IK key at frame ${appContext.shared.tlFrame}`);
+		appContext.notify(ko(`Full-body IK key at frame ${appContext.shared.tlFrame}`, `${appContext.shared.tlFrame}프레임에 전신 IK 키를 추가했어요`, `已在第 ${appContext.shared.tlFrame} 帧添加全身 IK 关键帧`));
 	}
 
 	function ikDeleteKeyframe(frame) {
@@ -918,9 +918,9 @@ export function useMotion(appContext) {
 		// Handles re-seat on the posed effectors, ready to drag into a refinement.
 		ikSeedTargets(ikChains, appContext.shared.ikStateRef.current);
 		setIkTick((n) => n + 1);
-		appContext.notify(isKo
-			? `${appContext.shared.tlFrame}프레임에 포즈를 전신 IK 보정 키로 추가했어요 — 모션은 그대로예요`
-			: `Pose keyed as a full-body IK correction at frame ${appContext.shared.tlFrame} — the take stays`);
+		appContext.notify(ko(`Pose keyed as a full-body IK correction at frame ${appContext.shared.tlFrame} — the take stays`,
+			`${appContext.shared.tlFrame}프레임에 포즈를 전신 IK 보정 키로 추가했어요 — 모션은 그대로예요`,
+			`已在第 ${appContext.shared.tlFrame} 帧将姿势记录为全身 IK 修正关键帧 — 动作保持不变`));
 		return true;
 	}
 

@@ -106,7 +106,7 @@ export function ResourceStatus({ manifest, compact = false, onSelect }) {
 				<div className="resource-status-total is-missing"><dt>{ko("Missing", "누락")}</dt><dd data-total="missing">{totals.missing}</dd></div>
 				{totals.bytes > 0 ? <div className="resource-status-total is-bytes"><dt>{ko("Size", "용량")}</dt><dd data-total="bytes">{formatMiB(totals.bytes)}</dd></div> : null}
 			</dl>
-			{missing.length ? <p className="resource-status-warning" role="status">{ko(`${missing.length} resource${missing.length === 1 ? "" : "s"} will not travel with this project file.`, `${missing.length}개 자원이 프로젝트 파일에 담기지 않습니다.`)}</p> : null}
+			{missing.length ? <p className="resource-status-warning" role="status">{ko(`${missing.length} resource${missing.length === 1 ? "" : "s"} will not travel with this project file.`, `${missing.length}개 자원이 프로젝트 파일에 담기지 않습니다.`, `${missing.length} 个资源不会随此项目文件一起保存。`)}</p> : null}
 			{!compact && ordered.length ? (
 				<ul className="resource-status-items">
 					{ordered.map((item, index) => <ResourceItem key={itemKey(item, index)} item={item} index={index} onSelect={onSelect} />)}
@@ -127,7 +127,7 @@ function reasonBody(reason) {
 			<>
 				<strong>{ko("The project file would be too large.", "프로젝트 파일이 너무 큽니다.")}</strong>
 				<span className="save-blocked-size" data-bytes={reason.bytes} data-limit={reason.limit}>
-					{ko(`${formatMiB(reason.bytes)} of embedded resources; the limit is ${formatMiB(reason.limit)}.`, `내장 자원 ${formatMiB(reason.bytes)}, 한도 ${formatMiB(reason.limit)}.`)}
+					{ko(`${formatMiB(reason.bytes)} of embedded resources; the limit is ${formatMiB(reason.limit)}.`, `내장 자원 ${formatMiB(reason.bytes)}, 한도 ${formatMiB(reason.limit)}.`, `嵌入资源 ${formatMiB(reason.bytes)}；上限为 ${formatMiB(reason.limit)}。`)}
 				</span>
 			</>
 		);
@@ -136,7 +136,7 @@ function reasonBody(reason) {
 		const items = Array.isArray(reason.items) ? reason.items.filter((item) => item && typeof item === "object") : [];
 		return (
 			<>
-				<strong>{ko(`${items.length} resource${items.length === 1 ? " is" : "s are"} missing.`, `${items.length}개 자원이 누락되었습니다.`)}</strong>
+				<strong>{ko(`${items.length} resource${items.length === 1 ? " is" : "s are"} missing.`, `${items.length}개 자원이 누락되었습니다.`, `缺少 ${items.length} 个资源。`)}</strong>
 				<ul className="save-blocked-missing">
 					{items.map((item, index) => <ResourceItem key={itemKey(item, index)} item={item} index={index} />)}
 				</ul>

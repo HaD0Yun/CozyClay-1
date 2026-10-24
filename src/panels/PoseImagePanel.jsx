@@ -1,7 +1,7 @@
 import { useEffect, useReducer, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Foldout from "./Foldout.jsx";
-import { ko, isKo } from "../locale.js";
+import { ko } from "../locale.js";
 import { readReferenceImage } from "./ReferenceImageField.jsx";
 import { createHttpTransport } from "../workflow/agent-client.js";
 import { saveExport } from "../export-workspace.js";
@@ -24,7 +24,7 @@ function setPoseImageState(patch) {
 
 function poseImageErrorMessage(error) {
 	if (error?.status === 401 || error?.code === "auth") return ko("Sign in with ChatGPT in the Agent panel first.", "먼저 Agent 패널에서 ChatGPT로 로그인하세요.");
-	return isKo ? `생성 실패 — ${error?.message || "알 수 없는 오류"}` : `Generation failed — ${error?.message || "unknown error"}`;
+	return ko(`Generation failed — ${error?.message || "unknown error"}`, `생성 실패 — ${error?.message || "알 수 없는 오류"}`, `生成失败 — ${error?.message || "未知错误"}`);
 }
 
 async function generatePoseImage(capturePoseImage) {
@@ -37,9 +37,9 @@ async function generatePoseImage(capturePoseImage) {
 		...store.refs.map((dataUrl, index) => ({ role: "reference", name: String(index + 1), dataUrl })),
 	];
 	if (references.length > REFERENCES_MAX) {
-		setPoseImageState({ shot, error: isKo
-			? `참조 이미지는 최대 ${REFERENCES_MAX}장이에요 (인물·환경 참조 ${shot.references.length}장 포함).`
-			: `At most ${REFERENCES_MAX} reference images (${shot.references.length} identity/environment included).` });
+		setPoseImageState({ shot, error: ko(`At most ${REFERENCES_MAX} reference images (${shot.references.length} identity/environment included).`,
+			`참조 이미지는 최대 ${REFERENCES_MAX}장이에요 (인물·환경 참조 ${shot.references.length}장 포함).`,
+			`最多 ${REFERENCES_MAX} 张参考图（含 ${shot.references.length} 张角色/环境参考）。`) });
 		return;
 	}
 	setPoseImageState({ shot, busySince: Date.now(), error: "" });
@@ -78,7 +78,7 @@ export default function PoseImagePanel({ hidden, capturePoseImage }) {
 			const read = await Promise.all(picked.map((file) => readReferenceImage(file)));
 			setPoseImageState({ refs: [...store.refs, ...read].slice(0, USER_REFERENCES_MAX), error: "" });
 		} catch (failure) {
-			setPoseImageState({ error: isKo ? `이미지를 불러오지 못했어요 — ${failure.message}` : `Could not load that image — ${failure.message}` });
+			setPoseImageState({ error: ko(`Could not load that image — ${failure.message}`, `이미지를 불러오지 못했어요 — ${failure.message}`, `无法加载该图片 — ${failure.message}`) });
 		}
 	};
 
@@ -109,7 +109,7 @@ export default function PoseImagePanel({ hidden, capturePoseImage }) {
 					onDrop={(event) => { event.preventDefault(); addFiles(event.dataTransfer?.files ?? []); }}>
 					{refs.map((dataUrl, index) => (
 						<div key={index} className="pose-image-ref">
-							<img src={dataUrl} alt={isKo ? `참조 ${index + 1}` : `Reference ${index + 1}`} />
+							<img src={dataUrl} alt={ko(`Reference ${index + 1}`, `참조 ${index + 1}`, `参考图 ${index + 1}`)} />
 							<button type="button" className="pose-image-ref-remove" aria-label={ko("Remove reference", "참조 삭제")}
 								onClick={() => setPoseImageState({ refs: store.refs.filter((_, at) => at !== index) })}>×</button>
 						</div>
@@ -135,7 +135,7 @@ export default function PoseImagePanel({ hidden, capturePoseImage }) {
 				<button type="button" className="btn primary full" data-testid="pose-image-generate"
 					disabled={!prompt.trim() || Boolean(busySince)}
 					onClick={() => generatePoseImage(capturePoseImage)}>
-					{busySince ? (isKo ? `생성 중… ${elapsed}초` : `Generating… ${elapsed}s`) : ko("Generate image", "이미지 생성")}
+					{busySince ? ko(`Generating… ${elapsed}s`, `생성 중… ${elapsed}초`, `生成中… ${elapsed} 秒`) : ko("Generate image", "이미지 생성")}
 				</button>
 				{error && <p className="inspector-hint pose-image-error" role="status" data-testid="pose-image-error">{error}</p>}
 

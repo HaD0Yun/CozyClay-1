@@ -204,7 +204,7 @@ export const PANEL_PRESENTATIONS = Object.freeze({
 		history: true,
 		persistWidth: false,
 		emptyTitle: ko("Direct the scene", "\uC7A5\uBA74\uC744 \uC5F0\uCD9C\uD558\uC138\uC694"),
-		emptyHint: (sceneName) => ko(`Ask for blocking, a camera move, or a motion take in \u201C${sceneName}\u201D.`, `\u201C${sceneName}\u201D\uC5D0\uC11C \uBE14\uB85C\uD0B9, \uCE74\uBA54\uB77C \uC6C0\uC9C1\uC784, \uBAA8\uC158 \uD14C\uC774\uD06C\uB97C \uC694\uCCAD\uD558\uC138\uC694.`),
+		emptyHint: (sceneName) => ko(`Ask for blocking, a camera move, or a motion take in \u201C${sceneName}\u201D.`, `\u201C${sceneName}\u201D\uC5D0\uC11C \uBE14\uB85C\uD0B9, \uCE74\uBA54\uB77C \uC6C0\uC9C1\uC784, \uBAA8\uC158 \uD14C\uC774\uD06C\uB97C \uC694\uCCAD\uD558\uC138\uC694.`, `在“${sceneName}”中请求摆位、摄影机运动或动作片段。`),
 		composerPlaceholder: ko("Ask the agent to block, frame or animate\u2026", "\uBE14\uB85C\uD0B9\u00B7\uAD6C\uB3C4\u00B7\uBAA8\uC158\uC744 \uC694\uCCAD\uD558\uC138\uC694\u2026"),
 	}),
 });

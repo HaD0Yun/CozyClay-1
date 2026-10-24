@@ -14,7 +14,7 @@ import "./beat-board.css";
 function stateChip(block) {
 	const issues = block.issues ? `⚠ ${block.issues}` : "";
 	if (!block.missed) return issues || "✓";
-	const missed = ko(`goal ✗${block.missed > 1 ? ` ${block.missed}` : ""}`, `목표 ✗${block.missed > 1 ? ` ${block.missed}` : ""}`);
+	const missed = ko(`goal ✗${block.missed > 1 ? ` ${block.missed}` : ""}`, `목표 ✗${block.missed > 1 ? ` ${block.missed}` : ""}`, `目标 ✗${block.missed > 1 ? ` ${block.missed}` : ""}`);
 	return issues ? `${missed} · ${issues}` : missed;
 }
 

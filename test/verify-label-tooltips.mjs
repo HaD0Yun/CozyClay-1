@@ -15,7 +15,7 @@ assert.match(app, /ko\("MCP connected", "MCP 연결됨"\)/, "workspace status ne
 assert.match(timeline, /aria-label=\{playing \? ko\("Pause playback", "재생 일시중지"\) : ko\("Play playback", "재생 시작"\)\}/, "the play icon needs an accessible name");
 assert.match(timeline, /title=\{ko\("Play \/ pause \(Space\)", "재생\/일시중지 \(Space\)"\)\}/, "the play icon needs a tooltip");
 assert.match(app, /title=\{ko\("Download OTIO cut list", "OTIO 컷 목록 다운로드"\)\}/, "the OTIO export item needs a tooltip");
-assert.match(app, /aria-label=\{isKo \? `\$\{label\} 포즈 열기` : `Open pose studio for \$\{label\}`\}/, "pose glyph needs an accessible name");
-assert.match(app, /title=\{isKo \? `\$\{label\} 포즈` : `Pose \$\{label\}`\}/, "pose glyph keeps a visible tooltip");
+assert.match(app, /aria-label=\{ko\(`Open pose studio for \$\{label\}`, `\$\{label\} 포즈 열기`, `打开 \$\{label\} 的姿势工作室`\)\}/, "pose glyph needs an accessible name");
+assert.match(app, /title=\{ko\(`Pose \$\{label\}`, `\$\{label\} 포즈`, `\$\{label\} 姿势`\)\}/, "pose glyph keeps a visible tooltip");
 
 console.log("label and icon tooltip checks PASS");

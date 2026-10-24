@@ -9,7 +9,7 @@ import { LIGHT_KIND } from "../object-look.js";
 const characterIndexForRow = (rowId, characters) => rowId === "characterA" ? 0
 	: rowId === "characterB" ? 1
 		: characters.findIndex((entry) => `character:${entry.id}` === rowId);
-const characterTitle = (index) => ko(`Character ${index + 1}`, `인물 ${index + 1}`);
+const characterTitle = (index) => ko(`Character ${index + 1}`, `인물 ${index + 1}`, `角色 ${index + 1}`);
 
 /** The 2a selection header: the selected item's name and a "Kind · detail"
  * type line. Null when nothing that owns settings is selected. */

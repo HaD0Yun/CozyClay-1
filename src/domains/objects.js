@@ -31,7 +31,7 @@ import {
 	tidyAngle,
 } from "../scene-objects.js";
 
-import { ko, isKo } from "../locale.js";
+import { ko } from "../locale.js";
 import {
 	sceneObjectNameDisplayKo,
 	attachWorldMatrix,
@@ -264,7 +264,7 @@ export function useObjects(appContext) {
 			return;
 		}
 		changeSceneObject(object.id, patch);
-		appContext.notify(isKo ? `${sceneObjectNameDisplayKo(object.name)}을 표면 위에 내려놓았어요` : `${object.name} dropped to surface`);
+		appContext.notify(ko(`${sceneObjectNameDisplayKo(object.name)} dropped to surface`, `${sceneObjectNameDisplayKo(object.name)}을 표면 위에 내려놓았어요`, `${sceneObjectNameDisplayKo(object.name)}已放到表面`));
 	}
 
 	// How much of the wall counts as the wall, and how wide the brush that
@@ -314,7 +314,7 @@ export function useObjects(appContext) {
 		// swallows the very next W/E/R. Renaming stays on F2/Return and the row's
 		// context menu. (docs/unity-reference.md §9.7)
 		setGizmoMode("move");
-		appContext.notify(isKo ? `${sceneObjectNameDisplayKo(object.name)} 추가됨 — W 이동, E 회전, R 크기` : `${object.name} added — W move, E rotate, R scale`);
+		appContext.notify(ko(`${sceneObjectNameDisplayKo(object.name)} added — W move, E rotate, R scale`, `${sceneObjectNameDisplayKo(object.name)} 추가됨 — W 이동, E 회전, R 크기`, `${sceneObjectNameDisplayKo(object.name)}已添加 — W 移动，E 旋转，R 缩放`));
 	}
 
 	/** "Sofa 2.png" reads as a set piece; "sofa-2.png" does not. The extension
@@ -345,11 +345,9 @@ export function useObjects(appContext) {
 				placement,
 			);
 			const imported = publishImported(object, commandContext);
-			appContext.notify(
-				isKo
-					? `${object.name} 추가됨 — 실제 높이(m)를 입력하면 크기가 맞습니다`
-					: `${object.name} added — type its real height in metres to set the scale`,
-			);
+			appContext.notify(ko(`${object.name} added — type its real height in metres to set the scale`,
+				`${object.name} 추가됨 — 실제 높이(m)를 입력하면 크기가 맞습니다`,
+				`${object.name} 已添加 — 输入实际高度（米）即可匹配尺寸`));
 			return imported;
 		} catch (error) {
 			throw new StudioProtocolError(error.code ?? "INVALID_ARGUMENT", `Could not import that image: ${error.message}`);
@@ -379,11 +377,9 @@ export function useObjects(appContext) {
 			placement,
 		);
 		const imported = publishImported(object, commandContext);
-		appContext.notify(
-			isKo
-				? `${object.name} 추가됨 — 실제 높이(m)를 입력하면 크기가 맞습니다`
-				: `${object.name} added — type its real height in metres to set the scale`,
-		);
+		appContext.notify(ko(`${object.name} added — type its real height in metres to set the scale`,
+			`${object.name} 추가됨 — 실제 높이(m)를 입력하면 크기가 맞습니다`,
+			`${object.name} 已添加 — 输入实际高度（米）即可匹配尺寸`));
 		return imported;
 	}
 
@@ -479,11 +475,9 @@ export function useObjects(appContext) {
 				placementInFrontOfShot(),
 			);
 			const imported = publishImported(object, commandContext);
-			appContext.notify(
-				isKo
-					? `${object.name} 추가됨 — 실제 높이(m)를 입력하면 크기가 맞습니다`
-					: `${object.name} added — type its real height in metres to set the scale`,
-			);
+			appContext.notify(ko(`${object.name} added — type its real height in metres to set the scale`,
+				`${object.name} 추가됨 — 실제 높이(m)를 입력하면 크기가 맞습니다`,
+				`${object.name} 已添加 — 输入实际高度（米）即可匹配尺寸`));
 			return imported;
 		} catch (error) {
 			throw new StudioProtocolError(error.code ?? "INVALID_ARGUMENT", `Could not import that model: ${error.message}`);
@@ -520,11 +514,9 @@ export function useObjects(appContext) {
 			placement,
 		);
 		const imported = publishImported(object, commandContext);
-		appContext.notify(
-			isKo
-				? `${object.name} 추가됨 — 실제 높이(m)를 입력하면 크기가 맞습니다`
-				: `${object.name} added — type its real height in metres to set the scale`,
-		);
+		appContext.notify(ko(`${object.name} added — type its real height in metres to set the scale`,
+			`${object.name} 추가됨 — 실제 높이(m)를 입력하면 크기가 맞습니다`,
+			`${object.name} 已添加 — 输入实际高度（米）即可匹配尺寸`));
 		return imported;
 	}
 
@@ -569,11 +561,9 @@ export function useObjects(appContext) {
 				aspect: cut.asset.width / cut.asset.height,
 				height: fullFrameHeight * cut.heightScale,
 			})));
-			appContext.notify(
-				isKo
-					? `${object.name} 배경 제거 — ${Math.round(cut.removed * 100)}% 지움. 원본과 칠한 영역은 그대로 남습니다`
-					: `${object.name} — ${Math.round(cut.removed * 100)}% removed. The original and your selection are kept`,
-			);
+			appContext.notify(ko(`${object.name} — ${Math.round(cut.removed * 100)}% removed. The original and your selection are kept`,
+				`${object.name} 배경 제거 — ${Math.round(cut.removed * 100)}% 지움. 원본과 칠한 영역은 그대로 남습니다`,
+				`${object.name} 背景已移除 — 清除 ${Math.round(cut.removed * 100)}%。原图和选区仍保留`));
 			return { objectId: object.id };
 		} catch (error) {
 			throw new StudioProtocolError(error.code ?? "TARGET_NOT_READY", `Could not remove the background: ${error.message}`);
@@ -606,7 +596,7 @@ export function useObjects(appContext) {
 		const placed = { ...object, id: copy.id, name: copy.name, x: object.x + 0.5 };
 		domain.write((objects) => [...objects, placed]);
 		appContext.shared.setSelectedHierarchyId(`object:${placed.id}`);
-		appContext.notify((isKo, ko) => isKo ? `${sceneObjectNameDisplayKo(placed.name)} 복제됨` : `${placed.name} duplicated`);
+		appContext.notify((isKo, ko) => ko(`${sceneObjectNameDisplayKo(placed.name)} duplicated`, `${sceneObjectNameDisplayKo(placed.name)} 복제됨`, `${sceneObjectNameDisplayKo(placed.name)}已复制`));
 	}
 
 	function frameSelection(id = selectedSceneObjectId) {
@@ -676,7 +666,7 @@ export function useObjects(appContext) {
 				? ko("Character 1", "인물 1")
 				: index === 1
 					? ko("Character 2", "인물 2")
-					: isKo ? `인물 ${index + 1}` : `Character ${index + 1}`;
+					: ko(`Character ${index + 1}`, `인물 ${index + 1}`, `角色 ${index + 1}`);
 		const bone = attach.bone
 			? HIERARCHY_INSPECTOR_TITLES[`rig.${attach.bone}`] ?? attach.bone
 			: ko("Root", "루트");

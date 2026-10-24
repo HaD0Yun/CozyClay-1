@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import Foldout from "./Foldout.jsx";
-import { ko, isKo } from "../locale.js";
+import { ko } from "../locale.js";
 import { effortOptions } from "../workflow/agent-client.js"; import { saveExport } from "../export-workspace.js";
 import "./sculpt.css";
 
@@ -59,7 +59,7 @@ function NowLine({ waiting, now = Date.now() }) {
 			<span className="sculpt-now-time" data-testid="sculpt-now-time">{Math.floor(waited / 1000)}s</span>
 			{expect !== null && (
 				<span className="sculpt-now-expect">
-					{over ? ko("taking longer than usual", "평소보다 오래 걸려요") : isKo ? `보통 ~${Math.round(expect / 1000)}초` : `usually ~${Math.round(expect / 1000)}s`}
+					{over ? ko("taking longer than usual", "평소보다 오래 걸려요") : ko(`usually ~${Math.round(expect / 1000)}s`, `보통 ~${Math.round(expect / 1000)}초`, `通常约 ${Math.round(expect / 1000)} 秒`)}
 				</span>
 			)}
 			{expect !== null && <span className="sculpt-now-bar" aria-hidden="true"><span style={{ "--sculpt-wait": Math.min(1, waited / expect) }} /></span>}
@@ -78,7 +78,7 @@ function IouTrail({ history, target }) {
 	const delta = history.length > 1 ? last - history.at(-2).iou : null;
 	return (
 		<div className="sculpt-trail" data-testid="sculpt-trail">
-			<svg viewBox="0 0 100 34" preserveAspectRatio="none" aria-label={isKo ? `라운드별 IoU: ${values.map((v) => v.toFixed(3)).join(", ")}` : `IoU by round: ${values.map((v) => v.toFixed(3)).join(", ")}`} role="img">
+			<svg viewBox="0 0 100 34" preserveAspectRatio="none" aria-label={ko(`IoU by round: ${values.map((v) => v.toFixed(3)).join(", ")}`, `라운드별 IoU: ${values.map((v) => v.toFixed(3)).join(", ")}`, `各轮 IoU：${values.map((v) => v.toFixed(3)).join(", ")}`)} role="img">
 				{target !== null && <line className="sculpt-trail-target" x1="0" x2="100" y1={y(target)} y2={y(target)} />}
 				{history.length > 1 && <polyline className="sculpt-trail-line" points={history.map((row, index) => `${x(index)},${y(row.iou)}`).join(" ")} />}
 				{history.map((row, index) => <circle key={index} className="sculpt-trail-dot" data-last={index === history.length - 1 ? "true" : undefined} cx={x(index)} cy={y(row.iou)} r="2.2" />)}
@@ -186,7 +186,7 @@ function ModelPicker({ picker, locked }) {
 				{efforts.length > 0 && (
 					<select className="sculpt-select sculpt-effort" data-testid="sculpt-effort-select" aria-label={ko("Effort", "추론 강도")} value={effort ?? ""} disabled={locked}
 						onChange={(event) => onEffort?.(event.target.value || null)}>
-						<option value="">{isKo ? `기본 (${efforts[0]})` : `Default (${efforts[0]})`}</option>
+						<option value="">{ko(`Default (${efforts[0]})`, `기본 (${efforts[0]})`, `默认（${efforts[0]}）`)}</option>
 						{efforts.map((value) => <option key={value} value={value}>{value}</option>)}
 					</select>
 				)}
@@ -293,7 +293,7 @@ export default function SculptPanel({ run, reference, onReference, onStart, onCa
 						onDragOver={(event) => { if (event.dataTransfer?.types?.includes("Files")) event.preventDefault(); }}
 						onDrop={(event) => { event.preventDefault(); take(event.dataTransfer?.files); }}>
 						<div className="sculpt-ref-frame">
-							<img src={reference.dataUrl} alt={isKo ? `참조 이미지: ${reference.name}` : `Reference: ${reference.name}`} />
+							<img src={reference.dataUrl} alt={ko(`Reference: ${reference.name}`, `참조 이미지: ${reference.name}`, `参考图：${reference.name}`)} />
 							<OutlineScan outline={run?.outline} scanning={stage === "measure" && !run?.outline} />
 						</div>
 						<button type="button" className="btn ghost small sculpt-well-replace" data-testid="sculpt-reference-replace"
@@ -351,7 +351,7 @@ export default function SculptPanel({ run, reference, onReference, onStart, onCa
 						{running && <NowLine waiting={run.waiting} />}
 
 						<div className="sculpt-stats">
-							<span data-testid="sculpt-round">{isKo ? `라운드 ${run.round} / ${run.maxRounds}` : `Round ${run.round} / ${run.maxRounds}`}</span>
+							<span data-testid="sculpt-round">{ko(`Round ${run.round} / ${run.maxRounds}`, `라운드 ${run.round} / ${run.maxRounds}`, `第 ${run.round} / ${run.maxRounds} 轮`)}</span>
 							<span data-testid="sculpt-elapsed">{formatElapsed(run.elapsedMs)}</span>
 						</div>
 
@@ -365,7 +365,7 @@ export default function SculptPanel({ run, reference, onReference, onStart, onCa
 								data-reached={iou !== null && target !== null && iou >= target ? "true" : undefined}
 								style={{ "--sculpt-iou": iou ?? 0, "--sculpt-target": target ?? 0 }}>
 								<span className="sculpt-iou-fill" />
-								{target !== null && <span className="sculpt-iou-marker" data-testid="sculpt-iou-target" title={isKo ? `목표 ${formatIou(target)}` : `Target ${formatIou(target)}`} />}
+								{target !== null && <span className="sculpt-iou-marker" data-testid="sculpt-iou-target" title={ko(`Target ${formatIou(target)}`, `목표 ${formatIou(target)}`, `目标 ${formatIou(target)}`)} />}
 							</div>
 							<IouTrail history={run.history} target={target} />
 						</div>
@@ -374,7 +374,7 @@ export default function SculptPanel({ run, reference, onReference, onStart, onCa
 						<ActivityLog activity={run.activity} />
 
 						{run.message && !hasLog && <p className="inspector-hint sculpt-message" role="status">{run.message}</p>}
-						{stage === "done" && <p className="inspector-hint sculpt-done" role="status" data-testid="sculpt-done">{isKo ? `완료 — IoU ${formatIou(iou)}` : `Done — IoU ${formatIou(iou)}`}</p>}
+						{stage === "done" && <p className="inspector-hint sculpt-done" role="status" data-testid="sculpt-done">{ko(`Done — IoU ${formatIou(iou)}`, `완료 — IoU ${formatIou(iou)}`, `完成 — IoU ${formatIou(iou)}`)}</p>}
 						{stage === "cancelled" && <p className="inspector-hint" role="status" data-testid="sculpt-cancelled">{ko("Cancelled.", "취소했어요.")}</p>}
 						{stage === "failed" && <p className="inspector-hint sculpt-error" role="alert" data-testid="sculpt-error">{run.error || ko("The sculpt run failed.", "조형에 실패했어요.")}</p>}
 					</div>
@@ -391,7 +391,7 @@ export default function SculptPanel({ run, reference, onReference, onStart, onCa
 				)}
 
 				<button type="button" className="btn full" data-testid="sculpt-place" disabled={!sculptName || running}
-					aria-label={sculptName ? (isKo ? `${sculptName} 장면에 배치` : `Place ${sculptName} in scene`) : ko("Place in scene", "장면에 배치")}
+					aria-label={sculptName ? ko(`Place ${sculptName} in scene`, `${sculptName} 장면에 배치`, `将 ${sculptName} 放入场景`) : ko("Place in scene", "장면에 배치")}
 					onClick={() => onPlaceInScene?.()}>
 					{ko("Place in scene", "장면에 배치")}
 				</button>
