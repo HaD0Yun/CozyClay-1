@@ -966,7 +966,7 @@ export default function AgentPanel({
 					<select className="agent-model-select" aria-label="Model" title="Model" value={model} disabled={!models.length} onChange={(event) => chooseModel(event.target.value)}>
 						{modelProviders.length
 							? modelProviders.map((provider) => <optgroup key={provider.id} label={provider.label}>
-								{provider.error && <option value={`${provider.id}/error`} disabled>{provider.error}</option>}{provider.models.length
+								{provider.models.length
 									? provider.models.map((entry) => <option key={entry.key} value={entry.key} disabled={!provider.signedIn}>{provider.signedIn ? entry.label : `${entry.label} — add key`}</option>)
 									: <option value={`${provider.id}/`} disabled>{provider.signedIn ? "No models" : "No models — add key"}</option>}
 							</optgroup>)
