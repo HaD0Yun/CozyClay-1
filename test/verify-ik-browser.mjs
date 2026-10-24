@@ -221,10 +221,14 @@ expect(
 
 await click(profile.positions[hiddenShoulder]);
 const hiddenClickFocus = await evaluate("window.__cozyclay?.ikFocus");
+// A hidden control is still drawn, so a press on it answers; an exposed
+// control under the same pixel wins it instead.
+const exposedUnderHidden = Object.entries(profile.positions).some(([id, p]) => id !== hiddenShoulder && p.exposed
+	&& Math.hypot(p.x - profile.positions[hiddenShoulder].x, p.y - profile.positions[hiddenShoulder].y) < 12);
 expect(
-	"hidden shoulder cannot take its own focus",
-	hiddenClickFocus !== hiddenShoulder,
-	JSON.stringify({ hiddenShoulder, focus: hiddenClickFocus, detail: profile.details[hiddenShoulder] }),
+	"a press on the hidden shoulder answers, unless an exposed control is under it",
+	exposedUnderHidden ? hiddenClickFocus !== hiddenShoulder && !!hiddenClickFocus : hiddenClickFocus === hiddenShoulder,
+	JSON.stringify({ hiddenShoulder, focus: hiddenClickFocus, exposedUnderHidden, detail: profile.details[hiddenShoulder] }),
 );
 const overlapFocus = hiddenClickFocus;
 if (overlapFocus) {
@@ -274,8 +278,31 @@ const perfAfterAxis = await evaluate("window.__ikVisibilityPerformance()");
 expect("axis drag moves the focused hand", axisWorldDelta > 0.005, `delta=${axisWorldDelta}`);
 expect("axis drag invalidates the cached exposure", perfAfterAxis.passes > perfBeforeAxis.passes);
 
-const ringPick = (await evaluate(`window.__ikPickScreenPositions().filter((pick) => pick.trackId === ${JSON.stringify(handTrack)})`))
-	.find((pick) => pick.part === "ring");
+// Press the ring where no drawn arrow covers it: a drawn arrow over the ring
+// takes the press, as it should.
+const ringPick = await evaluate(`(() => {
+	const picks = window.__ikPickScreenPositions().filter((pick) => pick.trackId === ${JSON.stringify(handTrack)});
+	const ring = picks.find((pick) => pick.part === "ring");
+	if (!ring) return null;
+	const tips = picks.filter((pick) => pick.part === "tip");
+	const centre = window.__ikHandlePos(${JSON.stringify(handTrack)});
+	const c = window.__ikProject(centre);
+	// Screen distance from a point to an arrow drawn from the centre to its tip.
+	const toArrow = (point, tip) => {
+		const dx = tip.x - c.x, dy = tip.y - c.y, t = Math.max(0, Math.min(1, ((point.x - c.x) * dx + (point.y - c.y) * dy) / (dx * dx + dy * dy || 1)));
+		return Math.hypot(point.x - c.x - t * dx, point.y - c.y - t * dy);
+	};
+	const basis = { x: [[0, 1, 0], [0, 0, 1]], y: [[0, 0, 1], [1, 0, 0]], z: [[1, 0, 0], [0, 1, 0]] }[ring.axis];
+	let best = ring, clearance = -1;
+	for (let k = 0; k < 24; k++) {
+		const u = (k / 24) * Math.PI * 2;
+		const [a, b] = basis;
+		const point = window.__ikProject({ x: centre.x + 0.17 * (Math.cos(u) * a[0] + Math.sin(u) * b[0]), y: centre.y + 0.17 * (Math.cos(u) * a[1] + Math.sin(u) * b[1]), z: centre.z + 0.17 * (Math.cos(u) * a[2] + Math.sin(u) * b[2]) });
+		const gap = Math.min(...tips.map((tip) => toArrow(point, tip)));
+		if (gap > clearance) [best, clearance] = [{ ...ring, x: point.x, y: point.y }, gap];
+	}
+	return best;
+})()`);
 expect("focused hand exposes a swing-ring pick target", Number.isFinite(ringPick?.x));
 const movedHandCenter = await evaluate(`window.__ikControlScreenPositions()[${JSON.stringify(handTrack)}]`);
 const ringDx = ringPick.x - movedHandCenter.x;

@@ -29,7 +29,7 @@ const NODE_FILES = [
 	"test/ardy/verify-timeline-coordinates.mjs",
 	"test/verify-tokens.mjs", "test/verify-lens-scrub.mjs",
 	"test/demo/verify-api-routes.mjs",
-	"test/ik/verify-collision-capsules.mjs",
+	"test/ik/verify-collision-capsules.mjs", "test/ik/verify-ik-pick.mjs",
 	"test/ik/verify-ground.mjs",
 	"test/ik/verify-physics-review.mjs",
 	"test/ik/verify-physics-support.mjs",
