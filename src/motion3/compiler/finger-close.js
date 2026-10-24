@@ -8,7 +8,7 @@
 // then turned once; weighted by how far the hand holds (a fit's weight), so the fingers close over the reach and open
 // on the release. A joint the preset curled into the body straightens when that leaves the finger shallower; a
 // joint whose sub-chain already touches stays, and the next joint out closes on: the finger wraps the body.
-import { add, sub, scale, norm, cross, apply, axisRot } from "./math.js";
+import { add, sub, scale, norm, cross, dot, apply, axisRot } from "./math.js";
 import { rotateSubtree } from "./skeleton.js";
 import { palmAxes, fingerCurl, fistCurl } from "./limbs.js";
 import { capsuleDepth, shapeOf } from "../shapes.js";
@@ -16,7 +16,7 @@ import { GRASP_FINGERS } from "./vocab.js";
 import { partsOf } from "../object-pose.js";
 import { seatsInHand } from "../seat.js";
 
-const PHALANX = 0.009, TOUCH = 0.002, STEPS = 8, THUMB_FLEX = 70;
+const PHALANX = 0.009, TOUCH = 0.002, STEPS = 8, THUMB_FLEX = 70, SPREAD_STEP = 5, SPREAD_MAX = 15, SELF_GAP = 0.014;
 const FINGERS = ["Index", "Middle", "Ring", "Pinky"];
 // the hand stays open for most of a reach and closes as it arrives: from OPEN_UNTIL of the fit's weight to CLOSED_AT
 const OPEN_UNTIL = 0.6, CLOSED_AT = 0.9;
@@ -50,6 +50,34 @@ function clearTurn(points, pivot, axis, limit, entries) {
 	return hi;
 }
 
+const saveChain = (sk, s, j) => new Map(sk.subtree[j].map(i => [i, [s.P[i].slice(), s.R[i].map(r => r.slice())]]));
+const restoreChain = (s, saved) => { for (const [i, [p, r]] of saved) { s.P[i] = p.slice(); s.R[i] = r.map(row => row.slice()); } };
+
+/** Degrees each of joints 1..3 of finger f is flexed: each phalanx against the one before about the knuckle line. */
+function flexion(sk, s, side, f) {
+	const P = i => s.P[sk.index[`${side}Hand${f}${i}`]], { d, l } = palmAxes(sk, s, side), axis = scale(l, side === "Left" ? -1 : 1);
+	const flat = v => norm(sub(v, scale(axis, dot(v, axis)))), bone = [1, 2, 3].map(i => flat(norm(sub(P(i + 1), P(i)))));
+	return [flat(d), bone[0], bone[1]].map((a, i) => (Math.atan2(dot(cross(a, bone[i]), axis), dot(a, bone[i])) * 180) / Math.PI);
+}
+
+/** Closest distance between segments p1-q1 and p2-q2. */
+function segmentGap(p1, q1, p2, q2) {
+	const d1 = sub(q1, p1), d2 = sub(q2, p2), r = sub(p1, p2), a = dot(d1, d1), e = dot(d2, d2), f = dot(d2, r), c = dot(d1, r), b = dot(d1, d2);
+	const den = a * e - b * b, clamp = x => Math.min(1, Math.max(0, x));
+	let t1 = den > 1e-12 ? clamp((b * f - c * e) / den) : 0, t2 = e > 1e-12 ? (b * t1 + f) / e : 0;
+	if (t2 < 0) { t2 = 0; t1 = clamp(-c / a); } else if (t2 > 1) { t2 = 1; t1 = clamp((b - c) / a); }
+	return Math.hypot(...sub(add(p1, scale(d1, t1)), add(p2, scale(d2, t2))));
+}
+
+/** True when no phalanx of finger f lies within SELF_GAP of a phalanx of another (non-thumb) finger. */
+function clearOfNeighbours(sk, s, side, f) {
+	const P = name => s.P[sk.index[`${side}Hand${name}`]];
+	for (const g of FINGERS) if (g !== f) for (let a = 1; a <= 3; a++) for (let b = 1; b <= 3; b++) {
+		if (segmentGap(P(`${f}${a}`), P(`${f}${a + 1}`), P(`${g}${b}`), P(`${g}${b + 1}`)) < SELF_GAP) return false;
+	}
+	return true;
+}
+
 /** Turns joint j by the touching turn about `axis` (or `limit` when it never touches, unless `air` is false), weighted; true when it touched. */
 function closeJoint(sk, s, j, chain, axis, limit, entries, weight, air = true) {
 	const turn = touchTurn(chain.map(i => s.P[i]), s.P[j], axis, limit, entries), deg = turn ?? (air ? limit : 0);
@@ -67,9 +95,7 @@ export function closeOnShape(sk, s, side, { entries: held, stops = [], weight, p
 	// a finger stops on what it holds or on what that rests against (a table under a ball)
 	const entries = [...held, ...stops];
 	const sign = side === "Left" ? -1 : 1, J = name => sk.index[`${side}Hand${name}`], touched = [];
-	for (const f of FINGERS) {
-		const joints = [1, 2, 3, 4].map(i => J(`${f}${i}`));
-		if (joints.some(j => j === undefined)) continue;
+	const close = (f, joints) => {
 		let tip = false;
 		// a finger the preset curled into the body straightens, joint by joint, when the straight finger is shallower (a
 		// finger lying across a box would go deeper); each joint then closes until the finger touches
@@ -80,6 +106,35 @@ export function closeOnShape(sk, s, side, { entries: held, stops = [], weight, p
 			const axis = scale(palmAxes(sk, s, side).l, sign), curl = fingerCurl(preset, f, k), open = opens ? curl : 0;
 			if (open > 0) rotateSubtree(sk, s, joints[k], s.P[joints[k]].slice(), axisRot(axis, -open * weight));
 			tip = closeJoint(sk, s, joints[k], joints.slice(k), axis, Math.max(0, fistCurl(f, k) - curl + open), entries, weight, false);
+		}
+		return tip;
+	};
+	for (const f of FINGERS) {
+		const joints = [1, 2, 3, 4].map(i => J(`${f}${i}`));
+		if (joints.some(j => j === undefined)) continue;
+		const before = saveChain(sk, s, joints[0]);
+		let tip = close(f, joints);
+		// a finger whose curl passes beside what it holds (a ring or little finger off a ball's side) turns toward it at the
+		// knuckle, SPREAD_STEP at a time up to SPREAD_MAX, and closes again; kept when it touches without lying in a neighbour
+		if (!tip && f !== "Middle") {
+			const after = saveChain(sk, s, joints[0]), { l, n } = palmAxes(sk, s, side);
+			const toward = Math.sign(dot(sub(held[0].pos, before.get(joints[0])[0]), l)) * sign;
+			for (let deg = SPREAD_STEP; deg <= SPREAD_MAX && !tip; deg += SPREAD_STEP) {
+				restoreChain(s, before);
+				rotateSubtree(sk, s, joints[0], s.P[joints[0]].slice(), axisRot(n, toward * sign * deg * weight));
+				tip = close(f, joints) && clearOfNeighbours(sk, s, side, f);
+			}
+			if (!tip) restoreChain(s, after);
+		}
+		// a finger that still cannot reach it curls with the finger next in toward the middle (the ring and little fingers
+		// move together), joint by joint as far as that finger's flexion, stopping where it touches
+		const inner = { Ring: "Middle", Pinky: "Ring" }[f];
+		if (!tip && inner) {
+			const axis = scale(palmAxes(sk, s, side).l, sign);
+			for (let k = 0; k < 3; k++) {
+				const more = flexion(sk, s, side, inner)[k] - flexion(sk, s, side, f)[k];
+				if (more > 1) tip = closeJoint(sk, s, joints[k], joints.slice(k), axis, more, entries, weight, true);
+			}
 		}
 		if (tip) touched.push(f);
 	}

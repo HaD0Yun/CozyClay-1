@@ -67,5 +67,17 @@ for (const model of ["y-bot-tpose", "x-bot-tpose"]) {
 	expect(`ball pickup ${model}: a thumb swung off the ball is THUMB_OFF`, thumbOff(graspChecks(sk, open)).length > 0);
 }
 
+// a caught ball sits toward the index side: the ring finger's curl passed beside it until it turns toward it at the knuckle
+{
+	const { buildKit } = await import("../../src/kits/index.js"), { objectPoseAt, partsOf } = await import("../../src/motion3/object-pose.js"), { capsuleDepth } = await import("../../src/motion3/shapes.js");
+	const kit = buildKit("ball", [], { position: { x: 0, y: 1.6, z: 6 } }), id = kit.rootId, sk = skeletonFor("y-bot-tpose"), J = n => sk.index[`RightHand${n}`];
+	const spec = { schema: "cozyclay.motion-spec.v1", fps: 24, frames: 64, use: [{ skill: "standIdle", args: { at: [0, 0], heading: 0 }, f0: 0 }, { skill: "catchObject", args: { object: id }, f0: 12 }], objects: { [id]: { fall: { at: 12, v: [0, 2.5, -9] } } } };
+	const out = compileSpec(spec, { sk, scene: motionScene(kit.records) }).out, f = out.ctx.spec.objects[id].grab + 8, s = out.frames[f].s;
+	const ball = partsOf(out.ctx.scene, id).map(p => ({ ...out.ctx.scene.objects[p], ...objectPoseAt(out, p, f) }));
+	const ringGap = -Math.max(...ball.map(e => capsuleDepth(e, s.P[J("Ring3")], s.P[J("Ring4")], 0.009)));
+	expect("catch y-bot: the ring finger closes onto the ball", ringGap <= 0.008, ringGap);
+	expect("catch y-bot: no finger lies in another or past its range", fingerChecks(sk, out).length === 0, JSON.stringify(fingerChecks(sk, out).slice(0, 2)));
+}
+
 if (failures) { console.error(`${failures} finger pose check(s) failed`); process.exit(1); }
 console.log("all finger pose checks passed");
