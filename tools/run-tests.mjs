@@ -59,7 +59,7 @@ const NODE_FILES = [
 	"test/verify-agent-runner-errors.mjs",
 	"test/verify-agent-steer.mjs",
 	"test/verify-pi-tools.mjs",
-	"test/verify-agent-providers.mjs", "test/verify-agent-minimax.mjs", "test/verify-agent-login.mjs", "test/verify-anthropic-subscription.mjs",
+	"test/verify-agent-providers.mjs", "test/verify-agent-minimax.mjs", "test/verify-agent-login.mjs", "test/verify-agent-openai-compatible.mjs", "test/verify-anthropic-subscription.mjs",
 	"test/verify-cliproxy-live-model.mjs",
 	"test/verify-schema-to-typebox.mjs",
 	"test/verify-agent-sse-golden.mjs",

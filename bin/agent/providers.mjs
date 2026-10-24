@@ -5,6 +5,9 @@ import { createCredentialStore } from "./credential-store.mjs";
 import { readCredentials } from "./provider-keys.mjs";
 import { cliproxyBase, cliproxyProvider, extendCliproxyProvider, registryLiveCliproxy } from "./cliproxy-provider.mjs";
 export { cliproxyLiveModel } from "./cliproxy-provider.mjs";
+import { OPENAI_COMPATIBLE_ID, openaiCompatibleProvider, refreshOpenAICompatible } from "./openai-compatible-provider.mjs";
+import { rolesByMain } from "./model-roles.mjs";
+export { MODEL_ROLES, fallbackChain, resolveRoleModels } from "./model-roles.mjs";
 
 // #379 (F2 pass 5 finding 4): pi never forwards a per-request `fetch` to the
 // codex API module — `pi-agent-core`'s `createRequestOptions` (the options
@@ -66,6 +69,8 @@ export const PROVIDERS = [
 	{ id: "minimax", label: "MiniMax", auth: "api_key", env: ["MINIMAX_API_KEY"] }, { id: "minimax-cn", label: "MiniMax (China)", auth: "api_key", env: ["MINIMAX_CN_API_KEY"] },
 	{ id: "openrouter", label: "OpenRouter", auth: "api_key", env: ["OPENROUTER_API_KEY"] },
 	{ id: "cliproxy", label: "CLIProxyAPI", auth: "api_key", env: ["CLIPROXY_API_KEY"] },
+	// #885: LM Studio, Ollama or any OpenAI-compatible server; its address rides the stored credential
+	{ id: OPENAI_COMPATIBLE_ID, label: "OpenAI-compatible server", auth: "api_key", env: [] },
 ];
 
 const factories = {
@@ -82,7 +87,7 @@ export async function loadProvider(id, { baseUrl, env = process.env } = {}) {
 	// API-key lane minus the OAuth login it also advertises (see anthropicLaneProvider).
 	const provider = id === "cliproxy"
 		? await cliproxyProvider({ baseUrl, env })
-		: id === "anthropic" || id === "anthropic-subscription"
+		: id === OPENAI_COMPATIBLE_ID ? await openaiCompatibleProvider() : id === "anthropic" || id === "anthropic-subscription"
 			? await import("./anthropic-subscription.mjs").then((module) => module.anthropicLaneProvider(id))
 			: await import(`@earendil-works/pi-ai/providers/${id}`).then((module) => module[factories[id]]());
 	// pi 0.99 gave the API-key OpenAI lane a ChatGPT sign-in too; CozyClay's ChatGPT sign-in is the
@@ -176,6 +181,8 @@ export async function resolveModel(requested, options = {}) {
 	if (!modelId) throw unknownModel(requested);
 	const models = options.models ?? await createModels(options);
 	if (!providerConfig(provider) && !models.getProvider?.(provider)) throw unknownModel(requested);
+	// a custom server's models are its live /v1/models list, read again when a turn names one not listed yet (#885)
+	if (provider === OPENAI_COMPATIBLE_ID && !models.getModel(provider, modelId)) await refreshOpenAICompatible(models);
 	const model = models.getModel(provider, modelId);
 	if (!model) throw unknownModel(requested);
 	return { provider, modelId, model };
@@ -260,119 +267,6 @@ function liveModelsCodex(result) {
 	}).filter((model) => model.id);
 }
 
-// --- model roles (#717) ------------------------------------------------------
-//
-// One picked model (main) implies the rest of the lineup a turn may lean on: a
-// cheap helper, a mid-tier advisor, a model that can see images, and the
-// ordered alternatives to try when main fails. Subscription accounts usually
-// have exactly one signed-in provider, so every derived role stays on main's
-// provider; only the fallback chain may cross to another signed-in provider
-// that serves the very same model id. Both functions are pure over a
-// listAgentModels-shaped `{ providers }` catalog and never throw.
-
-export const MODEL_ROLES = ["main", "helper", "vision", "advisor"];
-
-const CLAUDE_TIERS = ["opus", "sonnet", "haiku"];
-const GPT_MINI_CLASS = /mini|nano/;
-const newestFirst = (a, b) => b.id.localeCompare(a.id, undefined, { numeric: true });
-
-function splitModelKey(key) {
-	const slash = typeof key === "string" ? key.indexOf("/") : -1;
-	return slash > 0 ? { providerId: key.slice(0, slash), modelId: key.slice(slash + 1) } : null;
-}
-
-const modelFamily = (id) => /^claude-/.test(id) ? "claude" : /^gpt-/.test(id) ? "gpt" : null;
-const claudeTier = (id) => CLAUDE_TIERS.find((tier) => id.startsWith(`claude-${tier}`)) ?? null;
-const takesImages = (model) => Array.isArray(model?.input) && model.input.includes("image");
-const modelKeyOf = (providerId, model) => model.key ?? `${providerId}/${model.id}`;
-
-/** main's provider entry, main's own model entry and the same-family models on that provider. */
-function locateMain(mainKey, catalog) {
-	const parts = splitModelKey(mainKey);
-	const providers = Array.isArray(catalog?.providers) ? catalog.providers : [];
-	const provider = parts && providers.find((entry) => entry?.id === parts.providerId);
-	const models = Array.isArray(provider?.models) ? provider.models.filter((model) => typeof model?.id === "string") : [];
-	const main = parts && models.find((model) => model.id === parts.modelId);
-	if (!main) return null;
-	const family = modelFamily(main.id);
-	return { providers, provider, models, main, family, sameFamily: family ? models.filter((model) => modelFamily(model.id) === family) : [] };
-}
-
-/** The first preference that matches a model: an exact id, or the newest id a pattern matches. */
-function pickModel(models, preferences) {
-	for (const preference of preferences) {
-		const match = typeof preference === "string"
-			? models.find((model) => model.id === preference)
-			: [...models].filter((model) => preference.test(model.id)).sort(newestFirst)[0];
-		if (match) return match;
-	}
-	return null;
-}
-
-/** One tier of a Claude lineup, preferring main's own version (opus-5-5 -> sonnet-5-5). */
-function claudeTierModel(models, mainId, tier) {
-	const current = claudeTier(mainId);
-	return pickModel(models, [current ? mainId.replace(`claude-${current}`, `claude-${tier}`) : null, new RegExp(`^claude-${tier}`)].filter(Boolean));
-}
-
-export function resolveRoleModels(mainKey, catalog) {
-	const main = typeof mainKey === "string" ? mainKey : "";
-	const found = locateMain(main, catalog);
-	if (!found) return { main, helper: main, vision: main, advisor: main };
-	const { provider, models, main: model, family, sameFamily } = found;
-	const key = (entry) => (entry ? modelKeyOf(provider.id, entry) : main);
-	const helper = family === "claude" ? pickModel(sameFamily, ["claude-haiku-5-5", /^claude-haiku/, /^claude-sonnet/])
-		: family === "gpt" ? pickModel(sameFamily, [GPT_MINI_CLASS, /luna/])
-			: null;
-	const advisor = family === "claude" ? pickModel(sameFamily, ["claude-sonnet-5-5", /^claude-sonnet/])
-		: family === "gpt" ? pickModel(sameFamily, ["gpt-6-astra"])
-			: null;
-	const vision = takesImages(model) ? model : models.find(takesImages);
-	return { main, helper: key(helper), vision: key(vision), advisor: key(advisor) };
-}
-
-export function fallbackChain(mainKey, catalog) {
-	const found = locateMain(mainKey, catalog);
-	if (!found) return [];
-	const { providers, provider, main, family, sameFamily } = found;
-	const chain = [];
-	// The same model served by another signed-in provider is the closest substitute there is.
-	for (const other of providers) {
-		if (other === provider || !other?.signedIn || !Array.isArray(other.models)) continue;
-		const same = other.models.find((model) => model?.id === main.id);
-		if (same) chain.push(modelKeyOf(other.id, same));
-	}
-	// Then a step down main's own family on main's provider.
-	if (family === "claude") {
-		const tier = CLAUDE_TIERS.indexOf(claudeTier(main.id));
-		if (tier !== -1) {
-			for (const lower of CLAUDE_TIERS.slice(tier + 1)) {
-				const model = claudeTierModel(sameFamily, main.id, lower);
-				if (model) chain.push(modelKeyOf(provider.id, model));
-			}
-		}
-	} else if (family === "gpt" && !GPT_MINI_CLASS.test(main.id)) {
-		for (const model of [pickModel(sameFamily, ["gpt-6-astra"]), pickModel(sameFamily, [GPT_MINI_CLASS])]) {
-			if (model) chain.push(modelKeyOf(provider.id, model));
-		}
-	}
-	const mainKeyFound = modelKeyOf(provider.id, main);
-	return [...new Set(chain)].filter((key) => key !== mainKeyFound).slice(0, 3);
-}
-
-/** `roles.byMain` for listAgentModels: every model of every signed-in provider. */
-function rolesByMain(catalog) {
-	const byMain = {};
-	for (const provider of catalog.providers) {
-		if (!provider.signedIn) continue;
-		for (const model of provider.models) {
-			const { helper, vision, advisor } = resolveRoleModels(model.key, catalog);
-			byMain[model.key] = { helper, vision, advisor, fallback: fallbackChain(model.key, catalog) };
-		}
-	}
-	return { byMain };
-}
-
 const astraFirst = (a, b) => Number(b.id === "gpt-6-astra") - Number(a.id === "gpt-6-astra");
 const cliproxyFirst = (a, b) => astraFirst(a, b) || Number(b.id === "claude-fable-5-1") - Number(a.id === "claude-fable-5-1");
 
@@ -416,6 +310,10 @@ export async function listAgentModels({ models, codex, auth = defaultAuth, keys 
 			}
 			list = [...list].sort(cliproxyFirst);
 			const error = catalogueState(resolvedModels).cliproxyFetchError; providers.push({ id: provider.id, label: provider.label, signedIn, authSource, models: list, ...(error ? { error } : {}) }); continue;
+		} else if (provider.id === OPENAI_COMPATIBLE_ID && signedIn) {
+			// the server's own /v1/models is the lineup, read on every listing so a model loaded since then shows up
+			const error = await refreshOpenAICompatible(resolvedModels);
+			providers.push({ id: provider.id, label: provider.label, signedIn, authSource, models: catalogModels(resolvedModels, provider.id, getSupportedThinkingLevels), ...(error ? { error } : {}) }); continue;
 		}
 		providers.push({ id: provider.id, label: provider.label, signedIn, authSource, models: list });
 	}
