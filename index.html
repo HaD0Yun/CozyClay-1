@@ -145,7 +145,7 @@
       /* Hero: headline left, the pitch and the two ways in on the right. */
       .hero { padding: 112px 0 56px; }
       .hero-grid { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 28px; }
-      .hero h1 { max-width: none; font-size: clamp(42px, 9.2vw, 128px); line-height: .98; letter-spacing: -.025em; font-weight: 400; }
+      .hero h1 { max-width: none; font-size: clamp(56px, 13vw, 168px); line-height: .98; letter-spacing: -.025em; font-weight: 400; }
       .hero h1 em { display: inline-block; white-space: nowrap; }
       .hero h1 .line { display: inline-block; white-space: nowrap; }
       .hero h1.curved { padding: .06em 0; }
@@ -315,7 +315,6 @@
       @media (max-width: 960px) {
         .steps, .reads { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .ai, .why, .start, .flow, .hero-grid { grid-template-columns: minmax(0, 1fr); }
-        .hero-grid { align-items: start; }
       }
       @media (max-width: 760px) {
         header.site nav { display: none; }
@@ -363,25 +362,7 @@
     <main>
       <section class="hero">
         <div class="wrap hero-grid">
-          <h1 class="curved" aria-label="Previs the shot before you generate it."><span class="line">Previs the shot</span> <em class="line">before you generate it.</em></h1>
-          <div class="hero-side">
-            <p class="lede">Block the set, move the cast and cut the camera in a browser tab, then hand the exact shot to an AI video model.</p>
-            <div class="hero-actions">
-              <a class="btn primary" href="/app/">Try it in your browser</a>
-              <span class="cmd">
-                <code>npx cozyclay --via site</code>
-                <button type="button" class="copy" data-copy="npx cozyclay --via site" aria-label="Copy command">
-                  <svg class="ic-copy" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15V6a2 2 0 0 1 2-2h9"></path></svg>
-                  <svg class="ic-done" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg>
-                </button>
-              </span>
-            </div>
-            <p class="meta-line">
-              <a href="https://github.com/NomaDamas/CozyClay/blob/main/CHANGELOG.md">v%COZYCLAY_VERSION%</a>
-              <span>AGPL-3.0</span>
-              <span>No GPU needed</span>
-            </p>
-          </div>
+          <h1 class="curved" aria-label="Previs the shot"><span class="line">Previs the shot</span></h1>
         </div>
       </section>
 
@@ -399,7 +380,6 @@
                 <span class="tag-r" aria-hidden="true">Seedance 2.5</span>
               </div>
             </div>
-            <figcaption>Drag the handle. Left: the greybox blocked in CozyClay. Right: what Seedance 2.5 made from it, same camera.</figcaption>
           </figure>
         </div>
       </section>
