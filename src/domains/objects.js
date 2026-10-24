@@ -596,7 +596,7 @@ export function useObjects(appContext) {
 		const placed = { ...object, id: copy.id, name: copy.name, x: object.x + 0.5 };
 		domain.write((objects) => [...objects, placed]);
 		appContext.shared.setSelectedHierarchyId(`object:${placed.id}`);
-		appContext.notify((isKo, ko) => ko(`${sceneObjectNameDisplayKo(placed.name)} duplicated`, `${sceneObjectNameDisplayKo(placed.name)} 복제됨`, `${sceneObjectNameDisplayKo(placed.name)}已复制`));
+		appContext.notify((isKo, ko) => ko(`${placed.name} duplicated`, `${sceneObjectNameDisplayKo(placed.name)} 복제됨`, `${sceneObjectNameDisplayKo(placed.name)}已复制`));
 	}
 
 	function frameSelection(id = selectedSceneObjectId) {
