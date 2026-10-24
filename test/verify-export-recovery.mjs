@@ -6,7 +6,8 @@ import { readFileSync } from "node:fs";
 import { EventEmitter } from "node:events";
 import { parseSync } from "rolldown/utils";
 import * as THREE from "three";
-import { startExportAttempt, exportFailureCode } from "../src/analytics.js";
+import { exportFailureCode } from "../src/analytics.js";
+import { startExportAttempt } from "../src/export-attempt.js";
 import { keyframePackEntries, keyframePackName } from "../src/keyframe-pack.js";
 import { buildZip } from "../src/zip-store.js";
 import { depthRangeFromFrames } from "../src/render-passes.js";
@@ -111,7 +112,7 @@ function fixture() {
 		updateStableItem: (list, id, update) => list.map((item) => item.id === id ? update(item) : item),
 		createStableItemId: () => "new-key", recordShotUndo: () => { deps.undoCount += 1; }, undoCount: 0,
 		setShots: (list) => { deps.shots = list; deps.shotWrites += 1; }, shotWrites: 0,
-		embedMode: false, ko: (english) => english, isKo: false, setToast() {}, setRecordedVideoName() {},
+		embedMode: false, sceneObjects: [], ko: (english) => english, isKo: false, setToast() {}, setRecordedVideoName() {},
 		startExportAttempt: (descriptor) => startExportAttempt(descriptor, { capture: (event, props) => lifecycle.push({ event, props }) }),
 		exportFailureCode, track: (event) => legacy.push(event), trackFeature() {}, trackActivation() {},
 		// #466: the optional use-case question after a finished export.
@@ -276,6 +277,23 @@ assert.ok(depth.targets.every((target) => target.disposed));
 assert.equal(depth.api.job, null);
 assertPaired(depth, 1);
 console.log("PASS cancellable depth prepass restores camera/bones and releases capture before encoding");
+
+// Stop during encoding: the "Cancelling…" status is UI only, so the cancelled
+// attempt still reports the stage and frame share it stopped at.
+const stopped = fixture();
+stopped.deps.encodeGate = deferred();
+const encodeEntered = stopped.signal("encode");
+const stoppedRun = stopped.api.exportShotVideo();
+const encodeOptions = await encodeEntered;
+encodeOptions.onPhase({ phase: "encoding", cancellable: true });
+encodeOptions.onFrame({ index: 4, frameCount: 10 });
+stopped.api.stopShotRecording();
+stopped.deps.encodeGate.resolve();
+await bounded(stoppedRun);
+const stoppedEnd = stopped.lifecycle.find(({ event }) => event === "export:attempt_cancelled");
+assert.deepEqual([stoppedEnd?.props.stage, stoppedEnd?.props.progress], ["encoding", "26-50"], "Stop keeps the stage and progress it interrupted");
+assertPaired(stopped, 1);
+console.log("PASS a stopped export reports the stage and progress it was stopped at, not the cancelling message");
 
 const render = fixture();
 const beforeRender = editor(render);

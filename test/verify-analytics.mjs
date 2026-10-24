@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
 import * as analytics from "../src/analytics.js";
+import { startExportAttempt } from "../src/export-attempt.js";
 import { createAppContext } from "../src/app-context.js";
 import { readFileSync } from "node:fs";
 import {
@@ -34,15 +35,14 @@ assert.equal(isOriginAllowed("https://preview.cozyclay.org", allowlist), false);
 assert.equal(isOriginAllowed("https://cozyclay.org.evil.example", allowlist), false);
 
 assert.deepEqual(
-	sanitizeProps("motion:job_succeeded", {
-		backend: "hosted",
-		duration_bucket: "1-3s",
-		input_mode: "pose",
+	sanitizeProps("project:saved", {
+		object_count_bucket: "1-3",
+		shot_count_bucket: "0",
 		prompt: "secret prompt",
 		name: "private name",
 		unknown: "discarded",
 	}),
-	{ backend: "hosted", duration_bucket: "1-3s", input_mode: "pose" },
+	{ object_count_bucket: "1-3", shot_count_bucket: "0" },
 );
 assert.deepEqual(
 	sanitizeProps("scene:created", {
@@ -54,16 +54,6 @@ assert.deepEqual(
 	{},
 	"free text and hard-denied keys are never captured",
 );
-assert.deepEqual(
-	sanitizeProps("motion:job_failed", {
-		backend: "local_kimodo",
-		duration_bucket: "gte30s",
-		input_mode: true,
-		error_code: 503,
-	}),
-	{ backend: "local_kimodo", duration_bucket: "gte30s" },
-);
-assert.deepEqual(sanitizeProps("motion:job_failed", { error_code: Number.POSITIVE_INFINITY }), {});
 assert.deepEqual(sanitizeProps("motion:generate_blocked", { surface: "timeline", prompt: "private" }), {});
 
 import { readStudioSource } from "./bus/verify-domain-modules.mjs";
@@ -75,12 +65,14 @@ const appFunction = (name) => {
 };
 assert.doesNotMatch(appSource, /trackGenerateBlocked|motion:generate_blocked/);
 
-const motionId = "0123456789abcdef0123456789abcdef";
-assert.deepEqual(sanitizeProps("motion:generate_requested", {
-	surface: "timeline", input_mode: "prompt", request_id: motionId, prompt: "private", host: "user@private",
-}), { surface: "timeline", input_mode: "prompt", request_id: motionId });
-for (const event of ["motion:generate_requested", "motion:preflight_blocked", "motion:preflight_passed", "motion:job_started", "motion:job_succeeded", "motion:job_failed", "motion:result_applied"]) {
-	assert.deepEqual(sanitizeProps(event, { surface: "private", input_mode: true, backend: "user@private", reason: "private", error_code: "PrivateError", duration_bucket: 503, host_configured: "yes", request_id: motionId.toUpperCase() }), {}, `${event} accepts only normalized values`);
+// The 2.x motion-generation funnel and the sample player have no emitter in
+// 3.0: their events left the allowlist, so nothing can send them again.
+const removedEvents = ["motion:generate_requested", "motion:preflight_blocked", "motion:preflight_passed", "motion:job_started", "motion:job_succeeded", "motion:job_failed", "motion:result_applied", "sample:played"];
+for (const event of removedEvents) {
+	assert.deepEqual(sanitizeProps(event, { surface: "timeline", backend: "hosted", request_id: "0123456789abcdef0123456789abcdef", from: "x" }), {}, `${event} is off the allowlist`);
+}
+for (const name of ["prompt_block_add", "shot_add", "shot_cut", "export_pose", "mcp_connected", "plan_view", "fal_motion_open"]) {
+	assert.deepEqual(sanitizeProps("feature:used", { name }), {}, `never-called feature name ${name} is gone`);
 }
 assert.doesNotMatch(appSource, /latency_bucket/);
 assert.deepEqual(sanitizeProps("feature:used", { name: "pose_edit", prompt: "secret" }), { name: "pose_edit" });
@@ -257,7 +249,7 @@ const descriptor = { export_kind: "video", format: "mp4", surface: "studio" };
 function fixture(metadata = descriptor, captureOverride) {
 	let clock = 100;
 	const events = [];
-	const attempt = analytics.startExportAttempt(metadata, {
+	const attempt = startExportAttempt(metadata, {
 		now: () => clock,
 		capture: captureOverride ?? ((event, props) => events.push({ event, props })),
 	});
@@ -267,7 +259,8 @@ const success = fixture({ ...descriptor, filename: "private.mp4", prompt: "secre
 assert.equal(success.events.length, 1);
 assert.equal(success.events[0].event, "export:attempt_started");
 assert.match(success.events[0].props.attempt_id, /^[a-f0-9]{32}$/);
-assert.deepEqual(Object.keys(success.events[0].props).sort(), ["attempt_id", "export_kind", "format", "surface"]);
+assert.deepEqual(Object.keys(success.events[0].props).sort(), ["attempt_id", "export_kind", "format", "is_retry", "surface"]);
+assert.equal(success.events[0].props.is_retry, false, "a first run is never a retry");
 success.advance(3500);
 success.attempt.succeed();
 success.attempt.fail(new Error("late failure"));
@@ -298,7 +291,7 @@ for (const [error, fallback, code, terminal] of [
 	assert.equal(run.events.length, 2, `${code} emits exactly one terminal after async rejection`);
 	assert.deepEqual(run.events[1], {
 		event: `export:attempt_${terminal}`,
-		props: { ...run.events[0].props, duration_bucket: "1-3s", failure_code: code },
+		props: { ...run.events[0].props, duration_bucket: "1-3s", failure_code: code, stage: "preparing", progress: "0" },
 	});
 }
 assert.equal(analytics.exportFailureCode(new Error("unsupported codec encode failed aborted")), "unknown", "messages never determine classification");
@@ -338,6 +331,59 @@ for (const duration of ["lt1s", "1-3s", "3-10s", "10-30s", "gte30s"]) {
 	assert.deepEqual(sanitizeProps("export:attempt_succeeded", { duration_bucket: duration }), { duration_bucket: duration });
 }
 assert.deepEqual(sanitizeProps("export:video_succeeded", { format: "mp4", ...allProps }), { format: "mp4" });
+
+// PR 0 hygiene: the storyboard, render-pass and OTIO flows, retries, the scene
+// size, where a failed export stood, and where each saved file went.
+for (const [export_kind, format] of [["storyboard", "png"], ["render_pass", "png"], ["otio", "otio"]]) {
+	assert.deepEqual(sanitizeProps("export:attempt_started", { export_kind, format, surface: "studio" }), { export_kind, format, surface: "studio" });
+}
+assert.deepEqual(sanitizeProps("export:attempt_started", { is_retry: true, retry_of: "b".repeat(32), objects: "4-10" }), { is_retry: true, retry_of: "b".repeat(32), objects: "4-10" });
+for (const [key, value] of [["is_retry", "true"], ["retry_of", "B".repeat(32)], ["retry_of", "private"], ["objects", 5], ["objects", "5"]]) {
+	assert.deepEqual(sanitizeProps("export:attempt_started", { [key]: value }), {}, `attempt_started rejects ${key}=${value}`);
+}
+for (const stage of ["preparing", "encoding", "finalizing", "handoff"]) {
+	for (const progress of ["0", "1-25", "26-50", "51-75", "76-99"]) {
+		for (const event of ["export:attempt_failed", "export:attempt_cancelled"]) assert.deepEqual(sanitizeProps(event, { stage, progress }), { stage, progress });
+	}
+}
+for (const [key, value] of [["stage", "mux"], ["progress", "100"], ["progress", 50]]) assert.deepEqual(sanitizeProps("export:attempt_failed", { [key]: value }), {});
+assert.deepEqual(sanitizeProps("export:attempt_succeeded", { stage: "encoding", progress: "0" }), {}, "only a stopped export carries stage and progress");
+for (const method of ["workspace", "download"]) {
+	for (const reason of ["none", "unsupported", "no_workspace", "permission", "write_failed"]) {
+		assert.deepEqual(sanitizeProps("export:saved", { method, reason, name: "private.png", path: "/private" }), { method, reason });
+	}
+}
+assert.deepEqual(sanitizeProps("export:saved", { method: "folder", reason: "no-workspace" }), {}, "export:saved values are closed");
+{
+	const events = [];
+	const capture = (event, props) => events.push({ event, props });
+	const request = Object.freeze({ kind: "video" });
+	const first = startExportAttempt({ ...descriptor, objects: 5, request }, { capture });
+	first.note("preparing", { stage: "depth", completedFrames: 4, frameCount: 4 });
+	first.note("encoding", { completedFrames: 3, frameCount: 10 });
+	first.fail(new Error("private encode message"), "encode_failed");
+	const retry = startExportAttempt({ ...descriptor, objects: 5, request }, { capture });
+	retry.note("encoding", { completedFrames: 10, frameCount: 10 });
+	retry.note("finalizing", { stage: "mux" });
+	retry.note("failed", { completedFrames: 0, frameCount: 10 });
+	retry.fail(new DOMException("private", "AbortError"));
+	const fresh = startExportAttempt({ ...descriptor, request: Object.freeze({ kind: "video" }) }, { capture });
+	fresh.note("finalizing", { stage: "download" });
+	fresh.fail(new Error("private handoff"), "unknown");
+	const [firstStart, firstEnd, retryStart, retryEnd, freshStart, freshEnd] = events;
+	assert.equal(firstStart.props.objects, "4-10", "a numeric scene size crosses only as its bucket");
+	assert.deepEqual([firstEnd.event, firstEnd.props.stage, firstEnd.props.progress], ["export:attempt_failed", "encoding", "26-50"]);
+	assert.equal(Object.hasOwn(firstStart.props, "request"), false, "the request identity never crosses");
+	assert.deepEqual([retryStart.props.is_retry, retryStart.props.retry_of], [true, firstStart.props.attempt_id], "the same request again is a retry of its last attempt");
+	assert.deepEqual([retryEnd.event, retryEnd.props.stage, retryEnd.props.progress], ["export:attempt_cancelled", "finalizing", "76-99"], "terminal phases do not move the stop point");
+	assert.deepEqual([freshStart.props.is_retry, Object.hasOwn(freshStart.props, "retry_of")], [false, false], "a new request is not a retry");
+	assert.equal(freshEnd.props.stage, "handoff", "the download step is the handoff stage");
+	const handed = startExportAttempt(descriptor, { capture });
+	handed.note("preparing", { completedFrames: 1, frameCount: 2 });
+	handed.fail(new Error("private"), "unknown", 1);
+	assert.deepEqual([events.at(-1).props.stage, events.at(-1).props.progress], ["handoff", "26-50"], "a file already handed off ends the run in handoff");
+}
+console.log("PASS export retries, scene size, stop stage/progress, new export kinds and export:saved values");
 assert.deepEqual(sanitizeProps("export:blocking_frame_succeeded", { ...allProps, format: "png" }), { format: "png" });
 
 // Previs events (#653): closed values only, never a caption, name or prompt.
@@ -387,40 +433,8 @@ assert.deepEqual(
 );
 
 const privacyHtml = readFileSync(new URL("../tools/dev/pages/privacy.html", import.meta.url), "utf8");
-const motionDisclosure = new Map();
-for (const row of privacyHtml.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/g)) {
-	const cells = [...row[1].matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/g)].map((cell) => cell[1].replace(/<[^>]*>/g, " "));
-	for (const event of cells[0]?.match(/\bmotion:[a-z_]+\b/g) ?? []) {
-		motionDisclosure.set(event, new Set(cells[1]?.match(/\b[a-z][a-z0-9_]*\b/g) ?? []));
-	}
-}
-const motionSchemas = {
-	"motion:generate_requested": ["surface", "input_mode", "request_id"],
-	"motion:preflight_blocked": ["reason", "surface", "request_id"],
-	"motion:preflight_passed": ["backend", "surface", "request_id"],
-	"motion:job_started": ["backend", "input_mode", "request_id"],
-	"motion:job_succeeded": ["backend", "duration_bucket", "input_mode", "request_id"],
-	"motion:job_failed": ["backend", "duration_bucket", "input_mode", "error_code", "request_id"],
-	"motion:result_applied": ["request_id", "backend"],
-};
-assert.deepEqual([...motionDisclosure.keys()].sort(), Object.keys(motionSchemas).sort());
-const motionProps = { backend: "local_kimodo", host_configured: true, surface: "timeline", input_mode: "prompt", reason: "unconfigured", request_id: motionId, duration_bucket: "lt1s", error_code: "aborted" };
-for (const [event, properties] of Object.entries(motionSchemas)) {
-	assert.deepEqual(Object.keys(sanitizeProps(event, motionProps)).sort(), [...properties].sort());
-	for (const property of properties) assert.ok(motionDisclosure.get(event).has(property), `${event} discloses ${property}`);
-}
-for (const [event, property, values] of [
-	["motion:generate_requested", "surface", ["timeline", "line_edit", "trail", "mcp"]],
-	["motion:generate_requested", "input_mode", ["prompt", "pose", "edit"]],
-	["motion:preflight_blocked", "reason", ["unconfigured", "unreachable", "unsupported_route"]],
-	["motion:job_failed", "error_code", ["aborted", "unsupported_route", "generation_failed", "unknown"]],
-]) {
-	for (const value of values) {
-		assert.deepEqual(sanitizeProps(event, { [property]: value }), { [property]: value });
-		assert.ok(motionDisclosure.get(event).has(value), `${event} discloses enum ${value}`);
-	}
-}
-console.log("PASS motion allowlists, normalized enums and disclosure schema tokens");
+for (const event of removedEvents) assert.equal(privacyHtml.includes(event), false, `the privacy page no longer lists ${event}`);
+console.log("PASS removed motion-generation and sample events stay off the allowlist and the privacy page");
 const shippedPrivacyHtml = readFileSync(new URL("../privacy/index.html", import.meta.url), "utf8");
 assert.ok(shippedPrivacyHtml.includes(privacyHtml.split("\n---\n")[1].trimEnd()), "the shipped privacy body matches its source disclosure");
 const exportDisclosure = new Map();
@@ -431,7 +445,7 @@ for (const row of privacyHtml.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/g)) {
 	}
 }
 assert.deepEqual([...exportDisclosure.keys()].sort(), [
-	...lifecycleEvents, "export:keyframe_pack", "export:video_succeeded", "export:blocking_frame_succeeded",
+	...lifecycleEvents, "export:keyframe_pack", "export:video_succeeded", "export:blocking_frame_succeeded", "export:saved",
 ].sort(), "the disclosure event tokens match the export contract");
 for (const event of [...lifecycleEvents, "export:keyframe_pack"]) {
 	for (const property of Object.keys(sanitizeProps(event, allProps))) {
@@ -448,7 +462,7 @@ for (const capture of [() => { throw new Error("transport failed"); }, async () 
 	assert.doesNotThrow(() => run.attempt.fail(hostileError));
 }
 const clockEvents = [];
-const brokenClock = analytics.startExportAttempt(descriptor, {
+const brokenClock = startExportAttempt(descriptor, {
 	now() { throw new Error("clock unavailable"); },
 	capture(event, props) { clockEvents.push({ event, props }); },
 });
@@ -469,7 +483,7 @@ const performanceDescriptor = Object.getOwnPropertyDescriptor(globalThis, "perfo
 try {
 	Object.defineProperty(globalThis, "performance", { configurable: true, get() { throw new Error("global clock unavailable"); } });
 	const events = [];
-	const attempt = analytics.startExportAttempt(descriptor, { capture(event, props) { events.push({ event, props }); } });
+	const attempt = startExportAttempt(descriptor, { capture(event, props) { events.push({ event, props }); } });
 	assert.doesNotThrow(() => attempt.fail(new Error("render failure"), "render_failed"));
 	assert.equal(events.length, 2, "a throwing global clock cannot prevent the terminal event");
 	assert.equal(events[1].props.duration_bucket, "lt1s");
@@ -654,7 +668,7 @@ async function runtimeFixture({
 	runtime = { distribution: "npm", telemetryEnabled: true, installationId, appVersion: "1.8.1", apiKey: "test", apiHost: "https://telemetry.invalid", internalQa: false, installKind: "npx" },
 	origin = "http://127.0.0.1:5180", search = "", store = new Map(),
 	env = { PROD: true, VITE_POSTHOG_KEY: "test", VITE_APP_VERSION: "1.8.1" },
-	dnt = false, beacon = true, sync,
+	dnt = false, beacon = true, sync, sessionId = "0192f0d6-3a4b-7c2d-8e9f-abcdefabcdef",
 } = {}) {
 	const records = [], beacons = [], requests = [];
 	const listeners = new Map();
@@ -668,6 +682,7 @@ async function runtimeFixture({
 			if (payload) records.push(payload);
 		},
 		get_distinct_id() { return distinctId; },
+		get_session_id() { return sessionId; },
 		has_opted_out_capturing() { return optedOut || dnt; },
 		opt_out_capturing() { optedOut = true; },
 		opt_in_capturing() { optedOut = false; },
@@ -699,6 +714,7 @@ async function runtimeFixture({
 	for (const [key, value] of Object.entries(values)) Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
 	const source = runtimeSource
 		.replace('"./semantic-edit.js"', JSON.stringify(new URL("../src/semantic-edit.js", import.meta.url).href))
+		.replace('"./analytics-values.js"', JSON.stringify(new URL("../src/analytics-values.js", import.meta.url).href))
 		.replace("import.meta.env", JSON.stringify(env))
 		.replace('import("posthog-js")', "Promise.resolve({ default: globalThis.__analyticsSdkFixture })");
 	const module = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}#${++runtimeFixtureId}`);
@@ -725,6 +741,7 @@ try {
 			run.module.track("scene:loaded", { scene_source: "library", internal_qa: !internalQa, distribution: "forged", prompt: "private" });
 			const [ended] = await run.unload();
 			assert.equal(run.beacons.length, 1, "pagehide plus beforeunload sends exactly once");
+			assert.equal(ended.properties.session_id, "0192f0d6-3a4b-7c2d-8e9f-abcdefabcdef", `${distribution} session end carries the SDK session id`);
 			for (const record of run.records) {
 				assert.equal(record.properties.internal_qa, internalQa, "every capture carries the declared marker, never event-supplied overrides");
 				for (const key of globalKeys) assert.equal(ended.properties[key], record.properties[key], `${distribution} beacon/capture parity: ${key}`);
@@ -734,6 +751,22 @@ try {
 			assert.equal(run.options.bootstrap?.isIdentifiedID, distribution === "npm" ? false : undefined);
 			cohortFixtures.push(...run.records);
 		}
+	}
+	{
+		const run = await runtimeFixture({ sessionId: "private session" });
+		const before = run.records.length;
+		run.module.track("private:unlisted", { scene_source: "library" });
+		run.module.track("motion:compile_private", {});
+		assert.equal(run.records.length, before, "an event the allowlist does not name is dropped, not sent with empty props");
+		run.module.track("scene:loaded", { scene_source: "library" });
+		assert.equal(run.records.at(-1).event, "scene:loaded", "allowlisted events still send");
+		const [ended] = await run.unload();
+		assert.equal(Object.hasOwn(ended.properties, "session_id"), false, "a malformed session id is dropped by the validator");
+		assert.equal(ended.properties.action_count_bucket, "1-3", "dropped events do not count as actions");
+		assert.equal(ended.properties.scenes_touched, 1);
+		assert.deepEqual(sanitizeProps("app:session_ended", { duration_bucket: "1-3s", scenes_touched: 21, action_count_bucket: "lt1m", pose_edit_bucket: 2, distinct_id: "x" }), {},
+			"session end values are its own closed buckets and a capped count");
+		console.log("PASS allowlist gate drops unlisted events; session end goes through the validator with session_id");
 	}
 	const external = cohortFixtures.filter((row) => row.properties.internal_qa !== true);
 	assert.equal(external.some((row) => row.properties.internal_qa === true), false);
@@ -1073,7 +1106,7 @@ console.log("PASS Workflow, Agent and MCP execution allowlists and disclosure sc
 	const sessionTokens = rowTokens("app:session_ended");
 	for (const key of EDIT_BUCKET_KEYS) assert.ok(sessionTokens.has(key), `session end discloses ${key}`);
 	assert.ok(FEATURE_USAGE_NAMES.includes("pose_save"));
-	for (const name of ["export_depth_video", "export_keyframe_pack"]) assert.ok(FEATURE_USAGE_NAMES.includes(name), `${name} is no longer silently dropped`);
+	for (const name of ["export_depth_video", "export_keyframe_pack", "export_render_pass", "export_storyboard"]) assert.ok(FEATURE_USAGE_NAMES.includes(name), `${name} is no longer silently dropped`);
 	assert.deepEqual(sanitizeProps("feature:used", { name: "pose_save" }), { name: "pose_save" });
 	for (const name of ["pose_edit", "pose_save"]) {
 		assert.ok(FEATURE_USAGE_NAMES.includes(name), `${name} is a closed feature name`);
@@ -1081,20 +1114,6 @@ console.log("PASS Workflow, Agent and MCP execution allowlists and disclosure sc
 	}
 	console.log("PASS per-group edit gestures, real pose_edit vs pose_save, and session-end disclosure");
 
-	for (const [event, property, values] of [
-		["motion:generate_requested", "surface", ["fal_card", "agent"]],
-		["motion:generate_requested", "input_mode", ["a_to_b", "still"]],
-		["motion:preflight_blocked", "reason", ["locked", "missing_input"]],
-		["motion:preflight_passed", "backend", ["fal"]],
-		["motion:job_failed", "error_code", ["quota"]],
-	]) {
-		const tokens = rowTokens(event);
-		for (const value of values) {
-			assert.deepEqual(sanitizeProps(event, { [property]: value }), { [property]: value });
-			assert.ok(tokens.has(value), `${event} discloses ${value}`);
-		}
-	}
-	console.log("PASS Fal A->B values on the motion contract: locked, missing input, fal and quota");
 
 	const { FIRST_LAUNCH_SOURCES } = await import("../bin/telemetry-state.mjs");
 	assert.deepEqual([...HEARD_FROM_SOURCES].sort(), [...FIRST_LAUNCH_SOURCES].sort(), "the CLI and the browser agree on install sources");
