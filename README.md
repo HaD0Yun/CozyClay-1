@@ -78,7 +78,7 @@ The same scene can be driven from three places, live, while you watch the viewpo
 
 | Surface | Start | For |
 | --- | --- | --- |
-| **Agent panel** | `Cmd/Ctrl+B` in the studio | Chat in the studio. Sign in with ChatGPT or use your own key (Anthropic, OpenAI, Gemini, OpenRouter, CLIProxyAPI). |
+| **Agent panel** | `Cmd/Ctrl+B` in the studio | Chat in the studio. Sign in with ChatGPT or use your own key (Anthropic, OpenAI, Gemini, MiniMax, OpenRouter, CLIProxyAPI). |
 | **MCP server** | `npx -y cozyclay mcp` | Claude Desktop, Claude Code, Cursor or any MCP client. |
 | **Terminal** | `cclay live status --wait` | Coding agents that drive a running studio, JSON in and out. |
 

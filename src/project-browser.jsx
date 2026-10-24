@@ -294,7 +294,7 @@ export default function ProjectBrowser({ currentName, onOpen, onOpenFile, onNew,
 									<button type="button" onClick={onOpenFile}>{ko("Open project file…", "프로젝트 파일 열기…")}</button>
 								</div>
 							</div>
-							<RecentList entries={recentEntries} currentName={currentName} onOpen={onOpen} onRemove={async (entry) => {
+							<RecentList entries={recentEntries} currentName={currentName} onOpen={onOpen} onOpenFile={onOpenFile} onRemove={async (entry) => {
 								await removeRecentProject(entry.name);
 								setRecents(await loadRecentProjects());
 							}} />
@@ -326,18 +326,18 @@ export default function ProjectBrowser({ currentName, onOpen, onOpenFile, onNew,
 										<span>{ko("Start from an empty stage", "빈 무대에서 시작")}</span>
 									</span>
 								</button>
+								<button type="button" role="listitem" className="v2-start-add-card v2-start-open-card" data-testid="start-open-project-card" onClick={onOpenFile}><span className="v2-start-add-art" aria-hidden="true"><svg viewBox="0 0 20 20" width="20" height="20"><path d="M2.5 6.5V15a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1H10L8.5 5H3.5a1 1 0 0 0-1 1.5Z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" /></svg></span><span className="v2-start-template-copy"><strong>{ko("Open project", "프로젝트 열기")}</strong><span>{ko("A saved .cclayproject file", "저장한 .cclayproject 파일")}</span></span></button>
 							</div>
 
 							<div className="v2-start-recent-block">
 								<div className="v2-start-recent-heading"><span>{ko("Recent", "최근")}</span></div>
-								<RecentList entries={recents.map((entry) => ({ ...entry, key: `recent-${entry.name}`, removable: true, date: entry.openedAt }))} currentName={currentName} onOpen={onOpen} onRemove={async (entry) => {
+								<RecentList entries={recents.map((entry) => ({ ...entry, key: `recent-${entry.name}`, removable: true, date: entry.openedAt }))} currentName={currentName} onOpen={onOpen} onOpenFile={onOpenFile} onRemove={async (entry) => {
 									await removeRecentProject(entry.name);
 									setRecents(await loadRecentProjects());
 								}} compact />
 							</div>
 						</>
 					)}
-					{activeNav !== "recent" && activeNav !== "learn" && <div className="v2-start-file-actions"><button type="button" className="v2-start-file-button" onClick={onOpenFile}>{ko("Open project file…", "프로젝트 파일 열기…")}</button></div>}
 				</main>
 
 				<aside className="v2-start-preview" data-testid="start-project-preview" aria-label={ko("Project preview", "프로젝트 미리보기")}>
@@ -392,9 +392,10 @@ export default function ProjectBrowser({ currentName, onOpen, onOpenFile, onNew,
 	);
 }
 
-function RecentList({ entries, currentName, onOpen, onRemove, compact = false }) {
+// Recents live in this browser's storage for this address, so a project saved elsewhere opens from its file.
+function RecentList({ entries, currentName, onOpen, onOpenFile, onRemove, compact = false }) {
 	return entries.length === 0 ? (
-		<p className={`v2-start-empty${compact ? " compact" : ""}`}>{ko("No recent projects yet.", "아직 최근 프로젝트가 없습니다.")}</p>
+		<p className={`v2-start-empty${compact ? " compact" : ""}`}>{ko("No recent projects in this browser yet. ", "이 브라우저에 최근 프로젝트가 없습니다. ")}<button type="button" className="v2-start-empty-open" onClick={onOpenFile}>{ko("Open a project file…", "프로젝트 파일 열기…")}</button></p>
 	) : (
 		<div className={`v2-start-recent-list${compact ? " compact" : ""}`} role="list">
 			{entries.map((entry) => (

@@ -5,6 +5,7 @@ import * as THREE from "three";
 import { POSE_BONES, normalizeBoneName, primeBindPose } from "./poses.js";
 import { poseThumbnail, warmThumbnailModels } from "./pose-thumbs.js";
 import { IK_TRACKS, MID_TRACKS, ikControlIsExposed } from "./motion/ik.js";
+import { pickIkHit } from "./motion/ik-pick.js";
 import { shouldRefreshIkExposure } from "./use-render-activity.js";
 import { POSER_LAYER } from "./dualview.jsx";
 import { ko } from "./locale.js";
@@ -754,7 +755,9 @@ export function IkHandles({ chains, fkJoints, ikState, enabled, focus, onFocus, 
 				halo.material.opacity = mesh.material.opacity * (focused ? 0.6 : 0.4);
 			}
 		}
-		const focusExposed = !!focus && visibilityRef.current.get(focus) !== false;
+		// A focused control keeps its gizmo and rings even when the body hides it:
+		// the user picked it, and while focused nothing else can take a press.
+		const focusExposed = !!focus;
 		if (gizmoRef.current) gizmoRef.current.visible = focusExposed;
 		if (ringRef.current) ringRef.current.visible = focusExposed;
 
@@ -938,10 +941,11 @@ const CLICK_PX = 4;
 			if (ev.button !== 0) return;
 			const downXY = [ev.clientX, ev.clientY];
 			const focused = focusIdRef.current;
+			// A hidden unfocused control keeps only its sphere: its gizmo and rings are not drawn.
 			let picks = pickRefs.current.filter((p) =>
 				p.mesh?.visible &&
 				handleRefs.current[p.track.id]?.visible &&
-				handleRefs.current[p.track.id]?.userData.ikExposed !== false
+				(handleRefs.current[p.track.id]?.userData.ikExposed !== false || !p.part || p.track.id === focused)
 			);
 			if (focused && !selectionOnly) picks = picks.filter((p) => p.track.id === focused);
 			else picks = picks.filter((p) => !p.axisDir); // spheres only
@@ -955,13 +959,11 @@ const CLICK_PX = 4;
 				-((ev.clientY - rect.top) / rect.height) * 2 + 1
 			);
 			raycaster.setFromCamera(ndc, camera);
-			const hits = raycaster.intersectObjects(picks.map((p) => p.mesh), false);
-			if (!hits.length) {
+			const pick = pickIkHit(raycaster.intersectObjects(picks.map((p) => p.mesh), false), picks, handleRefs.current);
+			if (!pick) {
 				if (focused) beginDrag("empty", { id: "empty" }, null, null, downXY);
 				return;
 			}
-			const pick = picks.find((p) => p.mesh === hits[0].object);
-			if (!pick) return;
 			if (typeof window !== "undefined") {
 				window.__ikLastPick = { trackId: pick.track.id, kind: pick.kind, part: pick.part };
 			}

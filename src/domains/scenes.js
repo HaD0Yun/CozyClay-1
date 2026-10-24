@@ -30,9 +30,7 @@ import {
 	PROJECT_EXTENSION,
 	normalizeWorkflowGraph,
 	storeWorkflowGraph,
-	pickProjectFileForOpen,
 	readProjectFile,
-	openProjectFallback,
 	readProjectDocument,
 	requestHandlePermission,
 	createWorkflowGraph,
@@ -42,6 +40,7 @@ import {
 	buildAnimationProjectFromStoryboard,
 } from "../project.js";
 import { playgroundSceneUrl, fetchSceneProject } from "../playground.js";
+import { pickProjectToOpen } from "../project-open-file.js";
 import { openAssetDb, referencedAssetIds, getAsset, putAsset } from "../scene-assets.js";
 import { internWorkflowOutputs, workflowOutputRefs, resolveWorkflowOutputs } from "../workflow/workflow-resources.js";
 
@@ -444,14 +443,8 @@ export function useScenes(appContext) {
 	async function openProject(context = null) {
 		if (!context) return runProject("project.open");
 		try {
-			let file = null;
-			let handle = null;
-			if (hasFileSystemAccess()) {
-				handle = await pickProjectFileForOpen();
-				file = await readProjectFile(handle);
-			} else {
-				file = await openProjectFallback();
-			}
+			const { file, handle = null, blocked } = await pickProjectToOpen();
+			if (blocked) throw new StudioProtocolError("TARGET_NOT_READY", ko("This browser would not read that file. Open it once more.", "이 브라우저가 그 파일을 읽지 못했어요. 한 번 더 열어 주세요."));
 			if (!file) return false;
 			const result = readProjectDocument(file.text);
 			if (!result.ok) {
