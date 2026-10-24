@@ -23,6 +23,7 @@ import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { ensureMcpRuntime, runMcp } from "./mcp-runtime.mjs";
 import { openBrowser } from "./open-browser.mjs";
+import { maybeAskForStar } from "./star-prompt.mjs";
 import { checkForUpdate, readUpdateStatus, runUpdate } from "./update-check.mjs";
 import { handleOAuthRequest } from "./codex-auth.mjs";
 import { createAgentHandler } from "./agent/agent-routes.mjs";
@@ -120,12 +121,8 @@ function parseArgs(argv) {
 	return opts;
 }
 
-const REPO_URL = "https://github.com/NomaDamas/CozyClay";
 const STATE_DIR = join(process.env.XDG_CONFIG_HOME || join(homedir(), ".config"), "cozyclay");
 const STATE_FILE = join(STATE_DIR, "state.json");
-// Only worth asking someone who actually used the thing. A prompt three
-// seconds in is a popup; a prompt after a real session is a question.
-const STAR_AFTER_MS = Number(process.env.COZYCLAY_STAR_AFTER_MS ?? 60_000);
 
 async function askFirstLaunchSource() {
 	if (!process.stdin.isTTY || !process.stdout.isTTY) return null;
@@ -194,49 +191,6 @@ function writeState(patch) {
 		renameSync(temporary, STATE_FILE);
 	} catch {
 		/* a read-only home is not a reason to fail a local dev server */
-	}
-}
-
-async function starCount() {
-	try {
-		const res = await fetch("https://api.github.com/repos/NomaDamas/CozyClay", {
-			headers: { accept: "application/vnd.github+json" },
-			signal: AbortSignal.timeout(2500),
-		});
-		if (!res.ok) return null;
-		const body = await res.json();
-		return Number.isInteger(body?.stargazers_count) ? body.stargazers_count : null;
-	} catch {
-		return null;
-	}
-}
-
-// Asked once, on the way out, and never again on this machine. A CLI that
-// nags on every run is worse than one that never asks.
-async function maybeAskForStar(startedAt, opts) {
-	if (!opts.star) return;
-	if (process.env.CI || process.env.COZYCLAY_NO_STAR) return;
-	if (!process.stdin.isTTY || !process.stdout.isTTY) return;
-	if (Date.now() - startedAt < STAR_AFTER_MS) return;
-	if (readState().starPromptedAt) return;
-
-	writeState({ starPromptedAt: new Date().toISOString() });
-	const stars = await starCount();
-	const tally = stars === null ? "" : ` (${stars} so far)`;
-	const rl = createInterface({ input: process.stdin, output: process.stdout });
-	const answer = await new Promise((done) => {
-		const timer = setTimeout(() => done(""), 12_000);
-		rl.question(`\nWas CozyClay any good? A star helps people find it${tally}. Open GitHub? [Y/n] `, (a) => {
-			clearTimeout(timer);
-			done(a);
-		});
-	});
-	rl.close();
-	if (/^(y|yes|)$/i.test(answer.trim())) {
-		openBrowser(REPO_URL);
-		console.log("Thanks. Opening the repo.");
-	} else {
-		console.log(`Fair enough. ${REPO_URL} if you change your mind.`);
 	}
 }
 
@@ -343,7 +297,7 @@ async function shutdown(exitCode = 0) {
 	shuttingDown = true;
 	if (server?.listening) await new Promise((resolvePromise) => server.close(() => resolvePromise()));
 	try {
-		await maybeAskForStar(startedAt, opts);
+		await maybeAskForStar(startedAt, opts, { readState, writeState });
 	} catch {
 		/* never let the goodbye prompt hold the process hostage */
 	}
