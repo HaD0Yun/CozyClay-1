@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { projectFixture, ok } from './project-fixture.mjs';
 import { deferred } from './fixture.mjs';
+import { declarations } from '../../src/commands/project.js';
+
+// The open deadline spans the user in the file picker: at the 30 s default a slow pick opened nothing.
+assert.equal(declarations.find(entry => entry.id === 'project.open').timeoutMs, 300_000, 'project.open waits out a slow file pick');
 
 const f = projectFixture(), previousWindow = globalThis.window;
 try {

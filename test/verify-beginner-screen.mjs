@@ -13,6 +13,8 @@ function expect(name, condition) {
 expect("start screen has the v2 region root", browser.includes('className={`v2-start-screen project-browser-backdrop'));
 expect("start screen has the three navigation destinations", ["Recent", "New Project", "Learn"].every((label) => browser.includes(`label: ko("${label}"`)) && !browser.includes('label: ko("Samples"'));
 expect("start screen exposes the template grid and the + card as its one blank entry", browser.includes("v2-start-template-grid") && browser.includes('data-testid="start-new-project-card"') && !browser.includes("BLANK_TEMPLATE") && !browser.includes("v2-start-tabs"));
+expect("the New view offers an Open project card beside the + card that opens a project file", /data-testid="start-open-project-card" onClick=\{onOpenFile\}/.test(browser));
+expect("an empty recent list offers to open a project file", browser.includes('className="v2-start-empty-open" onClick={onOpenFile}') && (browser.match(/onOpenFile=\{onOpenFile\}/g) || []).length === 2);
 expect("start screen exposes the name and storage fields", browser.includes('data-testid="start-project-name"') && browser.includes('ko("Location"') && browser.includes('ko("Frame rate"') && browser.includes('ko("Units"'));
 expect("empty project names disable Create with a reason title", browser.includes("disabled={!canCreate}") && browser.includes("createReason"));
 expect("the first-success guide keeps its v2 region root", guide.includes('className="v2-first-success-guide first-success-guide"'));
