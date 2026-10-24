@@ -1,6 +1,9 @@
 import { defineConfig } from "vite";
 import { resolve } from "node:path";
 import react from "@vitejs/plugin-react";
+import { readFileSync } from "node:fs";
+
+const { version } = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
 
 const livePort = process.env.COZYCLAY_LIVE_PORT ?? "5184";
 const oauthPort = process.env.COZYCLAY_OAUTH_PORT?.trim();
@@ -35,6 +38,11 @@ export default defineConfig({
 	},
 	plugins: [
 		react(),
+		// The landing shows the release it was built from (#903).
+		{
+			name: "cozyclay-landing-version",
+			transformIndexHtml: (html) => html.replaceAll("%COZYCLAY_VERSION%", version),
+		},
 		// A service worker registered by an earlier PRODUCTION visit to this same
 		// origin outlives the tab and keeps serving its cached bundle to the dev
 		// server's port — edits appear to do nothing, and no amount of reloading
