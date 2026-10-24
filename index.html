@@ -143,13 +143,42 @@
       .cta { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
 
       /* Hero: headline left, the pitch and the two ways in on the right. */
-      .hero { padding: 24px 0 32px; overflow: hidden; }
-      .hero .wrap { max-width: none; padding: 0 2vw; }
+      /* First screen: black stage, the headline and the reel. Scrolling plays
+         it out: the reel rises over the headline and grows to the full width,
+         then the page continues. --p (0..1) is set by the script below. */
+      .stage { position: relative; height: 210vh; background: #0b0b0c; color: #f2efe8; --p: 0; }
+      .stage-pin {
+        position: sticky; top: 0; height: 100vh; height: 100svh; overflow: hidden;
+        display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+        padding-top: calc(var(--header-h) + 2vh);
+      }
+      .stage h1 {
+        margin: 0; padding: 0 2vw; width: 100%; max-width: none; font-size: 21.5vw; line-height: .98; letter-spacing: -.045em; font-weight: 400; text-align: center;
+        opacity: calc(.88 * (1 - var(--p) * 1.4));
+        transform: translateY(calc(var(--p) * -12vh)) scale(calc(1 - var(--p) * .12));
+        transform-origin: 50% 0;
+      }
+      .stage-reel {
+        position: relative; z-index: 1; width: min(1160px, 92vw); margin-top: 1vh;
+        transform: translateY(calc(var(--p) * var(--rise, 0px))) scale(calc(.82 + var(--p) * var(--grow, .18)));
+        transform-origin: 50% 0;
+      }
+      .stage .window { border-color: #2a2a2e; background: #141416; box-shadow: 0 40px 120px rgba(0, 0, 0, .6); }
+      .stage .titlebar { background: #1c1c1f; border-bottom-color: #2a2a2e; }
+      .stage .titlebar span { color: #8a8a90; }
+      .stage-cue {
+        position: absolute; bottom: 3vh; left: 50%; margin-left: -11px; color: #8a8a90;
+        opacity: calc(1 - var(--p) * 5); animation: cue 1.8s ease-in-out infinite;
+      }
+      @keyframes cue { 50% { transform: translateY(6px); } }
+      body.on-stage header.site { background: #0b0b0c; border-bottom-color: #1f1f22; }
+      body.on-stage header.site .brand, body.on-stage header.site .icon-link { color: #f2efe8; }
+      body.on-stage header.site nav a { color: #9a9aa0; }
+      body.on-stage header.site nav a:hover { color: #f2efe8; }
+      body.on-stage header.site .btn.primary { background: #f2efe8; color: #0b0b0c; }
       .hero-grid { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 28px; }
-      .hero h1 { max-width: none; font-size: 21.5vw; opacity: .88; margin: 0; letter-spacing: -.045em !important; line-height: .98; letter-spacing: -.025em; font-weight: 400; }
-      .hero h1 em { display: inline-block; white-space: nowrap; }
-      .hero h1 .line { display: inline-block; white-space: nowrap; }
-      .hero h1.curved { padding: .06em 0; }
+
+      .stage h1 .line { display: inline-block; white-space: nowrap; }
       .curved .ch { display: inline-block; white-space: pre; transform-origin: 50% 55%; will-change: transform; }
       .hero-side { display: flex; flex-direction: column; align-items: center; gap: 22px; max-width: 640px; }
       .lede { margin: 0; color: var(--muted); font-size: 19px; }
@@ -176,13 +205,10 @@
       .titlebar span { flex: 1; text-align: center; margin-right: 52px; font-size: 13px; font-weight: 500; color: var(--muted); }
 
 
-      .proof { padding: 0 0 104px; }
-      .proof figure { margin: 0; }
-      .proof video { display: block; width: 100%; height: auto; background: #000; }
-      .proof figcaption { margin-top: 16px; text-align: center; }
+
       /* Before/after compare. --pos is the divider, set by the script below. */
       .compare { position: relative; aspect-ratio: 16 / 9; background: #000; cursor: ew-resize; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
-      .proof .compare video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+      .compare video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
       .compare .cmp-b { clip-path: inset(0 0 0 var(--pos)); }
       .cmp-line { position: absolute; top: 0; bottom: 0; left: var(--pos); width: 2px; margin-left: -1px; background: #fff; pointer-events: none; }
       .cmp-knob {
@@ -202,7 +228,7 @@
 
       section { padding: 88px 0; border-top: 1px solid var(--line); }
       section.alt { background: var(--paper-2); }
-      section.hero, section.proof { border-top: 0; }
+      section.stage { padding: 0; border-top: 0; }
 
       .card {
         min-width: 0; padding: 28px; background: var(--panel);
@@ -322,11 +348,13 @@
       }
       @media (max-width: 720px) {
         :root { --header-h: 56px; }
+        .stage { height: 170vh; }
+        .stage-pin { justify-content: center; padding-top: var(--header-h); }
+        .stage-reel { margin-top: 4vh; }
         body { font-size: 16px; }
         .brand img { width: 32px; }
         section { padding: 72px 0; }
         #controls { padding-bottom: 72px; }
-        .hero { padding: 16px 0 20px; }
         .hero-actions .btn, .hero-actions .cmd { width: 100%; }
         .hero-actions .cmd { justify-content: space-between; }
         .flow-tabs, .ai-tabs { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 4px; }
@@ -337,6 +365,10 @@
         .flow-exports { aspect-ratio: auto; padding: 4px 20px; }
       }
       @media (prefers-reduced-motion: reduce) {
+        .stage { height: auto; --p: 0 !important; }
+        .stage-pin { position: relative; height: auto; padding-bottom: 72px; }
+        .stage-reel { transform: none; }
+        .stage-cue { display: none; }
         html { scroll-behavior: auto; }
         .btn, a.card, .seg button, details summary::after { transition: none; }
       }
@@ -361,17 +393,11 @@
     </header>
 
     <main>
-      <section class="hero">
-        <div class="wrap hero-grid">
+      <section class="stage" id="stage">
+        <div class="stage-pin">
           <h1 class="curved" aria-label="Previs the shot"><span class="line">Previs the shot</span></h1>
-        </div>
-      </section>
-
-      <section class="proof">
-        <div class="wrap">
-          <figure>
+          <div class="stage-reel">
             <div class="window">
-              <div class="titlebar" aria-hidden="true"><i></i><i></i><i></i><span>CozyClay</span></div>
               <div class="compare" id="compare" style="--pos: 50%">
                 <video class="cmp-a" src="/media/truck-greybox.mp4" poster="/media/truck-greybox-poster.jpg" width="1920" height="1080" autoplay muted loop playsinline preload="metadata"></video>
                 <video class="cmp-b" src="/media/truck-seedance.mp4" poster="/media/truck-seedance-poster.jpg" width="1920" height="1080" autoplay muted loop playsinline preload="metadata" aria-hidden="true"></video>
@@ -381,7 +407,8 @@
                 <span class="tag-r" aria-hidden="true">Seedance 2.5</span>
               </div>
             </div>
-          </figure>
+          </div>
+          <span class="stage-cue" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
         </div>
       </section>
 
@@ -692,6 +719,38 @@ npm run dev</code></pre>
         bend();
         document.fonts.ready.then(bend);
         addEventListener("resize", bend);
+        // First screen: map the scroll through the stage to --p, and size the
+        // reel's rise and growth so it ends centred at the full width.
+        const stage = document.getElementById("stage");
+        const reel = stage.querySelector(".stage-reel");
+        const header = document.querySelector("header.site");
+        const still = matchMedia("(prefers-reduced-motion: reduce)");
+        const measure = () => {
+          const pin = stage.querySelector(".stage-pin");
+          const start = 0.82;
+          const width = reel.offsetWidth;
+          const full = Math.min(innerWidth * 0.98, (innerHeight - header.offsetHeight - 24) * 16 / 9 + 0);
+          const end = Math.max(start, full / width);
+          stage.style.setProperty("--grow", (end - start).toFixed(3));
+          const top = reel.offsetTop;
+          const target = header.offsetHeight + Math.max(12, (innerHeight - header.offsetHeight - reel.offsetHeight * end) / 2);
+          stage.style.setProperty("--rise", (target - top) + "px");
+          void pin;
+        };
+        let queued = false;
+        const onScroll = () => {
+          queued = false;
+          const box = stage.getBoundingClientRect();
+          const span = stage.offsetHeight - innerHeight;
+          const p = still.matches || span <= 0 ? 0 : Math.min(1, Math.max(0, -box.top / span));
+          stage.style.setProperty("--p", p.toFixed(4));
+          document.body.classList.toggle("on-stage", box.bottom > header.offsetHeight);
+        };
+        const queue = () => { if (!queued) { queued = true; requestAnimationFrame(onScroll); } };
+        measure();
+        onScroll();
+        addEventListener("scroll", queue, { passive: true });
+        addEventListener("resize", () => { measure(); queue(); });
         greybox.addEventListener("timeupdate", follow);
         greybox.addEventListener("seeked", follow);
         greybox.addEventListener("play", follow);
