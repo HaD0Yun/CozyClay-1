@@ -45,7 +45,7 @@ function Step({ step, live, isLast, now, toolLabels }) {
 		</li>;
 	}
 	const running = step.kind === "compose" || step.status === "running";
-	const label = step.kind === "compose" ? ko(`Preparing ${stepLabel(step, toolLabels)}`, `${stepLabel(step, toolLabels)} 준비 중`) : stepLabel(step, toolLabels);
+	const label = step.kind === "compose" ? ko(`Preparing ${stepLabel(step, toolLabels)}`, `${stepLabel(step, toolLabels)} 준비 중`, `正在准备 ${stepLabel(step, toolLabels)}`) : stepLabel(step, toolLabels);
 	const result = running ? (step.progress ? `${scriptNow(step)}${step.progress.summary ? ` — ${step.progress.summary}` : ""}` : "") : stepResult(step);
 	const time = running ? now - (step.startedAt ?? now) : step.elapsedMs;
 	return <li className={`agent-step ${step.kind}${step.status === "failed" ? " failed" : ""}`} data-step-kind={step.kind} data-tool-name={step.name} data-tool-status={step.kind === "compose" ? "composing" : step.status} data-action={step.action}>

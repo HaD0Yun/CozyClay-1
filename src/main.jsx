@@ -16,7 +16,7 @@ import { preloadBodies } from "./motion3/body.js";
 
 registerPwa();
 void initAnalytics();
-document.documentElement.lang = LOCALE;
+document.documentElement.lang = LOCALE === "zh" ? "zh-CN" : LOCALE;
 applyTheme(readTheme());
 
 async function boot() {

@@ -56,7 +56,7 @@ export function ThemeControls() {
 	const [theme, setTheme] = useState(readTheme);
 	const options = [
 		{ id: "dark", label: ko("Dark", "다크") },
-		{ id: "light", label: ko("Light", "라이트") },
+		{ id: "light", label: ko("Light", "라이트", "浅色") },
 	];
 	return (
 		<div className="v2-preferences__language-controls" role="group" aria-label={ko("Theme", "테마")}>
@@ -80,6 +80,7 @@ export function LanguageControls() {
 	const options = [
 		{ id: "en", label: "English", action: "Switch to English" },
 		{ id: "ko", label: "한국어", action: "한국어로 전환" },
+		{ id: "zh", label: "简体中文", action: "切换到中文" },
 	];
 	return (
 		<div className="v2-preferences__language-controls">

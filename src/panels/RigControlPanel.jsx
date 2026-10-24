@@ -1,5 +1,5 @@
 import Foldout from "./Foldout.jsx";
-import { ko, isKo } from "../locale.js";
+import { ko } from "../locale.js";
 import { HIERARCHY_INSPECTOR_TITLES } from "../app-stage.jsx";
 import { RangePinPanel } from "../range-pin-panel.jsx";
 
@@ -27,7 +27,7 @@ export default function RigControlPanel({
       onChange={(event) => setPoseObjectOpacity(Number(event.target.value) / 100)} />
      <b>{Math.round(poseObjectOpacity * 100)}%</b>
     </div>}
-    <p className="inspector-hint">{rigSelection && rigSelection.token !== "rig" ? (isKo ? `${HIERARCHY_INSPECTOR_TITLES[rigSelection.token]}이 활성 제어 그룹입니다.` : `${HIERARCHY_INSPECTOR_TITLES[rigSelection.token]} is the active control group.`) : ko("Select a body group to pose it in the viewport.", "몸 그룹을 선택해 뷰포트에서 포즈를 잡으세요.")}</p>
+    <p className="inspector-hint">{rigSelection && rigSelection.token !== "rig" ? ko(`${HIERARCHY_INSPECTOR_TITLES[rigSelection.token]} is the active control group.`, `${HIERARCHY_INSPECTOR_TITLES[rigSelection.token]}이 활성 제어 그룹입니다.`, `${HIERARCHY_INSPECTOR_TITLES[rigSelection.token]}是当前控制组。`) : ko("Select a body group to pose it in the viewport.", "몸 그룹을 선택해 뷰포트에서 포즈를 잡으세요.")}</p>
    </section>
    {ikMode && <section className="pose-section" data-testid="pose-active-tool">
     <h4>{ko("Active tool", "활성 도구")} · {ko(activeTool, activeTool === "Pin" ? "고정" : "IK")}</h4>

@@ -89,9 +89,9 @@ function OfflineCard({ probing, onRetry }) {
 		<FiPower className="agent-offline-icon" size={18} aria-hidden="true" />
 		<h3>{ko("Agent server is not running", "에이전트 서버가 실행 중이 아니에요")}</h3>
 		<p>{ko(<>Start CozyClay with <code>npx cozyclay</code> (or <code>npm run dev</code> in a checkout) to sign in.</>,
-			<>로그인하려면 <code>npx cozyclay</code>(체크아웃에서는 <code>npm run dev</code>)로 CozyClay를 시작하세요.</>)}</p>
+			<>로그인하려면 <code>npx cozyclay</code>(체크아웃에서는 <code>npm run dev</code>)로 CozyClay를 시작하세요.</>, <>使用 <code>npx cozyclay</code> 启动 CozyClay（在代码检出中使用 <code>npm run dev</code>）即可登录。</>)}</p>
 		<button type="button" className="agent-ghost-button agent-offline-retry" onClick={onRetry} disabled={probing} aria-busy={probing}>
-			<FiRotateCw size={11} aria-hidden="true" /> {probing ? ko("Checking…", "확인 중…") : ko("Retry", "다시 확인")}
+			<FiRotateCw size={11} aria-hidden="true" /> {probing ? ko("Checking…", "확인 중…") : ko("Retry", "다시 확인", "重新检查")}
 		</button>
 	</div>;
 }
@@ -982,7 +982,7 @@ export default function AgentPanel({
 						</select>
 					)}
 					{surface === "studio" && (
-						<button type="button" className={`agent-supervisor-toggle agent-tasks-toggle${taskMode ? " is-on" : ""}`} role="switch" aria-checked={taskMode} aria-label={ko("Task mode", "작업 모드")} title={ko(taskMode ? "Task mode is on: the agent answers at once and runs your requests as parallel tasks" : "Task mode is off: one request at a time", taskMode ? "작업 모드 켜짐: 에이전트가 바로 답하고 요청을 병렬 작업으로 돌려요" : "작업 모드 꺼짐: 한 번에 요청 하나")} onClick={toggleTaskMode} disabled={streaming}>
+						<button type="button" className={`agent-supervisor-toggle agent-tasks-toggle${taskMode ? " is-on" : ""}`} role="switch" aria-checked={taskMode} aria-label={ko("Task mode", "작업 모드")} title={ko(taskMode ? "Task mode is on: the agent answers at once and runs your requests as parallel tasks" : "Task mode is off: one request at a time", taskMode ? "작업 모드 켜짐: 에이전트가 바로 답하고 요청을 병렬 작업으로 돌려요" : "작업 모드 꺼짐: 한 번에 요청 하나", taskMode ? "任务模式已开启：智能体会立即回答，并将请求作为并行任务运行" : "任务模式已关闭：一次只处理一个请求")} onClick={toggleTaskMode} disabled={streaming}>
 							{ko("Tasks", "작업")} {taskMode ? "ON" : "OFF"}
 						</button>
 					)}

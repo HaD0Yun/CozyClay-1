@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { ko, isKo } from "./locale.js";
+import { ko } from "./locale.js";
 import { SHOT_ASPECT_RATIOS } from "./shot.js";
 import {
 	SCENES_QUARANTINE_KEY,
@@ -159,9 +159,9 @@ export function loadSceneStartup() {
 			// funnel's "scene created" step never fires for a brand-new room.
 			startupCreatedScene: result.status === "absent" || result.status === "corrupt",
 			toast: result.status === "corrupt"
-				? ko(`Saved scenes were unreadable — starting fresh; the old data is kept under ${SCENES_QUARANTINE_KEY}`, `저장된 장면을 읽을 수 없어 새로 시작합니다. 기존 데이터는 ${SCENES_QUARANTINE_KEY}에 보관했어요.`)
+				? ko(`Saved scenes were unreadable — starting fresh; the old data is kept under ${SCENES_QUARANTINE_KEY}`, `저장된 장면을 읽을 수 없어 새로 시작합니다. 기존 데이터는 ${SCENES_QUARANTINE_KEY}에 보관했어요.`, `无法读取已保存的场景 — 将重新开始；旧数据保留在 ${SCENES_QUARANTINE_KEY} 下。`)
 				: result.dropped > 0
-					? (isKo ? `저장된 장면 ${result.dropped}개를 복원하지 못했어요` : `${result.dropped} saved scene(s) could not be restored`)
+					? ko(`${result.dropped} saved scene(s) could not be restored`, `저장된 장면 ${result.dropped}개를 복원하지 못했어요`, `${result.dropped} 个已保存的场景无法恢复`)
 					: null,
 		};
 	} catch {

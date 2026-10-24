@@ -162,8 +162,8 @@ function StorageAssetRow({ id, onDelete, deleting, usageCount = 0, graphSignatur
 	const failed = thumb === null;
 	const mesh = Boolean(thumb?.mesh);
 	const name = thumb?.name || (failed ? ko("(unreadable image)", "(읽을 수 없는 이미지)") : mesh ? ko("Untitled model", "이름 없는 모델") : ko("Untitled image", "이름 없는 이미지"));
-	const usageLabel = ko(`Used by ${usageCount} scene object${usageCount === 1 ? "" : "s"}`, `${usageCount}개 씬 오브젝트에서 사용 중`);
-	const deleteLabel = ko(`Delete ${name} from storage`, `${name}을(를) 저장소에서 삭제`);
+	const usageLabel = ko(`Used by ${usageCount} scene object${usageCount === 1 ? "" : "s"}`, `${usageCount}개 씬 오브젝트에서 사용 중`, `被 ${usageCount} 个场景物体使用`);
+	const deleteLabel = ko(`Delete ${name} from storage`, `${name}을(를) 저장소에서 삭제`, `从存储中删除 ${name}`);
 	const confirmationId = `asset-storage-warning-${id}`;
 	const kindLabel = thumb?.kind === "mesh" ? ko("Model", "모델") : thumb?.kind === "environment" ? ko("HDR environment", "HDR 환경") : thumb?.kind === "matte" ? ko("Matte", "매트") : ko("Image", "이미지");
 	return (
@@ -183,7 +183,7 @@ function StorageAssetRow({ id, onDelete, deleting, usageCount = 0, graphSignatur
 			{confirmation ? (
 				<div className="asset-storage-confirm">
 					<span id={confirmationId} role="alert">{inUse
-						? ko(`Permanently delete this image from storage? It is used by ${usageCount} scene object${usageCount === 1 ? "" : "s"} and those objects will lose it.`, `저장소에서 이 이미지를 영구 삭제할까요? ${usageCount}개 씬 오브젝트가 사용 중이며 해당 오브젝트에서 사라집니다.`)
+						? ko(`Permanently delete this image from storage? It is used by ${usageCount} scene object${usageCount === 1 ? "" : "s"} and those objects will lose it.`, `저장소에서 이 이미지를 영구 삭제할까요? ${usageCount}개 씬 오브젝트가 사용 중이며 해당 오브젝트에서 사라집니다.`, `要从存储中永久删除此图片吗？它正被 ${usageCount} 个场景物体使用，那些物体会失去它。`)
 						: ko("Unused by every scene. Delete it?", "모든 씬에서 사용되지 않아요. 삭제할까요?")}</span>
 					<button type="button" className="asset-storage-delete" aria-label={deleteLabel} aria-describedby={confirmationId} disabled={deleting} onClick={async () => {
 						if (await onDelete(id, inUse ? usageCount : undefined, confirmation.graphSignature)) setConfirmation(null);
@@ -209,7 +209,7 @@ function StorageManager({ unusedAssetIds, usedAssetIds, usageCounts, graphSignat
 					<h3>{ko("Manage storage", "저장 공간 관리")}</h3>
 					<p>{ko("Review unused and in-use stored images. Deleted images can be restored until this page is reloaded.", "사용하지 않는 이미지와 사용 중인 저장 이미지를 확인하세요. 삭제한 이미지는 이 페이지를 새로 고치기 전까지 복원할 수 있어요.")}</p>
 				</div>
-				{trashCount > 0 && <button type="button" className="asset-storage-undo" onClick={onUndo}>{ko(`Undo last delete (${trashCount})`, `마지막 삭제 실행 취소 (${trashCount})`)}</button>}
+				{trashCount > 0 && <button type="button" className="asset-storage-undo" onClick={onUndo}>{ko(`Undo last delete (${trashCount})`, `마지막 삭제 실행 취소 (${trashCount})`, `撤销上次删除（${trashCount}）`)}</button>}
 			</div>
 			{loading ? (
 				<div className="asset-storage-list" aria-busy="true">
@@ -301,8 +301,8 @@ function ImageAssetTile({ id, onAssetGrab, onAssetPlace, selectedKey, onSelect, 
 			type={failed ? ko("Unreadable", "읽을 수 없음") : ko("Image", "이미지")}
 			failed={failed}
 			title={failed
-				? ko(`${label} — could not decode; delete it from Manage storage`, `${label} — 불러오지 못했어요. 저장소 관리에서 삭제할 수 있어요`)
-				: ko(`Drag ${label} into the scene, or double-click to place it at the origin`, `${label}을(를) 씬에 드래그하거나 더블클릭해 원점에 놓으세요`)}
+				? ko(`${label} — could not decode; delete it from Manage storage`, `${label} — 불러오지 못했어요. 저장소 관리에서 삭제할 수 있어요`, `${label} — 无法解码；请在存储管理中删除`)
+				: ko(`Drag ${label} into the scene, or double-click to place it at the origin`, `${label}을(를) 씬에 드래그하거나 더블클릭해 원점에 놓으세요`, `将 ${label} 拖入场景，或双击将其放在原点`)}
 			preview={thumb
 				? <img className="content-tile-img" src={thumb.url} alt="" draggable={false} />
 				: <span className="content-tile-skeleton" aria-hidden="true" />}
@@ -329,8 +329,8 @@ function MeshAssetTile({ id, onAssetGrab, onAssetPlace, selectedKey, onSelect, q
 			type={failed ? ko("Unreadable", "읽을 수 없음") : ko("Model", "모델")}
 			failed={failed}
 			title={failed
-				? ko(`${label} — could not read; delete it from Manage storage`, `${label} — 불러오지 못했어요. 저장소 관리에서 삭제할 수 있어요`)
-				: ko(`Drag ${label} into the scene, or double-click to place it at the origin`, `${label}을(를) 씬에 드래그하거나 더블클릭해 원점에 놓으세요`)}
+				? ko(`${label} — could not read; delete it from Manage storage`, `${label} — 불러오지 못했어요. 저장소 관리에서 삭제할 수 있어요`, `${label} — 无法读取；请在存储管理中删除`)
+				: ko(`Drag ${label} into the scene, or double-click to place it at the origin`, `${label}을(를) 씬에 드래그하거나 더블클릭해 원점에 놓으세요`, `将 ${label} 拖入场景，或双击将其放在原点`)}
 			preview={failed ? <span className="content-tile-skeleton" aria-hidden="true" /> : <MeshPreview />}
 			selected={selectedKey === key}
 			onSelect={onSelect}
@@ -386,7 +386,7 @@ function catalogueTile(entry, props) {
 			assetKey={key}
 			label={label}
 			type={ko("Shape", "도형")}
-			title={ko(`Drag ${entry.label} into the scene, or double-click to place it at the origin`, `${label}을(를) 씬에 드래그하거나 더블클릭해 원점에 놓으세요`)}
+			title={ko(`Drag ${entry.label} into the scene, or double-click to place it at the origin`, `${label}을(를) 씬에 드래그하거나 더블클릭해 원점에 놓으세요`, `将 ${entry.label} 拖入场景，或双击将其放在原点`)}
 			preview={<ObjectPreview kind={entry.kind} color={entry.color} />}
 			selected={props.selectedKey === key}
 			onSelect={props.onSelect}
@@ -418,7 +418,7 @@ export function FolderGrid({ folder, query, ...props }) {
 					assetKey={key}
 					label={asset.label}
 					type={ko("Character", "인물")}
-					title={ko(`Drag ${asset.label} into the scene, or double-click to place it at the origin`, `${asset.label}을(를) 씬에 드래그하거나 더블클릭해 원점에 놓으세요`)}
+					title={ko(`Drag ${asset.label} into the scene, or double-click to place it at the origin`, `${asset.label}을(를) 씬에 드래그하거나 더블클릭해 원점에 놓으세요`, `将 ${asset.label} 拖入场景，或双击将其放在原点`)}
 					preview={<CharacterPreview model={asset.id} />}
 					selected={selectedKey === key}
 					onSelect={onSelect}
@@ -454,7 +454,7 @@ export function FolderGrid({ folder, query, ...props }) {
 					assetKey={key}
 					label={label}
 					type={ko("Camera", "카메라")}
-					title={ko(`${label} — double-click to open it in Camera mode`, `${label} — 더블클릭하면 카메라 모드에서 엽니다`)}
+					title={ko(`${label} — double-click to open it in Camera mode`, `${label} — 더블클릭하면 카메라 모드에서 엽니다`, `${label} — 双击可在摄影机模式中打开`)}
 					preview={<CameraPreview />}
 					selected={selectedKey === key}
 					onSelect={onSelect}
@@ -474,7 +474,7 @@ export function FolderGrid({ folder, query, ...props }) {
 						assetKey={key}
 						label={label}
 						type={ko("Motion", "모션")}
-						title={ko(`${label} — double-click to load this take`, `${label} — 더블클릭하면 이 테이크를 불러옵니다`)}
+						title={ko(`${label} — double-click to load this take`, `${label} — 더블클릭하면 이 테이크를 불러옵니다`, `${label} — 双击加载此动作片段`)}
 						preview={<MotionPreview />}
 						selected={selectedKey === key}
 						onSelect={onSelect}
@@ -484,7 +484,7 @@ export function FolderGrid({ folder, query, ...props }) {
 			});
 		if (!takeVersions.length) empty = ko("No takes for this character yet. Ask the agent to compile one.", "이 인물의 테이크가 아직 없어요. 에이전트에게 모션 컴파일을 요청하세요.");
 	} else if (folder === "poses") {
-		tiles = poses.map((pose, index) => ({ pose, index, label: pose?.name || pose?.label || ko(`Pose ${index + 1}`, `포즈 ${index + 1}`) }))
+		tiles = poses.map((pose, index) => ({ pose, index, label: pose?.name || pose?.label || ko(`Pose ${index + 1}`, `포즈 ${index + 1}`, `姿势 ${index + 1}`) }))
 			.filter(({ label }) => matchesQuery(label, query))
 			.map(({ pose, index, label }) => {
 				const key = `pose:${pose?.id ?? index}`;
@@ -634,7 +634,7 @@ export default function AssetPane({
 					data-testid="content-search"
 					value={search}
 					placeholder={tab === "content" ? ko("Search objects", "오브젝트 검색") : ko("Search", "검색")}
-					aria-label={tab === "content" ? ko(`Search ${folderLabel}`, `${folderLabel} 검색`) : ko("Search the log", "로그 검색")}
+					aria-label={tab === "content" ? ko(`Search ${folderLabel}`, `${folderLabel} 검색`, `搜索 ${folderLabel}`) : ko("Search the log", "로그 검색")}
 					onChange={(event) => setSearch(event.target.value)}
 				/>
 			</header>

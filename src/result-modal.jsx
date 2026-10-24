@@ -1,4 +1,4 @@
-import { ko, isKo } from "./locale.js";
+import { ko } from "./locale.js";
 
 export default function ResultModal({ result, copied, recordedVideoName, onClose, onCopy, onDownload, downloadDisabled = false, exportFeedback = null }) {
 	const isVideo = result.mode === "video";
@@ -9,9 +9,9 @@ export default function ResultModal({ result, copied, recordedVideoName, onClose
 	if (isVideo && result.frameB) {
 		nextStep = (
 			<p>
-				{ko(`Paste the prompt into ${modelLabel}, set `, `${modelLabel}에 프롬프트를 붙여 넣고 `)}
+				{ko(`Paste the prompt into ${modelLabel}, set `, `${modelLabel}에 프롬프트를 붙여 넣고 `, `将提示词粘贴到 ${modelLabel}，设置 `)}
 				<code>blocking-frame-A-start.png</code>
-				{ko(" as the start frame, and ", "를 시작 프레임으로, ")}
+				{ko(" as the start frame, and ", "를 시작 프레임으로, ", " 作为起始帧，并将 ")}
 				<code>blocking-frame-B-end.png</code>
 				{ko(" as the end frame.", "를 끝 프레임으로 설정하세요.")}
 			</p>
@@ -19,21 +19,21 @@ export default function ResultModal({ result, copied, recordedVideoName, onClose
 	} else if (isVideo && hasFrame) {
 		nextStep = (
 			<p>
-				{ko(`Paste the prompt into ${modelLabel} and attach `, `${modelLabel}에 프롬프트를 붙여 넣고 `)}
+				{ko(`Paste the prompt into ${modelLabel} and attach `, `${modelLabel}에 프롬프트를 붙여 넣고 `, `将提示词粘贴到 ${modelLabel}，并附加 `)}
 				<code>blocking-frame.png</code>
-				{ko(" as the reference frame.", "를 참고 프레임으로 첨부하세요.")}
+				{ko(" as the reference frame.", "를 참고 프레임으로 첨부하세요.", " 作为参考帧。")}
 			</p>
 		);
 	} else if (hasFrame) {
 		nextStep = (
 			<p>
-				{ko(`Paste the prompt into ${modelLabel} and attach `, `${modelLabel}에 프롬프트를 붙여 넣고 `)}
+				{ko(`Paste the prompt into ${modelLabel} and attach `, `${modelLabel}에 프롬프트를 붙여 넣고 `, `将提示词粘贴到 ${modelLabel}，并附加 `)}
 				<code>blocking-frame.png</code>
-				{ko(" as the reference image.", "를 참고 이미지로 첨부하세요.")}
+				{ko(" as the reference image.", "를 참고 이미지로 첨부하세요.", " 作为参考图像。")}
 			</p>
 		);
 	} else {
-		nextStep = <p>{ko(`Paste the copied prompt into ${modelLabel} to create the scene.`, `복사한 프롬프트를 ${modelLabel}에 붙여 넣어 장면을 만드세요.`)}</p>;
+		nextStep = <p>{ko(`Paste the copied prompt into ${modelLabel} to create the scene.`, `복사한 프롬프트를 ${modelLabel}에 붙여 넣어 장면을 만드세요.`, `将复制的提示词粘贴到 ${modelLabel} 以创建场景。`)}</p>;
 	}
 
 	return (
@@ -61,7 +61,7 @@ export default function ResultModal({ result, copied, recordedVideoName, onClose
 				)}
 				{result.move && (
 					<div className="move-slate result-move-slate">
-						<span>{result.move.displaySlate ?? result.move.slate} · {isKo ? `${result.move.spanS}초` : `${result.move.spanS}s`}</span>
+						<span>{result.move.displaySlate ?? result.move.slate} · {result.move.spanS}{ko("s", "초", "秒")}</span>
 						<small>{ko("Camera move made from timeline keyframes", "타임라인 키프레임으로 만든 카메라 움직임")}</small>
 					</div>
 				)}
@@ -80,7 +80,7 @@ export default function ResultModal({ result, copied, recordedVideoName, onClose
 
 				{exportFeedback}
 				<section className="result-next" aria-labelledby="result-next-title">
-					<span className="result-next-kicker">{ko(`Next · ${modelLabel}`, `다음 · ${modelLabel}`)}</span>
+					<span className="result-next-kicker">{ko(`Next · ${modelLabel}`, `다음 · ${modelLabel}`, `下一步 · ${modelLabel}`)}</span>
 					<h4 id="result-next-title">{ko("Handing off to your AI", "AI에 넣는 순서")}</h4>
 					<div className="result-next-intro">{nextStep}</div>
 					<ol className="result-handoff-steps">

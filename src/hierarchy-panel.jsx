@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ko, isKo } from "./locale.js";
+import { ko } from "./locale.js";
 import { buildHierarchyNodes } from "./hierarchy-model.js";
 import { sceneObjectIdFromHierarchy } from "./scene-objects.js";
 import { CatalogueEntries, displayObjectLabel } from "./object-catalog.jsx";
@@ -62,9 +62,8 @@ export const HIERARCHY_DRAG_MIME = "application/x-cclay-hierarchy";
 const carriesHierarchyRow = (event) => !!event.dataTransfer?.types?.includes?.(HIERARCHY_DRAG_MIME);
 
 function displaySceneName(name) {
-	if (!isKo) return name;
 	const generatedName = /^SCENE\s+(\d+)$/i.exec(name);
-	return generatedName ? ko(`Scene ${generatedName[1]}`, `장면 ${generatedName[1]}`) : name;
+	return generatedName ? ko(name, `장면 ${generatedName[1]}`, `场景 ${generatedName[1]}`) : name;
 }
 
 /**
@@ -112,7 +111,7 @@ function ScenePill({ scenes, activeSceneId, onSceneSelect, onSceneCreate, onRena
 function displayHierarchyLabel(node) {
 	if (node.kind === "object") return displayObjectLabel(node.label);
 	if (node.kind === "scene") return displaySceneName(node.label);
-	return isKo ? (HIERARCHY_LABELS_KO[node.label] ?? node.label) : node.label;
+	return HIERARCHY_LABELS_KO[node.label] ? ko(node.label, HIERARCHY_LABELS_KO[node.label]) : node.label;
 }
 
 const OUTLINER_TYPES = {
@@ -466,7 +465,7 @@ function TreeRow({
 				<button
 					type="button"
 					className="hierarchy-toggle"
-					aria-label={isKo ? `${label} ${expanded ? "접기" : "펼치기"}` : `${expanded ? "Collapse" : "Expand"} ${label}`}
+					aria-label={ko(`${expanded ? "Collapse" : "Expand"} ${label}`, `${label} ${expanded ? "접기" : "펼치기"}`, `${expanded ? "折叠" : "展开"} ${label}`)}
 					onClick={() => onToggle(node.id)}
 				>
 					{expanded ? "▾" : "▸"}
@@ -486,7 +485,7 @@ function TreeRow({
 						ref={inputRef}
 						className="hierarchy-rename-input"
 						defaultValue={node.label}
-						aria-label={isKo ? `${label} 이름 바꾸기` : `Rename ${label}`}
+						aria-label={ko(`Rename ${label}`, `${label} 이름 바꾸기`, `重命名 ${label}`)}
 						autoFocus
 						onFocus={(event) => event.currentTarget.select()}
 						onKeyDown={(event) => {
@@ -523,7 +522,7 @@ function TreeRow({
 					className="hierarchy-eye"
 					data-hidden={node.hidden ? "true" : undefined}
 					aria-pressed={node.hidden === true}
-					aria-label={node.hidden ? (isKo ? `${label} 표시` : `Show ${label}`) : (isKo ? `${label} 숨기기` : `Hide ${label}`)}
+					aria-label={node.hidden ? ko(`Show ${label}`, `${label} 표시`, `显示 ${label}`) : ko(`Hide ${label}`, `${label} 숨기기`, `隐藏 ${label}`)}
 					onClick={(event) => {
 						event.preventDefault();
 						event.stopPropagation();

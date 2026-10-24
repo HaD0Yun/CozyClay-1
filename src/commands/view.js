@@ -14,7 +14,7 @@ const operations = Object.entries({ ...groups, 'view.update': Object.keys(fields
 }));
 export const declarations = Object.freeze([...operations, ...["view.setPartColours", "view.setGuideMode", "view.setInset", "view.setGhosts"].map(studioActionDeclaration)]);
 // A storyboard project has no Motion department; every door says so the same way.
-export const STORYBOARD_MOTION_REFUSAL = Object.freeze({ en: 'Motion tools are not part of a Storyboard project.', ko: '모션 도구는 스토리보드 프로젝트에 없어요.' });
+export const STORYBOARD_MOTION_REFUSAL = Object.freeze({ en: 'Motion tools are not part of a Storyboard project.', ko: '모션 도구는 스토리보드 프로젝트에 없어요.', zh: '故事板项目不包含动作工具。' });
 export const viewCommand = args => Object.entries(groups).find(([, keys]) => Object.keys(args).every(key => keys.includes(key)))?.[0] ?? 'view.update';
 
 export function register(registry, ports) {
@@ -24,7 +24,7 @@ export function register(registry, ports) {
 		const state = ports.readView();
 		// Pose mode is IK editing: without a rig to solve there is nothing to pose.
 		if (args.mode === 'pose' && args.mode !== state.view.mode && !ports.canPose()) fail('TARGET_NOT_READY', 'Pose mode needs a loaded character rig to edit with IK.');
-		if (args.mode === 'motion' && state.previsMode === 'storyboard') throw studioActionRefusal('TARGET_NOT_READY', STORYBOARD_MOTION_REFUSAL.en, ko(STORYBOARD_MOTION_REFUSAL.en, STORYBOARD_MOTION_REFUSAL.ko));
+		if (args.mode === 'motion' && state.previsMode === 'storyboard') throw studioActionRefusal('TARGET_NOT_READY', STORYBOARD_MOTION_REFUSAL.en, ko(STORYBOARD_MOTION_REFUSAL.en, STORYBOARD_MOTION_REFUSAL.ko, STORYBOARD_MOTION_REFUSAL.zh));
 		const selection = args.selection === undefined ? state.selection : args.selection;
 		if (selection) {
 			const found = selection.kind === 'scene' ? selection.id === state.host.sceneId : selection.kind === 'camera' ? selection.id === 'camera'

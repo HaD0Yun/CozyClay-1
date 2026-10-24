@@ -16,7 +16,7 @@ import { followFramingFromCamera, craneHeightAt, buildRail, simplifyStroke } fro
 import { defaultRailRange, clampRailRange } from '../camera-rail-schedule.js';
 import { timelineSpan, timelineContentExtent } from '../timeline-extent.js';
 import { trackFeature } from '../analytics.js';
-import { ko, isKo } from '../locale.js';
+import { ko } from '../locale.js';
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 function normalizeState(value) {
@@ -367,9 +367,9 @@ export function useShots(appContext) {
       // In the landing playground a drawn rail opens the player
       // on the shot camera, but leave playback to the visitor.
       appContext.shared.enterPreview(); appContext.shared.setTlPlaying(false); setTlFrame(activeShot.startFrame);
-      appContext.notify(isKo ? '레일 완성 — 샷 카메라 시점으로 전환했습니다. ▶ 로 재생, Esc 로 복귀' : 'Rail drawn — you are looking through the shot camera. Press ▶ to ride it; Esc goes back to flying.'); return;
+      appContext.notify(ko('Rail drawn — you are looking through the shot camera. Press ▶ to ride it; Esc goes back to flying.', '레일 완성 — 샷 카메라 시점으로 전환했습니다. ▶ 로 재생, Esc 로 복귀', '轨道已完成 — 已切换到镜头摄影机视角。按 ▶ 播放，按 Esc 返回自由视角。')); return;
     }
-    appContext.notify(isKo ? `카메라 레일 완성 — ${curve ? curve.length.toFixed(1) : '?'} m, 제어점 ${simplified.length}개` : `Camera rail drawn — ${curve ? curve.length.toFixed(1) : '?'} m, ${simplified.length} control points`);
+    appContext.notify(ko(`Camera rail drawn — ${curve ? curve.length.toFixed(1) : '?'} m, ${simplified.length} control points`, `카메라 레일 완성 — ${curve ? curve.length.toFixed(1) : '?'} m, 제어점 ${simplified.length}개`, `摄影机轨道已完成 — ${curve ? curve.length.toFixed(1) : '?'} m，${simplified.length} 个控制点`));
   }
   function publishStudioShots(value) { return appContext.storeDomain('shot').publish(value); }
   function commitStudioShots(draft) { return appContext.storeDomain('shot').commitDraft(draft); }

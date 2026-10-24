@@ -8,7 +8,7 @@ import { IK_TRACKS, MID_TRACKS, ikControlIsExposed } from "./motion/ik.js";
 import { pickIkHit } from "./motion/ik-pick.js";
 import { shouldRefreshIkExposure } from "./use-render-activity.js";
 import { POSER_LAYER } from "./dualview.jsx";
-import { ko, isKo } from "./locale.js";
+import { ko } from "./locale.js";
 import { ROTATION_AXES, backFaceFade, bindQuaternionOf, handleColor as sideColor, ringAngle, rotationFromBindDeg, rotationReadout } from "./pose-gizmo.js";
 import "./pose-gizmo.css";
 
@@ -1300,7 +1300,7 @@ export function PoseStudioPanel({ subject, model, poses, selectedId, onSelect, o
 	return (
 		<div className={"pose-studio" + (docked ? " docked" : "") + (closing ? " closing" : "")}>
 			<div className="studio-head">
-				<span>{isKo ? `포즈 스튜디오 · 인물 ${subject}` : `Pose Studio · Subject ${subject}`}</span>
+				<span>{ko(`Pose Studio · Subject ${subject}`, `포즈 스튜디오 · 인물 ${subject}`, `姿势工作室 · 角色 ${subject}`)}</span>
 				<button type="button" className="x" onClick={onClose} aria-label={ko("Close pose studio", "포즈 스튜디오 닫기")}>
 					✕
 				</button>

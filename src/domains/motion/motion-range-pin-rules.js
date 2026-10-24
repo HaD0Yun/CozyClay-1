@@ -19,5 +19,5 @@ export function overlappingRangePin(draft, state) {
 	return [...ensureRangePinState(state).pins.values()].find((pin) => pin.id !== draft.id && rangePinTracks(pin).some((track) => rangePinTracks(draft).includes(track)) && Math.max(pin.startFrame, draft.startFrame) <= Math.min(pin.endFrame, draft.endFrame));
 }
 export function rangePinOverlapMessage(pin) {
-	return pin ? ko(`A required body or limb track already has an overlapping pin (${pin.startFrame}–${pin.endFrame}).`, `필요한 몸통 또는 팔다리 파츠에 겹치는 고정이 있어요 (${pin.startFrame}–${pin.endFrame}).`) : "";
+	return pin ? ko(`A required body or limb track already has an overlapping pin (${pin.startFrame}–${pin.endFrame}).`, `필요한 몸통 또는 팔다리 파츠에 겹치는 고정이 있어요 (${pin.startFrame}–${pin.endFrame}).`, `所需的身体或肢体轨道上已有重叠的固定（${pin.startFrame}–${pin.endFrame}）。`) : "";
 }

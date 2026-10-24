@@ -31,7 +31,7 @@ export function TaskRows({ steps, items }) {
 	return <div className="task-rows">{ids.map(id => <TaskRow key={id} task={board.tasks[id]} activity={activity} />)}</div>;
 }
 
-const GROUPS = [["failed", ko("need a look", "확인 필요")], ["running", ko("running", "실행 중")], ["waiting", ko("waiting", "대기")], ["done", ko("done", "완료")]];
+const GROUPS = [["failed", ko("need a look", "확인 필요")], ["running", ko("running", "실행 중", "执行中")], ["waiting", ko("waiting", "대기")], ["done", ko("done", "완료")]];
 
 export function TaskStrip() {
 	const { board, activity } = useTaskView();

@@ -45,7 +45,7 @@ import { openAssetDb, referencedAssetIds, getAsset, putAsset } from "../scene-as
 import { internWorkflowOutputs, workflowOutputRefs, resolveWorkflowOutputs } from "../workflow/workflow-resources.js";
 
 import { resourceManifest } from "../project-resources.js";
-import { isKo, ko } from "../locale.js";
+import { ko } from "../locale.js";
 import { track, bucketCount, bucketProjectAge, startExportAttempt } from "../analytics.js";
 import { mergeProjectCustomPoses } from "../project-poses.js";
 import { DEFAULT_WORKSPACE_LAYOUT, DEFAULT_DURATION_S, TIMELINE_FPS } from "../app-stage.jsx";
@@ -269,9 +269,9 @@ export function useScenes(appContext) {
 	function projectProblemsNotice(problems) {
 		if (!Array.isArray(problems) || !problems.length) return "";
 		const codes = [...new Set(problems.map((problem) => problem?.code).filter(Boolean))].join(", ");
-		return isKo
-			? ` · 포함된 자원 ${problems.length}개를 건너뛰었어요${codes ? ` (${codes})` : ""}`
-			: ` · skipped ${problems.length} embedded resource${problems.length === 1 ? "" : "s"}${codes ? ` (${codes})` : ""}`;
+		return ko(` · skipped ${problems.length} embedded resource${problems.length === 1 ? "" : "s"}${codes ? ` (${codes})` : ""}`,
+			` · 포함된 자원 ${problems.length}개를 건너뛰었어요${codes ? ` (${codes})` : ""}`,
+			` · 已跳过 ${problems.length} 个嵌入资源${codes ? `（${codes}）` : ""}`);
 	}
 
 	async function rehydrateProjectAssets(project, warnings = []) {
@@ -343,7 +343,7 @@ export function useScenes(appContext) {
 				object_count_bucket: bucketCount(appContext.shared.projectStateRef.current.sceneObjects?.length ?? 0),
 				shot_count_bucket: bucketCount(appContext.shared.shots.length),
 			});
-			appContext.notify((isKo, ko) => isKo ? `프로젝트 저장됨: ${name}${PROJECT_EXTENSION}` : `Project saved: ${name}${PROJECT_EXTENSION}`);
+			appContext.notify((isKo, ko) => ko(`Project saved: ${name}${PROJECT_EXTENSION}`, `프로젝트 저장됨: ${name}${PROJECT_EXTENSION}`, `项目已保存：${name}${PROJECT_EXTENSION}`));
 			return { saved: true, name, fileName: downloaded ? `${name}${PROJECT_EXTENSION}` : appContext.shared.projectHandleRef.current?.name ?? `${name}${PROJECT_EXTENSION}`, downloaded };
 		} catch (err) {
 			if (err?.name === "AbortError") {
@@ -448,7 +448,7 @@ export function useScenes(appContext) {
 			if (!file) return false;
 			const result = readProjectDocument(file.text);
 			if (!result.ok) {
-				appContext.notify(isKo ? `프로젝트를 열 수 없어요: ${result.reason}` : `Cannot open project: ${result.reason}`);
+				appContext.notify(ko(`Cannot open project: ${result.reason}`, `프로젝트를 열 수 없어요: ${result.reason}`, `无法打开项目：${result.reason}`));
 				return false;
 			}
 			result.project.savedAt = result.project.savedAt ?? file.savedAt ?? null;
@@ -458,7 +458,7 @@ export function useScenes(appContext) {
 			context.check();
 			applyProject(result.project, true);
 			setProjectStartupOpen(false);
-			appContext.notify(`${isKo ? `프로젝트 열림: ${result.project.name}` : `Project opened: ${result.project.name}`}${projectProblemsNotice(result.problems)}`);
+			appContext.notify(`${ko(`Project opened: ${result.project.name}`, `프로젝트 열림: ${result.project.name}`, `项目已打开：${result.project.name}`)}${projectProblemsNotice(result.problems)}`);
 			return true;
 		} catch (err) {
 			if (err?.name === "AbortError") return false;
@@ -483,7 +483,7 @@ export function useScenes(appContext) {
 			const file = await readProjectFile(handle);
 			const result = readProjectDocument(file.text);
 			if (!result.ok) {
-				appContext.notify(isKo ? `프로젝트를 열 수 없어요: ${result.reason}` : `Cannot open project: ${result.reason}`);
+				appContext.notify(ko(`Cannot open project: ${result.reason}`, `프로젝트를 열 수 없어요: ${result.reason}`, `无法打开项目：${result.reason}`));
 				return false;
 			}
 			result.project.savedAt = result.project.savedAt ?? file.savedAt ?? null;
@@ -494,7 +494,7 @@ export function useScenes(appContext) {
 			applyProject(result.project, true);
 			setProjectBrowserOpen(false);
 			setProjectStartupOpen(false);
-			appContext.notify(`${isKo ? `프로젝트 열림: ${result.project.name}` : `Project opened: ${result.project.name}`}${projectProblemsNotice(result.problems)}`);
+			appContext.notify(`${ko(`Project opened: ${result.project.name}`, `프로젝트 열림: ${result.project.name}`, `项目已打开：${result.project.name}`)}${projectProblemsNotice(result.problems)}`);
 			return true;
 		} catch (err) {
 			if (err?.code) throw err;
@@ -536,7 +536,7 @@ export function useScenes(appContext) {
 		setProjectStartupOpen(false);
 		appContext.shared.setFirstSuccessGuideOpen(true);
 		domain.pendingCheckpoint = { clock: appContext.undoClock, name };
-		appContext.notify(ko(`New project: ${name}`, `새 프로젝트: ${name}`));
+		appContext.notify(ko(`New project: ${name}`, `새 프로젝트: ${name}`, `新项目：${name}`));
 		return true;
 	}
 
@@ -553,7 +553,7 @@ export function useScenes(appContext) {
 			await rehydrateProjectAssets(result.project, result.warnings);
 			context.check();
 			applyProject(result.project, true);
-			appContext.notify(`${isKo ? `프로젝트 복원됨: ${result.project.name}` : `Project restored: ${result.project.name}`}${projectProblemsNotice(result.problems)}`);
+			appContext.notify(`${ko(`Project restored: ${result.project.name}`, `프로젝트 복원됨: ${result.project.name}`, `项目已恢复：${result.project.name}`)}${projectProblemsNotice(result.problems)}`);
 			return true;
 		} catch (error) {
 			if (error?.code) throw error;

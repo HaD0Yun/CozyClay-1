@@ -360,7 +360,7 @@ const modeCss = shellSource("../src/shell/mode.css");
 expect("the studio root carries data-previs-mode beside data-workflow-mode", appSource.includes("data-workflow-mode={workflowMode} data-previs-mode={scenesDomain.previsMode}"));
 expect("the mode pill drops Motion in a storyboard", viewportToolbar.includes('previsMode === "storyboard" ? MODES.filter((mode) => mode.id !== "motion") : MODES') && viewportToolbar.includes("modesFor(previsMode).map("));
 expect("key 4 is ignored in a storyboard", appSource.includes('if (modeKey === "motion" && storyboardProject) return;'));
-expect("selectWorkflowMode refuses Motion in a storyboard with the shared toast", appSource.includes('if (next === "motion" && storyboardProject) {') && appSource.includes("setToast(ko(STORYBOARD_MOTION_REFUSAL.en, STORYBOARD_MOTION_REFUSAL.ko))"));
+expect("selectWorkflowMode refuses Motion in a storyboard with the shared toast", appSource.includes('if (next === "motion" && storyboardProject) {') && appSource.includes("setToast(ko(STORYBOARD_MOTION_REFUSAL.en, STORYBOARD_MOTION_REFUSAL.ko, STORYBOARD_MOTION_REFUSAL.zh))"));
 expect("the project head always shows the mode badge", topBar.includes('data-testid="topbar-previs-mode"') && topBar.includes("<PrevisModeBadge mode={previsMode} />") && !topBar.includes("previsEnabled"));
 expect("waypoint authoring and Top-View path drawing stay off in a storyboard", appSource.includes("toggleWaypointMode: storyboardProject ? undefined : toggleWaypointMode") && appSource.includes("if (waypointMode) setWaypointMode(false);") && appSource.includes("if (pathDraw) setPathDraw(false);"));
 expect(
