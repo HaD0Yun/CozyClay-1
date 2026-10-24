@@ -297,6 +297,7 @@ assert.ok((await envStore.list()).some((entry) => entry.providerId === "openai-c
 	let catalogueCalls = 0;
 	const baseServer = createServer((req, res) => {
 		if (req.method === "GET" && req.url === "/v1/models") {
+			assert.equal(req.headers.authorization, `Bearer ${key}`);
 			catalogueCalls++;
 			res.writeHead(200, { "content-type": "application/json" });
 			res.end(JSON.stringify({ data: [
@@ -314,12 +315,19 @@ assert.ok((await envStore.list()).some((entry) => entry.providerId === "openai-c
 	const base = `http://127.0.0.1:${baseServer.address().port}`;
 	const auth = { readStored: () => undefined };
 	const noKeys = { readKeys: () => ({}) };
-	const env = { CLIPROXY_API_KEY: key, CLIPROXY_BASE_URL: `${base}/` };
-	const envRegistry = await providers.createModels({ auth, keys: noKeys, env });
-	const envStatus = await providers.listAgentModels({ models: envRegistry, auth, keys: noKeys, env });
+	const envForms = [base, `${base}/v1`, `${base}/`];
+	const envRegistry = await providers.createModels({ auth, keys: noKeys, env: { CLIPROXY_API_KEY: key, CLIPROXY_BASE_URL: envForms[0] } });
+	for (const [index, baseUrl] of envForms.entries()) {
+		const env = { CLIPROXY_API_KEY: key, CLIPROXY_BASE_URL: baseUrl };
+		const registry = index === 0 ? envRegistry : await providers.createModels({ auth, keys: noKeys, env });
+		const result = await providers.listAgentModels({ models: registry, auth, keys: noKeys, env });
+		const cliproxy = result.providers.find((provider) => provider.id === "cliproxy");
+		assert.equal(cliproxy.models.length, 4, `CLIProxyAPI model list works for base URL ${baseUrl}`);
+		assert.ok(cliproxy.models.some((model) => model.id === "gpt-7-luna"));
+	}
+	assert.equal(catalogueCalls, 3);
+	const envStatus = await providers.listAgentModels({ models: envRegistry, auth, keys: noKeys, env: { CLIPROXY_API_KEY: key, CLIPROXY_BASE_URL: envForms[0] } });
 	const cliproxy = envStatus.providers.find((provider) => provider.id === "cliproxy");
-	assert.equal((await providers.listAgentModels({ models: envRegistry, auth, keys: noKeys, env })).providers.find((provider) => provider.id === "cliproxy").models.length, 4);
-	assert.equal(catalogueCalls, 1);
 	assert.equal(cliproxy.signedIn, true);
 	assert.equal(cliproxy.authSource, "env");
 	assert.deepEqual(cliproxy.models.map((model) => model.id), ["gpt-6-astra", "claude-sonnet-5", "gpt-7-luna", "claude-opus-6"]);
@@ -338,9 +346,9 @@ assert.ok((await envStore.list()).some((entry) => entry.providerId === "openai-c
 	assert.equal(openaiModel.baseUrl, `${base}/v1`);
 	assert.equal(anthropicModel.provider, "cliproxy");
 	assert.equal(anthropicModel.baseUrl, base);
-	const fileRegistry = await providers.createModels({ auth, keys: { readKeys: () => ({ cliproxy: key }) }, env: { CLIPROXY_BASE_URL: base }});
-	assert.equal((await providers.listAgentModels({ models: fileRegistry, auth, keys: { readKeys: () => ({ cliproxy: key }) }, env: { CLIPROXY_BASE_URL: base }})).providers.find((provider) => provider.id === "cliproxy").authSource, "file");
-	const signedOut = await providers.listAgentModels({ models: await providers.createModels({ auth, keys: noKeys, env: { CLIPROXY_BASE_URL: base }}), auth, keys: noKeys, env: { CLIPROXY_BASE_URL: base }});
+	const fileRegistry = await providers.createModels({ auth, keys: { readKeys: () => ({ cliproxy: key }) }, env: { CLIPROXY_BASE_URL: `${base}/v1/` }});
+	assert.equal((await providers.listAgentModels({ models: fileRegistry, auth, keys: { readKeys: () => ({ cliproxy: key }) }, env: { CLIPROXY_BASE_URL: `${base}/v1/` }})).providers.find((provider) => provider.id === "cliproxy").authSource, "file");
+	const signedOut = await providers.listAgentModels({ models: await providers.createModels({ auth, keys: noKeys, env: { CLIPROXY_BASE_URL: `${base}/v1` }}), auth, keys: noKeys, env: { CLIPROXY_BASE_URL: `${base}/v1` }});
 	assert.equal(signedOut.providers.find((provider) => provider.id === "cliproxy").signedIn, false);
 	assert.equal(signedOut.providers.find((provider) => provider.id === "cliproxy").models.length > 0, true);
 	await new Promise((resolve) => baseServer.close(resolve));
@@ -350,6 +358,7 @@ assert.ok((await envStore.list()).some((entry) => entry.providerId === "openai-c
 	const failingBase = `http://127.0.0.1:${failing.address().port}`;
 	const fallbackModels = await providers.createModels({ auth, keys: noKeys, env: { CLIPROXY_API_KEY: key, CLIPROXY_BASE_URL: failingBase }});
 	const fallback = await providers.listAgentModels({ models: fallbackModels, auth, keys: noKeys, env: { CLIPROXY_API_KEY: key, CLIPROXY_BASE_URL: failingBase }});
+	assert.match(fallback.providers.find((provider) => provider.id === "cliproxy").error, /CLIProxyAPI models request failed: 500/);
 	const staticCount = fallbackModels.getModels("cliproxy").filter((model) => model.input.includes("text") && model.input.includes("image")).length;
 	assert.equal(fallback.providers.find((provider) => provider.id === "cliproxy").models.length, staticCount);
 	await new Promise((resolve) => failing.close(resolve));

@@ -18,7 +18,7 @@ function cleanBase(value) {
 /** The address the registry builds CLIProxyAPI's models on: environment, then the stored credential, then the default. */
 export function cliproxyBase({ env = process.env, credential } = {}) {
 	const fromEnv = typeof env?.[BASE_ENV] === "string" ? env[BASE_ENV].trim() : "";
-	return (fromEnv || credential?.env?.[BASE_ENV] || CLIPROXY_DEFAULT_BASE).replace(/\/$/, "");
+	return cleanBase(fromEnv || credential?.env?.[BASE_ENV] || CLIPROXY_DEFAULT_BASE);
 }
 
 /** pi ApiKeyAuth: login asks for the address, then the key; resolve prefers the stored key, then CLIPROXY_API_KEY. */
@@ -44,7 +44,7 @@ function cliproxyAuth() {
 }
 
 export async function cliproxyProvider({ baseUrl, env = process.env } = {}) {
-	const base = (baseUrl ?? cliproxyBase({ env })).replace(/\/$/, "");
+	const base = cleanBase(baseUrl ?? cliproxyBase({ env }));
 	const [{ createProvider }, { openaiProvider }, { anthropicProvider }, openaiResponsesApi, anthropicMessagesApi] = await Promise.all([
 		import("@earendil-works/pi-ai"),
 		import("@earendil-works/pi-ai/providers/openai"),
@@ -89,10 +89,16 @@ export async function registryLiveCliproxy(models, apiKey, state) {
 			const body = await response.json();
 			// id -> owned_by: the owner is how CLIProxyAPI routes a model (openai, anthropic, or an
 			// openai-compatibility upstream name), so it picks the wire format for models pi does not know.
-			return new Map((Array.isArray(body?.data) ? body.data : [])
+			const live = new Map((Array.isArray(body?.data) ? body.data : [])
 				.map((entry) => typeof entry === "string" ? [entry, undefined] : [entry?.id, typeof entry?.owned_by === "string" ? entry.owned_by : undefined])
 				.filter(([id]) => id));
-		}).catch(() => { state.cliproxyFetch = null; return null; });
+			state.cliproxyFetchError = null;
+			return live;
+		}).catch((error) => {
+			state.cliproxyFetch = null;
+			state.cliproxyFetchError = error instanceof Error ? error.message : String(error);
+			return null;
+		});
 	}
 	return state.cliproxyFetch;
 }
