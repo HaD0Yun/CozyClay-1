@@ -17,21 +17,21 @@
     <meta property="og:title" content="CozyClay — open source 3D previs software, in your browser" />
     <meta property="og:description" content="Block a scene, pose characters, author camera moves and cuts, and preview generated motion. Open source, runs in your browser." />
     <meta property="og:url" content="https://cozyclay.org/" />
-    <meta property="og:image" content="https://cozyclay.org/media/cozyclay-demo-poster.jpg" />
-    <meta property="og:image:width" content="1920" />
-    <meta property="og:image:height" content="1080" />
-    <meta property="og:image:alt" content="A CozyClay shot mid-wipe: the greybox previs on one half, the generated result on the other." />
+    <meta property="og:image" content="https://cozyclay.org/media/cozyclay-truck-demo-poster.jpg" />
+    <meta property="og:image:width" content="1280" />
+    <meta property="og:image:height" content="720" />
+    <meta property="og:image:alt" content="A CozyClay shot mid-wipe: the clay greybox of a truck driver on one half, the Seedance 2.5 generation on the other." />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="CozyClay — open source 3D previs software, in your browser" />
     <meta name="twitter:description" content="Block a scene, pose characters, author camera moves and cuts, and preview generated motion. Open source, runs in your browser." />
-    <meta name="twitter:image" content="https://cozyclay.org/media/cozyclay-demo-poster.jpg" />
+    <meta name="twitter:image" content="https://cozyclay.org/media/cozyclay-truck-demo-poster.jpg" />
 
     <title>CozyClay — open source 3D previs software, in your browser</title>
 
-    <meta property="og:video" content="https://cozyclay.org/media/cozyclay-demo.mp4" />
+    <meta property="og:video" content="https://cozyclay.org/media/cozyclay-truck-demo.mp4" />
     <meta property="og:video:type" content="video/mp4" />
-    <meta property="og:video:width" content="1920" />
-    <meta property="og:video:height" content="1080" />
+    <meta property="og:video:width" content="1280" />
+    <meta property="og:video:height" content="720" />
 
     <!-- Cloudflare Web Analytics. Cookie-less, so no consent banner. Installed by
          hand because cozyclay.org resolves straight to GitHub Pages (DNS-only),
@@ -49,8 +49,8 @@
         "operatingSystem": "Any (Chromium-based browser)",
         "softwareVersion": "%COZYCLAY_VERSION%",
         "description": "CozyClay is an open-source, browser-based 3D staging studio. Block a scene, pose characters, sequence motion prompts on a timeline, and preview generated motion in one local workspace that handles like the Unity Editor.",
-        "image": "https://cozyclay.org/media/cozyclay-demo-poster.jpg",
-        "screenshot": "https://cozyclay.org/media/cozyclay-demo-poster.jpg",
+        "image": "https://cozyclay.org/media/cozyclay-truck-demo-poster.jpg",
+        "screenshot": "https://cozyclay.org/media/cozyclay-truck-demo-poster.jpg",
         "logo": "https://cozyclay.org/media/cozyclay-logo.png",
         "license": "https://github.com/NomaDamas/CozyClay/blob/main/LICENSE",
         "codeRepository": "https://github.com/NomaDamas/CozyClay",
@@ -189,6 +189,13 @@
       .proof figure { margin: 0; }
       .proof video { display: block; width: 100%; height: auto; background: #000; }
       .proof figcaption { margin-top: 16px; text-align: center; }
+      .reel-frame { position: relative; }
+      .reel-frame span {
+        position: absolute; bottom: 14px; padding: 5px 10px; border-radius: 999px;
+        background: rgba(24, 24, 27, .72); color: var(--night-ink); font: 500 12px/1 var(--mono); letter-spacing: .04em;
+      }
+      .reel-frame .tag-l { left: 14px; }
+      .reel-frame .tag-r { right: 14px; }
 
       section { padding: 104px 0; }
       section.alt { background: var(--paper-2); }
@@ -436,14 +443,18 @@
           <figure>
             <div class="window">
               <div class="titlebar" aria-hidden="true"><i></i><i></i><i></i><span>CozyClay</span></div>
-              <video
-                src="/media/cozyclay-demo.mp4"
-                poster="/media/cozyclay-demo-poster.jpg"
-                width="1920" height="1080"
-                autoplay muted loop playsinline preload="metadata"
-              ></video>
+              <div class="reel-frame">
+                <video
+                  src="/media/cozyclay-truck-demo.mp4"
+                  poster="/media/cozyclay-truck-demo-poster.jpg"
+                  width="1280" height="720"
+                  autoplay muted loop playsinline preload="metadata"
+                ></video>
+                <span class="tag-l" aria-hidden="true">CozyClay</span>
+                <span class="tag-r" aria-hidden="true">Seedance 2.5</span>
+              </div>
             </div>
-            <figcaption>Greybox left, generated right. Same camera, every cut.</figcaption>
+            <figcaption>The clay greybox left of the wipe, the Seedance 2.5 take on the right. Same shot, same camera, every cut.</figcaption>
           </figure>
         </div>
       </section>
