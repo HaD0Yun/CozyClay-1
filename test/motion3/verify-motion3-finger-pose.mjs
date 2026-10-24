@@ -57,5 +57,15 @@ for (const model of ["y-bot-tpose", "x-bot-tpose"]) {
 	expect(`${model}: point and cigarette keyed together do not bend the index back`, fingerFlexion(sk, pointed.frames[0].s, "Right", "Index").every(a => a >= 0), JSON.stringify(fingerFlexion(sk, pointed.frames[0].s, "Right", "Index")));
 }
 
+// the ball stays carried after reachGrip lets its grip go: the carry's grasp keeps the thumb wrapped on it
+for (const model of ["y-bot-tpose", "x-bot-tpose"]) {
+	const sk = skeletonFor(model), scene = motionScene(BALL_SCENE), out = compileSpec(ballPickupSpec(), { sk, scene }).out, held = heldSpans(out)[0];
+	const thumbOff = issues => issues.filter(i => i.kind === "THUMB_OFF");
+	expect(`ball pickup ${model}: the thumb stays on the ball while it is carried`, thumbOff(graspChecks(sk, out)).length === 0, JSON.stringify(thumbOff(graspChecks(sk, out)).slice(0, 2)));
+	const J = n => sk.index[`RightHand${n}`], open = compileSpec(ballPickupSpec(), { sk, scene }).out;
+	for (let f = held.from; f <= held.to; f++) rotateSubtree(sk, open.frames[f].s, J("Thumb1"), open.frames[f].s.P[J("Thumb1")].slice(), axisRot(palmAxes(sk, open.frames[f].s, "Right").n, 70));
+	expect(`ball pickup ${model}: a thumb swung off the ball is THUMB_OFF`, thumbOff(graspChecks(sk, open)).length > 0);
+}
+
 if (failures) { console.error(`${failures} finger pose check(s) failed`); process.exit(1); }
 console.log("all finger pose checks passed");

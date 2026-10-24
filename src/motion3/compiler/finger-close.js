@@ -11,7 +11,8 @@
 import { add, sub, scale, norm, cross, apply, axisRot } from "./math.js";
 import { rotateSubtree } from "./skeleton.js";
 import { palmAxes, fingerCurl, fistCurl } from "./limbs.js";
-import { capsuleDepth } from "../shapes.js";
+import { capsuleDepth, shapeOf } from "../shapes.js";
+import { GRASP_FINGERS } from "./vocab.js";
 import { partsOf } from "../object-pose.js";
 import { seatsInHand } from "../seat.js";
 
@@ -119,6 +120,27 @@ export function heldFor(ctx, c, f, k, s) {
 	return best ?? carriedFor(ctx, c, f, k, s);
 }
 
+// A carry outlives the reach that took it: reachGrip lets its grip go after `hold` while the object stays in the hand, and
+// the thumb, wrapped by the grip preset (limbs.js THUMB_WRAP), swung back out 2.3 cm off the ball it held. While hand k
+// holds a seated carry, its grasp's preset is on at full weight, eased in over SETTLE frames from the grab and out over
+// SETTLE before a release (a carry that runs to the end of the take stays held).
+const SETTLE = 4;
+const graspOf = (o, scene, id) => o.grasp ?? ({ sphere: "spherical", cylinder: "power" }[partsOf(scene, id).length === 1 ? shapeOf(scene.objects[partsOf(scene, id)[0]]).kind : "box"] ?? "palm");
+
+/** The finger preset weights of hand k at frame f with channels c: the channel's, with a seated carry's grasp preset held on. */
+export function carryFingers(ctx, c, f, k) {
+	const { spec, scene } = ctx, own = c[`fingers_${k}`];
+	for (const [id, o] of Object.entries(spec.objects ?? {})) {
+		if (!seatsInHand(spec, o, scene, id) || spec.props?.[o.prop]?.hand !== k) continue;
+		const [grab, release] = ctx.carrySpan(o), on = Math.min(1, (f - grab) / SETTLE, o.release === undefined ? 1 : (release - f) / SETTLE);
+		if (!(on > 0)) continue;
+		const preset = GRASP_FINGERS[graspOf(o, scene, id)];
+		if (preset === "relaxed") return own;
+		return { ...own, [preset]: Math.max(own?.[preset] ?? 0, on) };
+	}
+	return own;
+}
+
 /** A carry on the grasp path hand k holds at frame f, at its seat on pose s (seat.js), as { entries, weight, preset }. */
 function carriedFor(ctx, c, f, k, s) {
 	const { spec, scene } = ctx;
@@ -131,7 +153,7 @@ function carriedFor(ctx, c, f, k, s) {
 		// where it is on this pose (object-pose.js: easing into its seat over the settle, as it is drawn), not the full seat
 		const entries = partsOf(scene, id).map(p => ({ ...scene.objects[p], ...ctx.objectPose(p, f, { s }) }));
 		const near = Object.entries(ctx.objectsAt(f)).filter(([key, e]) => !partsOf(scene, id).includes(key) && e.half && !e.carried && entries.some(h => Math.hypot(...h.pos.map((v, i) => v - e.pos[i])) < 0.25 + Math.hypot(...e.half))).map(([, e]) => e);
-		if (entries.length) return { entries, stops: near, weight, preset: c[`fingers_${k}`] };
+		if (entries.length) return { entries, stops: near, weight, preset: carryFingers(ctx, c, f, k) };
 	}
 	return null;
 }
