@@ -223,9 +223,9 @@
       .flow-tabs strong, .ai-tabs strong { display: block; margin-bottom: 2px; color: var(--ink); font-size: 17px; }
       .ai-tabs span { display: block; }
       .flow-view figure { margin: 0; }
-      .flow-view img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 10; object-fit: cover; border-radius: var(--radius); border: 1px solid var(--line); background: var(--paper-2); }
+      .flow-view video { display: block; width: 100%; height: auto; aspect-ratio: 1280 / 454; border-radius: var(--radius); border: 1px solid var(--line); background: var(--paper-2); }
       .flow-view figcaption { margin-top: 12px; }
-      .flow-exports { display: flex; align-items: center; padding: 8px 28px; aspect-ratio: 16 / 10; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
+      .flow-exports { display: flex; align-items: center; padding: 8px 28px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
       .flow-exports[hidden] { display: none; }
       .flow-exports .exports { width: 100%; }
       .exports { margin: 0; padding: 0; list-style: none; display: grid; }
@@ -476,16 +476,16 @@
             </div>
             <div class="flow-view">
               <figure role="tabpanel" id="flow-p1" aria-labelledby="flow-t1">
-                <img src="/media/playground-poster.jpg" width="1600" height="1000" loading="lazy" alt="A street set blocked in the CozyClay studio: primitive buildings and cars around a posed clay character." />
-                <figcaption>A street set from boxes and cylinders, with a posed character.</figcaption>
+                <video src="/media/step-stage.mp4" poster="/media/step-stage-poster.jpg" width="1280" height="454" muted loop playsinline preload="none" aria-label="A whole street built from cubes and cylinders in CozyClay."></video>
+                <figcaption>A whole street from cubes and cylinders, railings and lamps included.</figcaption>
               </figure>
               <figure role="tabpanel" id="flow-p2" aria-labelledby="flow-t2" hidden>
-                <img src="/media/truck-greybox-poster.jpg" width="1920" height="1080" loading="lazy" alt="A clay driver in a truck cab, mid-gesture with a cigarette, hand on the wheel." />
-                <figcaption>A driver's gestures at a red light, compiled in the browser.</figcaption>
+                <video src="/media/step-move.mp4" poster="/media/step-move-poster.jpg" width="1280" height="454" muted loop playsinline preload="none" aria-label="A request to the agent, then the clay character walks to a ball and pushes it with both hands."></video>
+                <figcaption>Ask the agent; the character walks to the ball and pushes it with both hands.</figcaption>
               </figure>
               <figure role="tabpanel" id="flow-p3" aria-labelledby="flow-t3" hidden>
-                <img src="/media/studio-sequencer.jpg" width="1600" height="1000" loading="lazy" alt="The CozyClay viewport with a camera frustum aimed at a clay character, a shot preview and the sequencer with camera cut, rail and crane lanes." />
-                <figcaption>The shot camera, its preview, and cut, rail and crane lanes.</figcaption>
+                <video src="/media/step-shoot.mp4" poster="/media/step-shoot-poster.jpg" width="1280" height="454" muted loop playsinline preload="none" aria-label="The shot camera riding a four-point rail while the crane rises, with its live preview."></video>
+                <figcaption>The camera rides a rail while the crane takes it up, previewed live.</figcaption>
               </figure>
               <div role="tabpanel" id="flow-p4" aria-labelledby="flow-t4" class="flow-exports" hidden>
                 <ul class="exports" aria-label="Export formats">
@@ -819,6 +819,16 @@ npm run dev</code></pre>
             });
           });
         });
+        // How it works: the open step's clip plays while the section is on screen.
+        const flowView = document.querySelector(".flow-view");
+        let flowSeen = false;
+        const playOpenStep = () => flowView.querySelectorAll("video").forEach((clip) => {
+          if (flowSeen && !clip.closest("[role=tabpanel]").hidden) clip.play().catch(() => {});
+          else clip.pause();
+        });
+        new IntersectionObserver(([entry]) => { flowSeen = entry.isIntersecting; playOpenStep(); }).observe(flowView);
+        document.querySelectorAll(".flow-tabs [role=tab]").forEach((tab) => tab.addEventListener("click", playOpenStep));
+        document.querySelector(".flow-tabs").addEventListener("keydown", () => setTimeout(playOpenStep));
         greybox.addEventListener("timeupdate", follow);
         greybox.addEventListener("seeked", follow);
         greybox.addEventListener("play", follow);
