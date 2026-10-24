@@ -499,7 +499,7 @@ document uses — take them from `inspect`, never from memory.
 ## Models and providers
 
 The other prompt surface, the Agent panel (Studio and Workflow), runs on the
-pi agent harness and can talk to eight providers. A model id on the wire is
+pi agent harness and can talk to nine providers. A model id on the wire is
 `provider/model`, so `openai-codex/gpt-6-astra` and `anthropic/claude-fable-5`
 name two different models without ambiguity. A bare id with no slash still
 works and means `openai-codex/<id>`, which is why older saved model choices
