@@ -101,16 +101,14 @@ const piEffort = (level) => level === "none" ? "off" : level === "ultra" ? "max"
 const wireEffort = (level) => (level === "off" ? "none" : level);
 
 const registryCatalogueState = new WeakMap();
-
 function catalogueState(models) {
 	let state = registryCatalogueState.get(models);
 	if (!state) {
-		state = { fetch: null, models: [], extendedProviders: new WeakSet(), cliproxyFetch: null };
+		state = { fetch: null, models: [], extendedProviders: new WeakSet(), cliproxyFetch: null, cliproxyFetchError: null };
 		registryCatalogueState.set(models, state);
 	}
 	return state;
 }
-
 function livePiModel(model, template) {
 	const supported = new Set(model.efforts.map(piEffort));
 	// map values are what goes on the wire: pi sends a model's off mapping, and Codex calls it "none"
@@ -417,6 +415,7 @@ export async function listAgentModels({ models, codex, auth = defaultAuth, keys 
 				}
 			}
 			list = [...list].sort(cliproxyFirst);
+			const error = catalogueState(resolvedModels).cliproxyFetchError; providers.push({ id: provider.id, label: provider.label, signedIn, authSource, models: list, ...(error ? { error } : {}) }); continue;
 		}
 		providers.push({ id: provider.id, label: provider.label, signedIn, authSource, models: list });
 	}
