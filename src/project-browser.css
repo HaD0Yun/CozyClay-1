@@ -390,7 +390,7 @@
 }
 
 .v2-start-screen .v2-start-recent-actions button,
-.v2-start-screen .v2-start-file-button,
+.v2-start-screen .v2-start-empty-open,
 .v2-start-screen .v2-start-learn-action {
 	padding: 0;
 	border: 0;
@@ -400,7 +400,7 @@
 }
 
 .v2-start-screen .v2-start-recent-actions button:hover,
-.v2-start-screen .v2-start-file-button:hover,
+.v2-start-screen .v2-start-empty-open:hover,
 .v2-start-screen .v2-start-learn-action:hover {
 	color: var(--text-1, #e4e4e7);
 }
@@ -510,10 +510,11 @@
 	line-height: 1.55;
 }
 
-.v2-start-screen .v2-start-file-actions {
-	margin-top: auto;
-	padding-top: var(--sp-1, 8px);
-}
+/* A toast raised from this screen (a project that would not open) shows above it, not behind it. */
+.app:has(.v2-start-screen) .toast { z-index: calc(var(--start-z-index, 200) + 1); }
+
+/* The open card's art is solid: it names a real file, not a blank slot. */
+.v2-start-screen .v2-start-open-card .v2-start-add-art { border-style: solid; }
 
 /* --------------------------------------------------------------- preview --- */
 
