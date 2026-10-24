@@ -153,7 +153,8 @@
       .cmd .copy[data-state="copied"] .ic-done { display: block; }
       .meta-line { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0; color: var(--muted); font-size: 14px; }
       .meta-line a { color: var(--muted); }
-      .meta-line > * + * { padding-left: 16px; border-left: 1px solid var(--line-strong); }
+      .meta-line > * + *::before { content: "·"; margin-right: 8px; }
+      .meta-line { gap: 4px 8px; }
 
       .window { border: 1px solid var(--line-strong); border-radius: 12px; overflow: hidden; background: var(--panel); box-shadow: var(--shadow-window); }
       .titlebar { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px; background: #e8e8ed; border-bottom: 1px solid var(--line); }
@@ -430,7 +431,7 @@
             <p class="meta-line">
               <a href="https://github.com/NomaDamas/CozyClay/blob/main/CHANGELOG.md">v%COZYCLAY_VERSION%</a>
               <span>AGPL-3.0</span>
-              <span>No GPU, Python or model download</span>
+              <span>No GPU needed</span>
             </p>
           </div>
         </div>
