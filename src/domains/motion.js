@@ -233,7 +233,7 @@ export function createMotionDomain(appContext, characters) {
 	}
 	// `preimage` is the rig before a drag: by drag end the rig already shows the drag, so the
 	// image the action records for Undo would otherwise be the dragged pose.
-	function bakeCurrentKey(id, at, dragIds = null, preimage = null) { const before = read(), receipt = bakeKey(id, at, dragIds); if (receipt && preimage) rigImages.get(before)?.set(id, preimage); return receipt; }
+	function bakeCurrentKey(id, at, dragIds = null, preimage = null) { const before = read(), receipt = bakeKey(id, at, dragIds); if (receipt?.ok && read() !== before && preimage) rigImages.get(before)?.set(id, preimage); return receipt; }
 	function bakeKey(id, at, dragIds) {
 		const rig = rigFor(id), resolved = rig && resolveIkRig(rig);
 		if (!resolved) return null;
@@ -396,7 +396,7 @@ export function useMotion(appContext) {
 
 	function restorePendingIkState(pending) {
 		// A replaced take or another authored edit owns the newer state.
-		if (domain.layer(pending.characterId) !== pending.sourceLayer) return;
+		if (domain.layer(pending.characterId) !== pending.sourceLayer) return false;
 		const state = pending.state;
 		state.keys = copyPhysicsKeys(pending.beforeKeys);
 		state.tracked = new Set(pending.beforeTracked);
@@ -407,17 +407,19 @@ export function useMotion(appContext) {
 			else appContext.shared.poseMemberAtFrame(pending.rig, pending.motion, state, appContext.shared.tlFrame, IK_CORRECTION_BLEND_FRAMES);
 			if (state.chains) ikSeedTargets(state.chains, state);
 		}
+		return true;
 	}
 
+	// true when the preview was backed out; a preview an authored edit made stale is dropped without restoring anything
 	function cancelPendingIkEdit() {
 		const pending = pendingIkEditRef.current;
 		if (!pending) return false;
-		restorePendingIkState(pending);
+		const restored = restorePendingIkState(pending);
 		setPendingIkEditValue(null);
 		ikDragRef.current = null;
 		ikPreDragRef.current = null;
 		setIkTick((value) => value + 1);
-		return true;
+		return restored;
 	}
 
 	function applyPendingIkEdit() {

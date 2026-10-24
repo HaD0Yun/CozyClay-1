@@ -54,6 +54,20 @@ test('motion: Ctrl+Z right after an IK drag backs out the un-applied preview', (
     assert.equal(hook.applyPendingIkEdit(), false, 'nothing left to apply');
   } finally { f.dispose(); }
 });
+test('motion: Ctrl+Z after an authored edit made the IK preview stale undoes that edit', () => {
+  const f = motionFixture();
+  try {
+    f.motion.load([{ id: 'actor-a', take: seedMotion() }]);
+    const hook = f.renderMotion();
+    const chain = f.scope.ikStateRef.current.chains.get('leftHand');
+    const target = chain.bones[2].getWorldPosition(chain.bones[2].position.clone()); target.y += 0.04;
+    hook.beginGesture(); hook.ikSolve('chain', 'leftHand', target); hook.ikDragEnd(); hook.finishGesture();
+    f.run('ik.setKey', { characterId: 'actor-a', frame: 0, tracks: { head: { q: [{ x: 0, y: 0.2, z: 0, w: Math.sqrt(0.96) }] } } });
+    assert.equal(hook.layer('actor-a').ikKeys.length, 1, 'the authored key landed');
+    assert.equal(f.actual.undoScene().status, 'undone', 'the first Ctrl+Z undoes the authored key, not the stale preview');
+    assert.equal(hook.layer('actor-a').ikKeys.length, 0);
+  } finally { f.dispose(); }
+});
 test('motion: with no take, Ctrl+Z after an IK drag restores the pre-drag rig', () => {
   const f = motionFixture();
   try {
