@@ -32,6 +32,7 @@ import { observeNear, NEAR_UNITS } from "./qa/near.js";
 import { observeWrist, WRIST_UNITS } from "./qa/wrist-obs.js";
 import { observeLoad, LOAD_UNITS } from "./load.js";
 import { observeLife, LIFE_UNITS } from "./qa/motion-life.js";
+import { observeGait, GAIT_UNITS } from "./qa/gait-observe.js";
 import { planWalks, applyWalkPlans } from "./walk-plan.js";
 import { relaxSpec } from "./lenient.js";
 import { observeAsked } from "./qa/asked.js";
@@ -128,6 +129,8 @@ function compilePrepared(prepared, { sk, scene }, opts, notes, refusals) {
 	const load = observeLoad(sk, out);
 	if (load) Object.assign(observations, { units: `${observations.units}; ${LOAD_UNITS}`, load });
 	Object.assign(observations, { units: `${observations.units}; ${LIFE_UNITS}`, life: observeLife(sk, out, resolved?.keys) });
+	const gait = observeGait(sk, out, out.keys);
+	if (gait) Object.assign(observations, { units: `${observations.units}; ${GAIT_UNITS}`, gait });
 	// a skill that paced its beats to fit a short span says so where every answer keeps it (C7 tier 1)
 	const paced = used.filter(u => u.paced).map(u => `${u.skill} paced ${u.paced.toFixed(2)} to fit f${u.f0}..f${u.end}`);
 	if (paced.length) observations.paced = paced;
