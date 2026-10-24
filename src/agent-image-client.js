@@ -76,7 +76,7 @@ export function stylizeErrorMessage(error) {
 	if (error?.code === "entitlement") return ko("This account cannot generate images.", "이 계정은 이미지를 생성할 수 없어요.");
 	if (error?.status === 401 || error?.code === "auth") return ko("Sign in with ChatGPT in the Agent panel first.", "먼저 Agent 패널에서 ChatGPT로 로그인하세요.");
 	const reason = error?.message || ko("unknown error", "알 수 없는 오류");
-	return ko(`Stylize failed — ${reason}`, `스타일화 실패 — ${reason}`);
+	return ko(`Stylize failed — ${reason}`, `스타일화 실패 — ${reason}`, `风格化失败 — ${reason}`);
 }
 
 /** The generated PNG's bytes, refused past `maxBytes` with a reason. */
@@ -86,7 +86,7 @@ export function stylizedPngBytes(dataUrl, maxBytes) {
 	const binary = atob(match[1]);
 	if (binary.length > maxBytes) {
 		const mb = Math.round(maxBytes / (1024 * 1024));
-		throw new Error(ko(`The stylized image is larger than ${mb} MB, so it was not added.`, `스타일화된 이미지가 ${mb} MB보다 커서 추가하지 않았어요.`));
+		throw new Error(ko(`The stylized image is larger than ${mb} MB, so it was not added.`, `스타일화된 이미지가 ${mb} MB보다 커서 추가하지 않았어요.`, `风格化图像超过 ${mb} MB，因此未添加。`));
 	}
 	const bytes = new Uint8Array(binary.length);
 	for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);

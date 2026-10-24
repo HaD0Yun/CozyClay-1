@@ -103,7 +103,7 @@ export default function BoardSlot({ active = true }) {
 		} catch (error) {
 			attempt.fail(error);
 			console.warn(`[cozyclay] panel ${entry.id} could not be sent to Workflow`, error);
-			setToast(ko(`Could not send the panel to Workflow: ${error?.message || error}`, `패널을 워크플로로 보내지 못했어요: ${error?.message || error}`));
+			setToast(ko(`Could not send the panel to Workflow: ${error?.message || error}`, `패널을 워크플로로 보내지 못했어요: ${error?.message || error}`, `无法将面板发送到工作流：${error?.message || error}`));
 		}
 	}
 
@@ -151,7 +151,7 @@ export default function BoardSlot({ active = true }) {
 	return (
 		<section className="dock-board" aria-label={ko("Board", "보드")} data-testid="dock-board" hidden={!active}>
 			<header className="dock-board-head">
-				<span className="dock-board-count">{ko(`${stills.length} panels`, `패널 ${stills.length}개`)}</span>
+				<span className="dock-board-count">{ko(`${stills.length} panels`, `패널 ${stills.length}개`, `${stills.length} 个面板`)}</span>
 				{/* An empty board offers + Panel once, in its empty state. */}
 				{stills.length > 0 && (
 					<button type="button" className="dock-board-add" data-testid="board-add-panel" title={ko("Add a panel after the last one, framed by the current camera", "현재 카메라 구도로 마지막 패널 뒤에 패널 추가")} onClick={addPanel}>
@@ -245,7 +245,7 @@ function PanelCard({ shot, index, fps, thumb, stylizing, onStylize, onUnstylize,
 			data-stylizing={stylizing || undefined}
 			tabIndex={0}
 			draggable
-			aria-label={ko(`Panel ${index + 1}`, `패널 ${index + 1}`)}
+			aria-label={ko(`Panel ${index + 1}`, `패널 ${index + 1}`, `面板 ${index + 1}`)}
 			aria-current={selected ? "true" : undefined}
 			onClick={onSelect}
 			onKeyDown={(event) => {
@@ -312,7 +312,7 @@ function PanelCard({ shot, index, fps, thumb, stylizing, onStylize, onUnstylize,
 				key={`caption:${shot.caption ?? ""}`}
 				className="dock-board-caption"
 				data-testid="board-card-caption"
-				aria-label={ko(`Panel ${index + 1} caption`, `패널 ${index + 1} 캡션`)}
+				aria-label={ko(`Panel ${index + 1} caption`, `패널 ${index + 1} 캡션`, `面板 ${index + 1} 说明`)}
 				placeholder={ko("Action or dialogue", "동작 또는 대사")}
 				defaultValue={shot.caption ?? ""}
 				maxLength={500}
@@ -330,7 +330,7 @@ function PanelCard({ shot, index, fps, thumb, stylizing, onStylize, onUnstylize,
 					max={STILL_HOLD_MAX / fps}
 					step={0.5}
 					defaultValue={seconds}
-					aria-label={ko(`Panel ${index + 1} hold in seconds`, `패널 ${index + 1} 홀드 (초)`)}
+					aria-label={ko(`Panel ${index + 1} hold in seconds`, `패널 ${index + 1} 홀드 (초)`, `面板 ${index + 1} 停留秒数`)}
 					onBlur={commitHold}
 					onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
 				/>

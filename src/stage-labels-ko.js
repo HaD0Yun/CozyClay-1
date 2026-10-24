@@ -76,7 +76,7 @@ export const CAMERA_MOVE_LABELS_KO = new Map([
 	["Dolly-zoom (vertigo)", ko("Dolly-zoom (vertigo)", "돌리 줌(버티고)")],
 	["Whip pan", ko("Whip pan", "휩 팬")],
 	["Aerial / drone", ko("Aerial / drone", "공중 / 드론")],
-	[CUSTOM_MOVE, ko(CUSTOM_MOVE, "직접 입력…")],
+	[CUSTOM_MOVE, ko(CUSTOM_MOVE, "직접 입력…", "自定义…")],
 ]);
 
 export const POSE_LABELS_KO = new Map([
@@ -120,7 +120,7 @@ export const SCENE_RENDERER_LABELS_KO = new Map([
 	["cone", ko("cone", "원뿔")],
 	["plane", ko("plane", "평면")],
 	[CUTOUT_KIND, ko("cutout", "컷아웃")],
-	[MESH_KIND, ko("Mesh", "모델")],
+	[MESH_KIND, ko("Mesh", "모델", "模型")],
 	["sculpt", ko("Sculpt", "조형")],
 ]);
 

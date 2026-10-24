@@ -24,7 +24,7 @@ export function PlanCard({ plan, live }) {
 	const total = plan.steps.length, done = plan.steps.filter(step => step.status === "done").length;
 	const state = live ? "live" : plan.outcome ?? "done";
 	return <div className="agent-row agent-plan-row" data-plan-live={live ? "true" : "false"}>
-		<section className="agent-card agent-plan" data-agent-card="plan" data-plan-state={state} aria-label={ko(`Plan, ${done} of ${total} done`, `계획, ${total}단계 중 ${done}단계 완료`)}>
+		<section className="agent-card agent-plan" data-agent-card="plan" data-plan-state={state} aria-label={ko(`Plan, ${done} of ${total} done`, `계획, ${total}단계 중 ${done}단계 완료`, `计划，已完成 ${done} / ${total}`)}>
 			<div className="agent-plan-head">
 				<span className="agent-plan-title">{ko("Plan", "계획")}</span>
 				<span className="agent-plan-bar" aria-hidden="true"><span className="agent-plan-fill" style={{ "--agent-plan-done": total ? done / total : 0 }} /></span>

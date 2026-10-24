@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { ko, isKo } from "../locale.js";
+import { ko } from "../locale.js";
 import { ASSET_IMAGE_TYPES, downscaleTarget } from "../scene-assets.js";
 
 const REFERENCE_IMAGE_MAX_DIMENSION = 1024;
@@ -82,7 +82,7 @@ export default function ReferenceImageField({ label, hint, value, alt, onPick, o
 					try {
 						onPick(await readReferenceImage(file));
 					} catch (failure) {
-						setError(isKo ? `이미지를 불러오지 못했어요 — ${failure.message}` : `Could not load that image — ${failure.message}`);
+						setError(ko(`Could not load that image — ${failure.message}`, `이미지를 불러오지 못했어요 — ${failure.message}`, `无法加载该图片 — ${failure.message}`));
 					}
 				}}
 			/>

@@ -5,10 +5,10 @@ import "./range-pin-panel.css";
 export const RANGE_PIN_TRACKS = Object.freeze(["leftHand", "rightHand", "leftFoot", "rightFoot"]);
 
 const PARTS = Object.freeze([
-	{ id: "leftHand", label: "Left Hand", ko: "왼손", color: "var(--range-pin-hand)" },
-	{ id: "rightHand", label: "Right Hand", ko: "오른손", color: "var(--range-pin-hand)" },
-	{ id: "leftFoot", label: "Left Foot", ko: "왼발", color: "var(--range-pin-foot)" },
-	{ id: "rightFoot", label: "Right Foot", ko: "오른발", color: "var(--range-pin-foot)" },
+	{ id: "leftHand", label: "Left Hand", ko: "왼손", zh: "左手", color: "var(--range-pin-hand)" },
+	{ id: "rightHand", label: "Right Hand", ko: "오른손", zh: "右手", color: "var(--range-pin-hand)" },
+	{ id: "leftFoot", label: "Left Foot", ko: "왼발", zh: "左脚", color: "var(--range-pin-foot)" },
+	{ id: "rightFoot", label: "Right Foot", ko: "오른발", zh: "右脚", color: "var(--range-pin-foot)" },
 ]);
 
 const PIN_ID_PREFIX = "pin";
@@ -77,10 +77,10 @@ function residualWarning(residuals) {
 		frames,
 		label: ko(
 			`Can't reach on ${frames.length} frame${frames.length === 1 ? "" : "s"}`,
-			`${frames.length}개 프레임에 닿지 않음`,
+			`${frames.length}개 프레임에 닿지 않음`, `${frames.length} 帧无法触及`,
 		),
-		title: ko(`Residual over 1 cm on frames ${frames.join(", ")}`, `1cm를 넘는 잔여 오차: ${frames.join(", ")}프레임`)
-			+ (feet.length ? ko(`; feet cannot stay planted on frames ${feet.join(", ")}`, `; 발 위치를 유지할 수 없는 프레임: ${feet.join(", ")}`) : ""),
+		title: ko(`Residual over 1 cm on frames ${frames.join(", ")}`, `1cm를 넘는 잔여 오차: ${frames.join(", ")}프레임`, `第 ${frames.join(", ")} 帧的残差超过 1 cm`)
+			+ (feet.length ? ko(`; feet cannot stay planted on frames ${feet.join(", ")}`, `; 발 위치를 유지할 수 없는 프레임: ${feet.join(", ")}`, `；第 ${feet.join(", ")} 帧无法保持双脚踩地`) : ""),
 	};
 }
 
@@ -88,7 +88,7 @@ function validationFor(draft, { motion, frameCount, objects }) {
 	if (!motion) return ko("Load a motion before creating a pin.", "핀을 만들기 전에 모션을 불러오세요.");
 	if (!RANGE_PIN_TRACKS.includes(draft.track)) return ko("Choose a hand or foot.", "손이나 발을 선택하세요.");
 	if (!Number.isInteger(Number(draft.startFrame)) || !Number.isInteger(Number(draft.endFrame))) return ko("In and Out must be whole frames.", "In과 Out은 정수 프레임이어야 해요.");
-	if (draft.startFrame < 0 || draft.endFrame >= frameCount) return ko(`Use frames 0–${Math.max(0, frameCount - 1)}.`, `${Math.max(0, frameCount - 1)}프레임 안에서 선택하세요.`);
+	if (draft.startFrame < 0 || draft.endFrame >= frameCount) return ko(`Use frames 0–${Math.max(0, frameCount - 1)}.`, `${Math.max(0, frameCount - 1)}프레임 안에서 선택하세요.`, `请使用第 0–${Math.max(0, frameCount - 1)} 帧。`);
 	if (draft.endFrame < draft.startFrame) return ko("Out must be on or after In.", "Out은 In 이후여야 해요.");
 	if (draft.targetKind === "object" && !draft.objectId) return ko("Choose a scene object.", "씬 오브젝트를 선택하세요.");
 	if (draft.targetKind === "object" && !objects.some((object) => object.id === draft.objectId)) return ko("That scene object is no longer available.", "씬 오브젝트를 찾을 수 없어요.");
@@ -98,7 +98,7 @@ function validationFor(draft, { motion, frameCount, objects }) {
 
 function targetLabel(pin, objects) {
 	if (pin.target.space === "object") {
-		return ko(`Object · ${objectName(objects.find((object) => object.id === pin.target.objectId))}`, `오브젝트 · ${objectName(objects.find((object) => object.id === pin.target.objectId))}`);
+		return ko(`Object · ${objectName(objects.find((object) => object.id === pin.target.objectId))}`, `오브젝트 · ${objectName(objects.find((object) => object.id === pin.target.objectId))}`, `物体 · ${objectName(objects.find((object) => object.id === pin.target.objectId))}`);
 	}
 	return ko("Hold at In", "In 위치 고정");
 }
@@ -233,7 +233,7 @@ export function RangePinPanel({
 							onClick={() => updateDraft({ track: part.id })}
 						>
 							<span className="range-pin-part-dot" aria-hidden="true" />
-							{ko(part.label, part.ko)}
+							{ko(part.label, part.ko, part.zh)}
 						</button>
 					))}
 				</div>
@@ -300,7 +300,7 @@ export function RangePinPanel({
 			{validation && <p className="range-pin-validation" role="alert">{validation}</p>}
 			{needsReplace && (
 				<div className="range-pin-replace-warning" role="alert">
-					<span>{ko(`Existing IK keys on ${conflictFrames.length} frame${conflictFrames.length === 1 ? "" : "s"}: ${conflictFrames.join(", ")}`, `기존 IK 키가 ${conflictFrames.length}개 프레임에 있어요: ${conflictFrames.join(", ")}`)}</span>
+					<span>{ko(`Existing IK keys on ${conflictFrames.length} frame${conflictFrames.length === 1 ? "" : "s"}: ${conflictFrames.join(", ")}`, `기존 IK 키가 ${conflictFrames.length}개 프레임에 있어요: ${conflictFrames.join(", ")}`, `${conflictFrames.length} 帧上已有 IK 关键帧：${conflictFrames.join(", ")}`)}</span>
 					<button type="button" className="btn ghost small" onClick={() => setReplaceConfirmed((value) => !value)} aria-pressed={replaceConfirmed}>
 						{replaceConfirmed ? ko("Replace confirmed", "교체 확인됨") : ko("Replace existing keys", "기존 키 교체")}
 					</button>
@@ -313,7 +313,7 @@ export function RangePinPanel({
 			</div>
 
 			<div className="range-pin-list-head">
-				<span>{ko("Pins", "고정 목록")}</span>
+				<span>{ko("Pins", "고정 목록", "固定项")}</span>
 				<small>{sortedPins.length}</small>
 			</div>
 			{sortedPins.length === 0 ? (
@@ -327,11 +327,11 @@ export function RangePinPanel({
 						return (
 							<div key={pin.id} className={"range-pin-item" + (selectedPinId === pin.id ? " selected" : "")} style={{ "--range-pin-color": part.color }}>
 								<button type="button" className="range-pin-item-main" onClick={() => editPin(pin)} aria-pressed={selectedPinId === pin.id}>
-									<span className="range-pin-item-top"><span className="range-pin-part-dot" aria-hidden="true" />{ko(part.label, part.ko)} <b>{pin.startFrame}–{pin.endFrame}</b></span>
+									<span className="range-pin-item-top"><span className="range-pin-part-dot" aria-hidden="true" />{ko(part.label, part.ko, part.zh)} <b>{pin.startFrame}–{pin.endFrame}</b></span>
 									<span className="range-pin-item-target">{missingObject ? ko("Missing object target", "오브젝트 대상 없음") : targetLabel(pin, objects)}</span>
 									{(warning || missingObject) && <span className="range-pin-warning" title={missingObject ? ko("The referenced object was deleted.", "참조한 오브젝트가 삭제됐어요.") : warning.title}>{missingObject ? ko("Invalid target", "대상 없음") : warning.label}</span>}
 								</button>
-								<button type="button" className="range-pin-delete" data-testid={`range-pin-delete-${pin.id}`} aria-label={ko(`Delete ${part.label} pin`, `${part.ko} 고정 삭제`)} title={ko("Delete pin", "고정 삭제")} onClick={() => onDelete?.(pin.id)}><span aria-hidden="true">×</span></button>
+								<button type="button" className="range-pin-delete" data-testid={`range-pin-delete-${pin.id}`} aria-label={ko(`Delete ${part.label} pin`, `${part.ko} 고정 삭제`, `删除${part.zh}固定`)} title={ko("Delete pin", "고정 삭제")} onClick={() => onDelete?.(pin.id)}><span aria-hidden="true">×</span></button>
 							</div>
 						);
 					})}

@@ -53,7 +53,7 @@ const expected = {
 	"sp-1": "8px",
 	"sp-2": "12px",
 	"sp-3": "16px",
-	sans: '"IBM Plex Sans", "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif',
+	sans: '"IBM Plex Sans", "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif',
 	mono: '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
 };
 

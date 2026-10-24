@@ -151,7 +151,7 @@ import {
 	trackActivation,
 	trackFeature,
 } from "./analytics.js";
-import { ko, isKo } from "./locale.js";
+import { ko, isKo, isZh } from "./locale.js";
 import { saveExport } from "./export-workspace.js";
 import { characterCapabilities, kindRefusal, proxyFigureBounds } from "./character-kind.js";
 import { STARTER_SCENES, resolveSceneParam } from "./starter-scenes.js";
@@ -1147,7 +1147,7 @@ export default function App() {
 	// A capsule figure has no rig at all, so it gets its own reason rather than
 	// the "load a character" one, which would read as a loading problem.
 	const activeCapabilities = characterCapabilities(activeChar);
-	const poseRefusal = !activeCapabilities.pose ? kindRefusal("pose", isKo) : ikChains ? null : ko("Load a character to pose it — Pose mode edits its rig with IK", "캐릭터를 불러와야 포즈를 잡을 수 있어요 — 포즈 모드는 IK로 리그를 편집합니다");
+	const poseRefusal = !activeCapabilities.pose ? kindRefusal("pose", isKo, isZh) : ikChains ? null : ko("Load a character to pose it — Pose mode edits its rig with IK", "캐릭터를 불러와야 포즈를 잡을 수 있어요 — 포즈 모드는 IK로 리그를 편집합니다", "加载角色后才能摆姿势 — 姿势模式用 IK 编辑其骨骼");
 	function selectWorkflowMode(next) {
 		if (next === "pose" && poseRefusal) {
 			setToast(poseRefusal);
@@ -1155,7 +1155,7 @@ export default function App() {
 		}
 		// A storyboard is stills: there is no Motion department to open.
 		if (next === "motion" && storyboardProject) {
-			setToast(ko(STORYBOARD_MOTION_REFUSAL.en, STORYBOARD_MOTION_REFUSAL.ko));
+			setToast(ko(STORYBOARD_MOTION_REFUSAL.en, STORYBOARD_MOTION_REFUSAL.ko, STORYBOARD_MOTION_REFUSAL.zh));
 			return;
 		}
 		setWorkflowMode(next);
@@ -1258,7 +1258,7 @@ export default function App() {
 			setSculptBlueprint((current) => ({ ...current, state: "idle", sheet: null, error: null }));
 			setSculptReference(await objectsDomain.storeSculptReference(file));
 		} catch (error) {
-			setToast(ko(`Could not read that image: ${error.message}`, `이미지를 읽지 못했어요: ${error.message}`));
+			setToast(ko(`Could not read that image: ${error.message}`, `이미지를 읽지 못했어요: ${error.message}`, `无法读取该图片：${error.message}`));
 		}
 	}
 	function startSculptRun() {
@@ -1478,7 +1478,7 @@ export default function App() {
 
 	const rejectUnsupportedDrop = (count) => setToast(ko(
 		`${count} file${count > 1 ? "s" : ""} not supported — use PNG, JPG, WebP, GIF or a .glb / .obj / .fbx (iPhone HEIC photos need converting first)`,
-		`지원하지 않는 파일 ${count}개 — PNG, JPG, WebP, GIF 또는 .glb / .obj / .fbx만 가능해요 (아이폰 HEIC 사진은 먼저 변환해 주세요)`,
+		`지원하지 않는 파일 ${count}개 — PNG, JPG, WebP, GIF 또는 .glb / .obj / .fbx만 가능해요 (아이폰 HEIC 사진은 먼저 변환해 주세요)`, `不支持 ${count} 个文件 — 请使用 PNG、JPG、WebP、GIF 或 .glb / .obj / .fbx（iPhone HEIC 照片需先转换）`,
 	));
 	const stageDrop = {
 		onImages: (files) => importCutouts(files),
@@ -1786,7 +1786,7 @@ export default function App() {
 	// so run_action can give the agent the reason the user was shown.
 	const toastSinkRef = useRef(new Set());
 	const setToast = useCallback((value, english) => {
-		const toast = resolveStudioToast(value, isKo, ko);
+		const toast = resolveStudioToast(value, isKo, ko, isZh);
 		if (english !== undefined) toast.message = english;
 		if (typeof toast.uiMessage === "string" && toast.uiMessage) for (const sink of toastSinkRef.current) sink(toast);
 		showToast(toast.uiMessage);
@@ -1948,7 +1948,7 @@ export default function App() {
 			deleted = true;
 			return true;
 		} catch (error) {
-			setToast(isKo ? `이미지를 삭제하지 못했어요 — ${error.message}` : `Could not delete that image — ${error.message}`);
+			setToast(ko(`Could not delete that image — ${error.message}`, `이미지를 삭제하지 못했어요 — ${error.message}`, `无法删除该图片 — ${error.message}`));
 			return false;
 		} finally {
 			db?.close?.();
@@ -1971,9 +1971,9 @@ export default function App() {
 			setAssetTrash((current) => current.filter((asset) => asset.id !== record.id));
 			setAssetUndoOffered(false);
 			restored = true;
-			setToast(isKo ? `${record.name || "이미지"} 복원됨` : `${record.name || "Image"} restored`);
+			setToast(ko(`${record.name || "Image"} restored`, `${record.name || "이미지"} 복원됨`, `${record.name || "图片"}已恢复`));
 		} catch (error) {
-			setToast(isKo ? `이미지를 복원하지 못했어요 — ${error.message}` : `Could not restore that image — ${error.message}`);
+			setToast(ko(`Could not restore that image — ${error.message}`, `이미지를 복원하지 못했어요 — ${error.message}`, `无法恢复该图片 — ${error.message}`));
 		} finally {
 			if (restored) await refreshAssetShelf();
 			setDeletingAssetId(null);
@@ -3012,7 +3012,7 @@ export default function App() {
 			const name = fileName ?? `cozyclay-${slate}.mp4`;
 			await saveExport(result.blob, name);
 			setRecordedVideoName(name);
-			setToast((isKo, ko) => isKo ? `${name} 내보내기 완료 · ${result.frameCount}프레임` : `${name} exported · ${result.frameCount} frames`);
+			setToast((isKo, ko) => ko(`${name} exported · ${result.frameCount} frames`, `${name} 내보내기 완료 · ${result.frameCount}프레임`, `${name} 已导出 · ${result.frameCount} 帧`));
 			return { ...result, fileName: name };
 		}
 		return result;
@@ -3083,7 +3083,7 @@ export default function App() {
 					: phase === "preparing" ? ko("Preparing the renderer and checking MP4 support…", "렌더러를 준비하고 MP4 지원을 확인하고 있어요…")
 					: ko("Encoding the requested frames, not yet a completed file.", "요청한 프레임을 인코딩 중이에요. 아직 파일이 완성되지 않았어요.")}</p>}
 				{retryable && <p>{ko("Retry keeps the original shot, camera, range and settings; it does not change your edits.", "다시 시도하면 원래 샷·카메라·범위·설정을 사용하며 편집 내용은 바꾸지 않아요.")}</p>}
-				{handedOff > 0 && <p>{ko(`${handedOff} file(s) already handed off. Retry skips those files; check your export folder or browser downloads because OS saves cannot be confirmed.`, `파일 ${handedOff}개는 이미 전달했어요. 다시 시도할 때 해당 파일은 건너뛰어요. OS 저장은 확인할 수 없으니 내보내기 폴더나 브라우저 다운로드를 확인하세요.`)}</p>}
+				{handedOff > 0 && <p>{ko(`${handedOff} file(s) already handed off. Retry skips those files; check your export folder or browser downloads because OS saves cannot be confirmed.`, `파일 ${handedOff}개는 이미 전달했어요. 다시 시도할 때 해당 파일은 건너뛰어요. OS 저장은 확인할 수 없으니 내보내기 폴더나 브라우저 다운로드를 확인하세요.`, `已交付 ${handedOff} 个文件。重试时会跳过这些文件；由于无法确认系统保存，请检查导出文件夹或浏览器下载。`)}</p>}
 				<div className="export-status-actions">
 					{busy && cancellable && <button type="button" data-testid="export-cancel" onClick={stopShotRecording}>{ko("Cancel export", "내보내기 취소")}</button>}
 					{retryable && <button type="button" data-testid="export-retry" disabled={recState === "recording"} onClick={() => void retryExport()}>{ko("Retry same export", "같은 내보내기 재시도")}</button>}
@@ -3117,9 +3117,9 @@ export default function App() {
 				.replace(/^-+|-+$/g, "") || "cut-list";
 			await saveExport(blob, `cozyclay-${slug}.otio`);
 			const frameCount = shots.reduce((total, shot) => total + shot.endFrame - shot.startFrame + 1, 0);
-			setToast(isKo
-				? `OTIO 저장됨 · ${shots.length}샷 · ${frameCount}프레임`
-				: `OTIO saved · ${shots.length} shots · ${frameCount} frames`);
+			setToast(ko(`OTIO saved · ${shots.length} shots · ${frameCount} frames`,
+				`OTIO 저장됨 · ${shots.length}샷 · ${frameCount}프레임`,
+				`OTIO 已保存 · ${shots.length} 个镜头 · ${frameCount} 帧`));
 		} catch (error) {
 			setToast(error?.message || String(error));
 		}
@@ -3201,13 +3201,13 @@ export default function App() {
 		updateExportStatus(job, "preparing", { stage: "frames", cancellable: true });
 		await exportBoundary(job);
 		const packShot = { title: entry.name, index: index + 1, startFrame: entry.startFrame, endFrame: entry.endFrame };
-		onProgress?.(ko(`Rendering frames for "${entry.name}"`, `"${entry.name}" 프레임 렌더링 중`));
+		onProgress?.(ko(`Rendering frames for "${entry.name}"`, `"${entry.name}" 프레임 렌더링 중`, `正在渲染“${entry.name}”的帧`));
 		const firstUrl = captureShotFramePng(entry.startFrame);
 		if (!firstUrl) throw Object.assign(new Error(ko("The shot renderer is not ready", "샷 렌더러가 아직 준비되지 않았어요")), { exportFailureCode: "render_failed" });
 		await exportBoundary(job);
 		const lastUrl = entry.endFrame > entry.startFrame ? captureShotFramePng(entry.endFrame) : null;
 		await exportBoundary(job);
-		onProgress?.(ko(`Recording the clip for "${entry.name}"`, `"${entry.name}" 클립 녹화 중`));
+		onProgress?.(ko(`Recording the clip for "${entry.name}"`, `"${entry.name}" 클립 녹화 중`, `正在录制“${entry.name}”的片段`));
 		const recorded = await runShotExport({ startFrame: entry.startFrame, endFrame: entry.endFrame, download: false }, job);
 		updateExportStatus(job, "finalizing", { stage: "archive", cancellable: true });
 		await exportBoundary(job);
@@ -3260,12 +3260,12 @@ export default function App() {
 			if (!job.request.context.shots.length) throw new Error(ko("Add at least one Shot before exporting a keyframe pack", "키프레임 팩을 내보내려면 샷을 하나 이상 추가하세요"));
 			for (const [order, index] of targets.entries()) {
 				if (job.request.handedOff.has(index)) continue;
-				job.label = ko(`Shot ${order + 1} of ${targets.length}`, `샷 ${order + 1} / ${targets.length}`);
+				job.label = ko(`Shot ${order + 1} of ${targets.length}`, `샷 ${order + 1} / ${targets.length}`, `镜头 ${order + 1} / ${targets.length}`);
 				const pack = await buildShotKeyframePack(job.request.context.shots[index], index, null, job);
 				job.controller.signal.throwIfAborted();
 				await saveExport(new Blob([pack.bytes], { type: "application/zip" }), pack.name);
 				job.request.handedOff.add(index);
-				setToast(isKo ? `${pack.name} 내보내기 완료 · 파일 ${pack.entries.length}개` : `${pack.name} exported · ${pack.entries.length} files`);
+				setToast(ko(`${pack.name} exported · ${pack.entries.length} files`, `${pack.name} 내보내기 완료 · 파일 ${pack.entries.length}개`, `${pack.name} 已导出 · ${pack.entries.length} 个文件`));
 				await exportBoundary(job);
 			}
 		}));
@@ -3336,7 +3336,7 @@ export default function App() {
 				createCanvas: storyboardCanvas,
 			});
 			await saveExport(canvas.toDataURL("image/png"), "cozyclay-storyboard.png");
-			setToast(isKo ? `스토리보드 저장됨 · ${cells.length}샷` : `Storyboard saved · ${cells.length} shots`);
+			setToast(ko(`Storyboard saved · ${cells.length} shots`, `스토리보드 저장됨 · ${cells.length}샷`, `故事板已保存 · ${cells.length} 个镜头`));
 			trackFeature("export_storyboard");
 		} catch (error) {
 			setToast(error?.message || String(error));
@@ -3427,7 +3427,7 @@ export default function App() {
 			const canvas = composeStoryboard({ shots: cells, columns: Math.min(3, cells.length), cell: { width: 480, height: 300 }, createCanvas: storyboardCanvas });
 			job.controller.signal.throwIfAborted();
 			await saveExport(canvas.toDataURL("image/png"), "cozyclay-storyboard.png");
-			setToast(isKo ? `콘택트 시트 내보내기 완료 · 패널 ${cells.length}개` : `Contact sheet exported · ${cells.length} panels`);
+			setToast(ko(`Contact sheet exported · ${cells.length} panels`, `콘택트 시트 내보내기 완료 · 패널 ${cells.length}개`, `缩略图总览已导出 · ${cells.length} 个面板`));
 			return { fileName: "cozyclay-storyboard.png", panelCount: cells.length };
 		}));
 	}
@@ -3470,7 +3470,7 @@ export default function App() {
 			updateExportStatus(job, "preparing", { stage: "frames", cancellable: true });
 			const packs = [];
 			for (const [step, entry] of targets.entries()) {
-				job.label = ko(`Panel ${step + 1} of ${targets.length}`, `패널 ${step + 1} / ${targets.length}`);
+				job.label = ko(`Panel ${step + 1} of ${targets.length}`, `패널 ${step + 1} / ${targets.length}`, `面板 ${step + 1} / ${targets.length}`);
 				packs.push(await panelPackArgs(entry, contextPanels.indexOf(entry), all));
 				await exportBoundary(job);
 			}
@@ -3481,7 +3481,7 @@ export default function App() {
 			const name = every ? "cozyclay-panels.zip" : `cozyclay-${packs[0].folder}-${slugifyTitle(target.name)}.zip`;
 			await exportBoundary(job);
 			await saveExport(new Blob([bytes], { type: "application/zip" }), name);
-			setToast(isKo ? `${name} 내보내기 완료 · 파일 ${entries.length}개` : `${name} exported · ${entries.length} files`);
+			setToast(ko(`${name} exported · ${entries.length} files`, `${name} 내보내기 완료 · 파일 ${entries.length}개`, `${name} 已导出 · ${entries.length} 个文件`));
 			return { fileName: name, entries: entries.map((entry) => entry.name) };
 		}));
 	}
@@ -3800,7 +3800,7 @@ export default function App() {
 				if (!result.ok) return result;
 				await rehydrateProjectAssets(result.project, result.warnings);
 				applyProject(result.project);
-				setToast(`${isKo ? `프로젝트 열림: ${result.project.name}` : `Project opened: ${result.project.name}`}${projectProblemsNotice(result.problems)}`);
+				setToast(`${ko(`Project opened: ${result.project.name}`, `프로젝트 열림: ${result.project.name}`, `项目已打开：${result.project.name}`)}${projectProblemsNotice(result.problems)}`);
 				return result;
 			},
 			manifest: () => projectManifest,
@@ -4984,9 +4984,9 @@ export default function App() {
 									setPathPointIndex(null);
 									setPathDraw(false);
 									const metrics = pathMetrics(createObjectPath({ points }));
-									setToast(isKo
-										? `이동 경로 완성 — ${metrics.length.toFixed(1)} m, 점 ${points.length}개`
-										: `Travel path drawn — ${metrics.length.toFixed(1)} m, ${points.length} points`);
+									setToast(ko(`Travel path drawn — ${metrics.length.toFixed(1)} m, ${points.length} points`,
+										`이동 경로 완성 — ${metrics.length.toFixed(1)} m, 점 ${points.length}개`,
+										`移动路径已完成 — ${metrics.length.toFixed(1)} m，${points.length} 个点`));
 								}}
 								onCameraChange={commitManualCameraFraming}
 							/>
@@ -5306,7 +5306,7 @@ export default function App() {
 			<FirstSuccessGuide open={firstSuccessGuideOpen} previsMode={scenesDomain.previsMode} onDismiss={() => setFirstSuccessGuideOpen(false)} />
 			<UseCaseQuestion
 				open={useCaseAskOpen}
-				isKo={isKo}
+				isKo={isKo} isZh={isZh}
 				onAnswer={(useCase, team) => {
 					recordUseCase(useCase, team);
 					setUseCaseAskOpen(false);
@@ -5343,7 +5343,7 @@ export default function App() {
 			)}
 			{restoreOffer && (
 				<div className="asset-delete-toast" role="status">
-					<span>{isKo ? `마지막 프로젝트 복원${restoreOffer.name ? `: ${restoreOffer.name}` : ""}` : `Restore last project${restoreOffer.name ? `: ${restoreOffer.name}` : ""}`}</span>
+					<span>{ko(`Restore last project${restoreOffer.name ? `: ${restoreOffer.name}` : ""}`, `마지막 프로젝트 복원${restoreOffer.name ? `: ${restoreOffer.name}` : ""}`, `恢复上次项目${restoreOffer.name ? `：${restoreOffer.name}` : ""}`)}</span>
 					<button
 						type="button"
 						onClick={async () => {

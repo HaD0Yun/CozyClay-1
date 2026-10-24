@@ -177,7 +177,7 @@ export default function ViewportToolbar() {
 			aria-pressed={snapEnabled}
 			title={ko(
 				`Grid snapping ${snapEnabled ? "on" : "off"} (${SNAP_MOVE} · ${SNAP_TURN}) — click to toggle, hold Ctrl during a drag to invert`,
-				`그리드 스냅 ${snapEnabled ? "켜짐" : "꺼짐"} (${SNAP_MOVE} · ${SNAP_TURN}) — 클릭해 전환, 드래그 중 Ctrl을 누르면 반대로 작동`,
+				`그리드 스냅 ${snapEnabled ? "켜짐" : "꺼짐"} (${SNAP_MOVE} · ${SNAP_TURN}) — 클릭해 전환, 드래그 중 Ctrl을 누르면 반대로 작동`, `网格吸附 ${snapEnabled ? "开" : "关"}（${SNAP_MOVE} · ${SNAP_TURN}）— 点击切换，拖动时按住 Ctrl 反向`,
 			)}
 			onClick={() => setSnapEnabled((value) => !value)}
 		>
@@ -524,12 +524,12 @@ export default function ViewportToolbar() {
 									className={"view-menu-item vp-guide-cycle" + (guideMode === "off" ? "" : " active")}
 									aria-checked={guideMode !== "off"}
 									aria-pressed={guideMode !== "off"}
-									title={ko(GUIDE_LABELS[guideMode].en, GUIDE_LABELS[guideMode].ko) + ko(" · click to cycle", " · 클릭으로 전환")}
+									title={ko(GUIDE_LABELS[guideMode].en, GUIDE_LABELS[guideMode].ko, GUIDE_LABELS[guideMode].zh) + ko(" · click to cycle", " · 클릭으로 전환")}
 									onClick={() => runStudioAction("view.setGuideMode", { mode: nextGuideMode(guideMode) })}
 								>
 									<span className="view-menu-mark" aria-hidden="true">{guideMode !== "off" ? "✓" : ""}</span>
 									{ko("Composition guides", "구도 가이드")}
-									<small>{ko(GUIDE_LABELS[guideMode].en, GUIDE_LABELS[guideMode].ko)}</small>
+									<small>{ko(GUIDE_LABELS[guideMode].en, GUIDE_LABELS[guideMode].ko, GUIDE_LABELS[guideMode].zh)}</small>
 								</button>
 								<GhostsMenuGroup />
 								{/* Part colours repaint a BODY, so the section only exists

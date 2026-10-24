@@ -14,7 +14,7 @@ export default function SubjectsPanel({
 							{characters.map((entry, index) => entry.hidden ? null : (
 								<SubjectBox
 									key={entry.id}
-									label={ko(`Subject ${index + 1}`, `인물 ${index + 1}`)}
+									label={ko(`Subject ${index + 1}`, `인물 ${index + 1}`, `角色 ${index + 1}`)}
 									onPose={() => openStudio(entry.id)}
 									posing={posing === entry.id}
 									onRemove={index > 0 ? () => run('character.remove', { characterId: entry.id }) : undefined}

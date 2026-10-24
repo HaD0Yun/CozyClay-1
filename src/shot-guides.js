@@ -9,11 +9,11 @@ export const GUIDE_STORAGE_KEY = "cozyclay.shot-guides.v1";
 export const GUIDE_MODES = Object.freeze(["off", "thirds", "golden", "center", "safe"]);
 
 export const GUIDE_LABELS = Object.freeze({
-	off: Object.freeze({ en: "Guides off", ko: "가이드 끔" }),
-	thirds: Object.freeze({ en: "Thirds", ko: "삼분할" }),
-	golden: Object.freeze({ en: "Golden ratio", ko: "골든 레이쇼" }),
-	center: Object.freeze({ en: "Center + diagonals", ko: "센터·대각선" }),
-	safe: Object.freeze({ en: "Safe areas", ko: "세이프 에어리어" }),
+	off: Object.freeze({ en: "Guides off", ko: "가이드 끔", zh: "参考线关闭" }),
+	thirds: Object.freeze({ en: "Thirds", ko: "삼분할", zh: "三分法" }),
+	golden: Object.freeze({ en: "Golden ratio", ko: "골든 레이쇼", zh: "黄金比例" }),
+	center: Object.freeze({ en: "Center + diagonals", ko: "센터·대각선", zh: "中心 + 对角线" }),
+	safe: Object.freeze({ en: "Safe areas", ko: "세이프 에어리어", zh: "安全框" }),
 });
 
 export function nextGuideMode(mode) {

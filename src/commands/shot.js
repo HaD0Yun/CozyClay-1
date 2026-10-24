@@ -68,7 +68,7 @@ export function register(registry, ports) {
     const next = reflowStillShots(shots), frameCount = stillFrameCount(next);
     if (frameCount > STILL_FRAME_COUNT_MAX) {
       const en = `Storyboard is full (${STILL_FRAME_COUNT_MAX} frames); shorten a hold or remove a panel.`;
-      throw studioActionRefusal('INVALID_ARGUMENT', en, ko(en, `스토리보드가 가득 찼습니다 (${STILL_FRAME_COUNT_MAX}프레임). 홀드를 줄이거나 패널을 지우세요.`));
+      throw studioActionRefusal('INVALID_ARGUMENT', en, ko(en, `스토리보드가 가득 찼습니다 (${STILL_FRAME_COUNT_MAX}프레임). 홀드를 줄이거나 패널을 지우세요.`, `故事板已满（${STILL_FRAME_COUNT_MAX} 帧）；请缩短停留时长或删除一个面板。`));
     }
     const clip = next.find(shot => shot.kind !== 'still' && next.some(still => still.kind === 'still' && still.startFrame <= shot.endFrame && still.endFrame >= shot.startFrame));
     if (clip) fail('TARGET_NOT_READY', `The stills would overlap the clip shot ${clip.name} (frames ${clip.startFrame}-${clip.endFrame}); move or remove it first.`);

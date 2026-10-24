@@ -19,7 +19,7 @@ function useScopeBadges(scopes, titles) {
 		const paint = () => {
 			for (const row of document.querySelectorAll("[data-node-id]")) {
 				const title = owner.get(row.getAttribute("data-node-id"));
-				if (title) { row.setAttribute("data-task-scope", title); row.setAttribute("title", ko(`In task: ${title}`, `작업 중: ${title}`)); }
+				if (title) { row.setAttribute("data-task-scope", title); row.setAttribute("title", ko(`In task: ${title}`, `작업 중: ${title}`, `任务中：${title}`)); }
 				else if (row.hasAttribute("data-task-scope")) { row.removeAttribute("data-task-scope"); row.removeAttribute("title"); }
 			}
 		};

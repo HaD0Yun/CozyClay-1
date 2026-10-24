@@ -1,4 +1,4 @@
-import { ko, isKo } from "../locale.js";
+import { ko } from "../locale.js";
 
 export default function SubjectBox({ label, onRemove, onPose, posing, color, onColorChange, onColorEditStart }) {
 	return (
@@ -28,8 +28,8 @@ export default function SubjectBox({ label, onRemove, onPose, posing, color, onC
 						<button
 							type="button"
 							className={"cam-toggle" + (posing ? " active" : "")}
-							aria-label={isKo ? `${label} 포즈 열기` : `Open pose studio for ${label}`}
-							title={isKo ? `${label} 포즈` : `Pose ${label}`}
+							aria-label={ko(`Open pose studio for ${label}`, `${label} 포즈 열기`, `打开 ${label} 的姿势工作室`)}
+							title={ko(`Pose ${label}`, `${label} 포즈`, `${label} 姿势`)}
 							onClick={onPose}
 						>
 							{/* The Pose mode figure, not a keyboard glyph. */}

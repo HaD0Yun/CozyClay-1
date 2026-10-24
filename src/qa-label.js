@@ -14,7 +14,7 @@ export function qaProblems(qa) {
 export function qaLabel(qa) {
 	const n = qaProblems(qa);
 	if (qa?.ok || !n) return ko("QA clean", "QA 통과");
-	return ko(`${n} problem${n === 1 ? "" : "s"}`, `문제 ${n}개`);
+	return ko(`${n} problem${n === 1 ? "" : "s"}`, `문제 ${n}개`, `${n} 个问题`);
 }
 
 /** A receipt's QA phrase: "clean" | "2 problems (321 frame issues)". */

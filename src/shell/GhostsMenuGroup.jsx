@@ -26,7 +26,7 @@ export default function GhostsMenuGroup() {
 	const set = (patch) => runStudioAction("view.setGhosts", { mode: ghosts.mode, count: ghosts.count, step: ghosts.step, ...patch });
 	const options = [
 		{ value: "off", label: ko("Off", "끔") },
-		{ value: "step", label: ko(`Every ${ghosts.step} frames`, `${ghosts.step}프레임마다`) },
+		{ value: "step", label: ko(`Every ${ghosts.step} frames`, `${ghosts.step}프레임마다`, `每 ${ghosts.step} 帧`) },
 		{ value: "keys", label: ko("Key frames", "키 프레임") },
 	];
 	return (

@@ -66,9 +66,9 @@ export function stepResult(step) {
 	if (step.name === "script") {
 		const calls = Array.isArray(result.calls) ? result.calls : [];
 		const refused = calls.filter(call => call?.ok === false);
-		const head = ko(`${calls.length} call${calls.length === 1 ? "" : "s"}`, `호출 ${calls.length}회`);
+		const head = ko(`${calls.length} call${calls.length === 1 ? "" : "s"}`, `호출 ${calls.length}회`, `调用 ${calls.length} 次`);
 		if (result.ok === false) return clip(`${head} · ${result.error?.message ?? ko("failed", "실패")}${result.rollback ? ko(" · its edits were rolled back", " · 편집 되돌림") : ""}`);
-		return clip(refused.length ? `${head} · ${ko(`${refused.length} refused`, `${refused.length}회 거부`)}: ${refused[0].code ?? refused[0].message ?? ""}` : head);
+		return clip(refused.length ? `${head} · ${ko(`${refused.length} refused`, `${refused.length}회 거부`, `${refused.length} 次拒绝`)}: ${refused[0].code ?? refused[0].message ?? ""}` : head);
 	}
 	if (step.name === "verify_result") return clip(verifySummary(result, step.args));
 	if (typeof result.summary === "string" && result.summary) return clip(result.summary.replace(/\.$/, ""));
@@ -81,7 +81,7 @@ export function scriptNow(step) {
 	const now = step.progress;
 	if (!now) return "";
 	const label = now.label ?? (now.action ? actionWords(now.action) : actionWords(now.name ?? "call"));
-	return ko(`${label} (call ${now.index})`, `${label} (${now.index}번째 호출)`);
+	return ko(`${label} (call ${now.index})`, `${label} (${now.index}번째 호출)`, `${label}（第 ${now.index} 次调用）`);
 }
 
 /** The reasoning text so far as one line: its latest paragraph, or the one before while the latest has only begun. */
@@ -157,7 +157,7 @@ export function turnLayout(items, { streaming = false } = {}) {
 /** The header of a turn's step list: how many steps, how it ended and how long it took. */
 export function stepsHeader(block, now, formatClock) {
 	const count = block.steps.filter(step => step.kind === "tool").length;
-	const steps = count ? ` · ${ko(`${count} step${count === 1 ? "" : "s"}`, `${count}단계`)}` : "";
+	const steps = count ? ` · ${ko(`${count} step${count === 1 ? "" : "s"}`, `${count}단계`, `${count} 步`)}` : "";
 	if (block.live) {
 		const started = block.steps[0]?.startedAt;
 		return { tone: "busy", text: `${ko("Working", "작업 중")}${steps}${Number.isFinite(started) ? ` · ${formatClock(now - started)}` : ""}` };
@@ -179,7 +179,7 @@ export function changedLine(ids, context) {
 	const rest = ids.filter(id => !names.has(id)).length;
 	if (!named.length && !rest) return ko("Changed the scene", "장면을 바꿈");
 	const shown = named.slice(0, 4).join(", "), more = Math.max(0, named.length - 4) + rest;
-	return ko(`Changed ${shown || "the scene"}${more > 0 ? ` and ${more} more` : ""}`, `${shown || "장면"}${more > 0 ? ` 외 ${more}개` : ""} 변경`);
+	return ko(`Changed ${shown || "the scene"}${more > 0 ? ` and ${more} more` : ""}`, `${shown || "장면"}${more > 0 ? ` 외 ${more}개` : ""} 변경`, `修改了 ${shown || "场景"}${more > 0 ? ` 以及另外 ${more} 项` : ""}`);
 }
 
 /** What a stopped turn left behind, as far as its steps tell: their edits stay (one undo entry), or none landed. */

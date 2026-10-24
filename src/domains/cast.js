@@ -19,7 +19,7 @@ import {
 	nextCharacterId,
 	MAX_WAYPOINTS,
 } from "../app-stage.jsx";
-import { ko, isKo } from "../locale.js";
+import { ko } from "../locale.js";
 import { createIkState } from "../motion/ik.js";
 import { judgeNextWaypoint } from "../motion/waypoints.js";
 import { StudioProtocolError } from "../studio-agent-protocol.js";
@@ -435,7 +435,7 @@ export function useCast(appContext) {
 			appContext.shared.setTlFrame(target);
 			setWaypointMode(true);
 			selectActiveCharacterInHierarchy();
-			appContext.notify(isKo ? `프레임 ${target}의 루트 웨이포인트를 선택했어요. 탑뷰에서 점을 드래그해 위치를 조정하세요.` : `Root waypoint at frame ${target} selected — drag the pin in the Top-View to reposition.`);
+			appContext.notify(ko(`Root waypoint at frame ${target} selected — drag the pin in the Top-View to reposition.`, `프레임 ${target}의 루트 웨이포인트를 선택했어요. 탑뷰에서 점을 드래그해 위치를 조정하세요.`, `已选中第 ${target} 帧的根路径点 — 在顶视图中拖动该点调整位置。`));
 			return;
 		}
 		setPendingWaypointFrame(target);
@@ -443,7 +443,7 @@ export function useCast(appContext) {
 		appContext.shared.setTlFrame(target);
 		setWaypointMode(true);
 		selectActiveCharacterInHierarchy();
-		appContext.notify(isKo ? `프레임 ${target}이 예약됐어요. 샷 뷰 바닥을 클릭하면 그 위치에 루트 웨이포인트가 생성됩니다.` : `Frame ${target} is reserved — click the Shot-view floor to drop the root waypoint there.`);
+		appContext.notify(ko(`Frame ${target} is reserved — click the Shot-view floor to drop the root waypoint there.`, `프레임 ${target}이 예약됐어요. 샷 뷰 바닥을 클릭하면 그 위치에 루트 웨이포인트가 생성됩니다.`, `第 ${target} 帧已预留 — 点击镜头视图地面即可在该位置放置根路径点。`));
 	}
 
 	/* One root-path core for every cast member, shared by the Shot-view floor
@@ -483,7 +483,7 @@ export function useCast(appContext) {
 		const ordered = [...readCharacterWaypoints(characterId)].sort((a, b) => a.frame - b.frame);
 		if (ordered.length + 1 > MAX_WAYPOINTS) {
 			throw studioActionRefusal("TARGET_NOT_READY", `The root path is capped at ${MAX_WAYPOINTS} waypoints; remove one first.`,
-				isKo ? `루트 경로는 웨이포인트 ${MAX_WAYPOINTS}개까지 사용할 수 있어요` : `The root path is capped at ${MAX_WAYPOINTS} waypoints`);
+				ko(`The root path is capped at ${MAX_WAYPOINTS} waypoints`, `루트 경로는 웨이포인트 ${MAX_WAYPOINTS}개까지 사용할 수 있어요`, `根路径最多 ${MAX_WAYPOINTS} 个路径点`));
 		}
 		const x = clampRootPosition(point.x);
 		const z = clampRootPosition(point.z);
@@ -498,7 +498,7 @@ export function useCast(appContext) {
 		}
 		if (ordered.some((waypoint) => waypoint.frame === at)) {
 			throw studioActionRefusal("INVALID_ARGUMENT", `Frame ${at} already has a root waypoint — pick an empty frame or move that one.`,
-				isKo ? `프레임 ${at}에는 이미 루트 웨이포인트가 있어요. 타임라인에서 빈 프레임을 선택하세요.` : `Frame ${at} already has a root waypoint — pick an empty frame on the timeline.`);
+				ko(`Frame ${at} already has a root waypoint — pick an empty frame on the timeline.`, `프레임 ${at}에는 이미 루트 웨이포인트가 있어요. 타임라인에서 빈 프레임을 선택하세요.`, `第 ${at} 帧已有根路径点 — 请在时间线上选择空白帧。`));
 		}
 		// The generator cannot refuse an impossible pin, so placement is the
 		// last moment to: block out-of-band legs with the fix named.
@@ -507,7 +507,7 @@ export function useCast(appContext) {
 		const waypoint = { id: createStableItemId("waypoint"), frame: at, x, z, heading: null };
 		const next = [...ordered.slice(0, index), waypoint, ...ordered.slice(index)];
 		const verdict = validateWaypointAt(next, index, waypoint, start);
-		if (!verdict.ok) throw studioActionRefusal("INVALID_ARGUMENT", `Not placed — ${verdict.error}`, isKo ? `배치하지 못했어요 — ${verdict.error}` : `Not placed — ${verdict.error}`);
+		if (!verdict.ok) throw studioActionRefusal("INVALID_ARGUMENT", `Not placed — ${verdict.error}`, ko(`Not placed — ${verdict.error}`, `배치하지 못했어요 — ${verdict.error}`, `未能放置 — ${verdict.error}`));
 		writeCharacterWaypoints(characterId, next);
 		return { waypoint, index, warnings: verdict.warnings };
 	}
@@ -523,7 +523,7 @@ export function useCast(appContext) {
 		const verdict = validateWaypointAt(next, index, moved, { frame: 0, x: character.x, z: character.z });
 		if (!verdict.ok) {
 			throw studioActionRefusal("INVALID_ARGUMENT", `This position doesn't fit the root path: ${verdict.error}`,
-				isKo ? `이 위치는 루트 경로에 맞지 않아요: ${verdict.error}` : `This position doesn't fit the root path: ${verdict.error}`);
+				ko(`This position doesn't fit the root path: ${verdict.error}`, `이 위치는 루트 경로에 맞지 않아요: ${verdict.error}`, `此位置不符合根路径：${verdict.error}`));
 		}
 		writeCharacterWaypoints(characterId, next);
 		return { waypoint: moved, index, warnings: verdict.warnings };
@@ -572,9 +572,9 @@ export function useCast(appContext) {
 		setActiveWaypointId(waypoint.id);
 		setPendingWaypointFrame(null);
 		const { warnings } = validateWaypointAt(path, index, waypoint);
-		const placed = isKo
-			? `루트 웨이포인트 ${index + 1} 추가: 프레임 ${waypoint.frame}${pendingFrame != null ? " (타임라인 예약 프레임)" : pinned ? " (재생 헤드 위치)" : ` (~${(waypoint.frame / appContext.shared.tlFps).toFixed(1)}초 걷기 기준)`}`
-			: `Waypoint ${index + 1} — frame ${waypoint.frame} ${pendingFrame != null ? "(at the reserved frame)" : pinned ? "(at the playhead)" : `(~${(waypoint.frame / appContext.shared.tlFps).toFixed(1)}s at a walk)`}`;
+		const placed = ko(`Waypoint ${index + 1} — frame ${waypoint.frame} ${pendingFrame != null ? "(at the reserved frame)" : pinned ? "(at the playhead)" : `(~${(waypoint.frame / appContext.shared.tlFps).toFixed(1)}s at a walk)`}`,
+			`루트 웨이포인트 ${index + 1} 추가: 프레임 ${waypoint.frame}${pendingFrame != null ? " (타임라인 예약 프레임)" : pinned ? " (재생 헤드 위치)" : ` (~${(waypoint.frame / appContext.shared.tlFps).toFixed(1)}초 걷기 기준)`}`,
+			`已添加第 ${index + 1} 个路径点 — 第 ${waypoint.frame} 帧${pendingFrame != null ? "（预留帧）" : pinned ? "（播放头位置）" : `（按步行约 ${(waypoint.frame / appContext.shared.tlFps).toFixed(1)} 秒）`}`);
 		appContext.notify(warnings.length ? `${placed} · ⚠ ${warnings[0]}` : placed);
 	}
 
@@ -587,7 +587,7 @@ export function useCast(appContext) {
 		const path = readCharacterWaypoints(activeChar.id);
 		const index = path.findIndex((entry) => entry.id === id);
 		const { warnings } = index === -1 ? { warnings: [] } : validateWaypointAt(path, index, path[index]);
-		if (warnings.length) appContext.notify(isKo ? `루트 웨이포인트 이동됨: ${warnings[0]}` : `Root waypoint moved: ${warnings[0]}`);
+		if (warnings.length) appContext.notify(ko(`Root waypoint moved: ${warnings[0]}`, `루트 웨이포인트 이동됨: ${warnings[0]}`, `根路径点已移动：${warnings[0]}`));
 	}
 
 	function removeWaypoint(id) {
@@ -639,7 +639,7 @@ export function useCast(appContext) {
 		trackFeature("pose_save");
 		const pose = {
 			id: `custom_${Date.now()}`,
-			label: isKo ? `내 포즈 ${customPoses.length + 1}` : `My Pose ${customPoses.length + 1}`,
+			label: ko(`My Pose ${customPoses.length + 1}`, `내 포즈 ${customPoses.length + 1}`, `我的姿势 ${customPoses.length + 1}`),
 			prompt: "in the exact body pose shown in the blocking frame",
 			bones: capturePose(activeRig),
 			// A take frame carries its measured hips height; bottling the frame
@@ -650,8 +650,8 @@ export function useCast(appContext) {
 		domain.run('cast.savePose', { pose });
 		setStudioPick(pose.id);
 		appContext.notify(appContext.shared.motion
-			? ko(`Saved this frame's pose to the library as “${pose.label}”`, `지금 프레임의 자세를 “${pose.label}”로 라이브러리에 저장했어요`)
-			: ko(`Saved the current pose to the library as “${pose.label}”`, `지금 자세를 “${pose.label}”로 라이브러리에 저장했어요`));
+			? ko(`Saved this frame's pose to the library as “${pose.label}”`, `지금 프레임의 자세를 “${pose.label}”로 라이브러리에 저장했어요`, `已将当前帧的姿势以“${pose.label}”保存到姿势库`)
+			: ko(`Saved the current pose to the library as “${pose.label}”`, `지금 자세를 “${pose.label}”로 라이브러리에 저장했어요`, `已将当前姿势以“${pose.label}”保存到姿势库`));
 	}
 
 	/** A handle drag is an authored pose. When it ends, the rig as it now
@@ -677,7 +677,7 @@ export function useCast(appContext) {
 		trackFeature("pose_save");
 		const pose = {
 			id: `custom_${Date.now()}`,
-		label: isKo ? `내 포즈 ${customPoses.length + 1}` : `My Pose ${customPoses.length + 1}`,
+		label: ko(`My Pose ${customPoses.length + 1}`, `내 포즈 ${customPoses.length + 1}`, `我的姿势 ${customPoses.length + 1}`),
 			prompt: "in the exact body pose shown in the blocking frame",
 			bones: capturePose(rig),
 			custom: true,

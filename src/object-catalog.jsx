@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ko, isKo } from "./locale.js";
+import { ko } from "./locale.js";
 import { EMPTY_KIND, OBJECT_MENU_ENTRIES } from "./scene-objects.js";
 
 const GROUP_LABELS_KO = {
@@ -25,14 +25,13 @@ const OBJECT_LABELS_KO = {
 };
 
 function displayObjectGroupName(name) {
-	return isKo ? (GROUP_LABELS_KO[name] ?? name) : name;
+	return GROUP_LABELS_KO[name] ? ko(name, GROUP_LABELS_KO[name]) : name;
 }
 
 export function displayObjectLabel(label) {
-	if (!isKo) return label;
 	const numbered = label.match(/^(.+?) (\d+)$/);
-	if (numbered && OBJECT_LABELS_KO[numbered[1]]) return `${OBJECT_LABELS_KO[numbered[1]]} ${numbered[2]}`;
-	return OBJECT_LABELS_KO[label] ?? label;
+	if (numbered && OBJECT_LABELS_KO[numbered[1]]) return `${ko(numbered[1], OBJECT_LABELS_KO[numbered[1]])} ${numbered[2]}`;
+	return OBJECT_LABELS_KO[label] ? ko(label, OBJECT_LABELS_KO[label]) : label;
 }
 
 /**

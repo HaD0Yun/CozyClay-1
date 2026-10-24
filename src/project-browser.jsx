@@ -405,7 +405,7 @@ function RecentList({ entries, currentName, onOpen, onOpenFile, onRemove, compac
 						<span>{formatDate(entry.date)}</span>
 						<small>{entry.shots ?? "—"}{ko(" shots", " 샷")}</small>
 					</button>
-					{entry.removable && <button type="button" className="v2-start-recent-remove" aria-label={ko(`Remove ${entry.name} from recent projects`, `최근 프로젝트에서 ${entry.name} 제거`)} title={ko("Remove from list", "목록에서 제거")} onClick={() => onRemove(entry)}>×</button>}
+					{entry.removable && <button type="button" className="v2-start-recent-remove" aria-label={ko(`Remove ${entry.name} from recent projects`, `최근 프로젝트에서 ${entry.name} 제거`, `从最近项目中移除 ${entry.name}`)} title={ko("Remove from list", "목록에서 제거")} onClick={() => onRemove(entry)}>×</button>}
 				</div>
 			))}
 		</div>

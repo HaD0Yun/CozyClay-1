@@ -1,5 +1,5 @@
 import Foldout from "./Foldout.jsx";
-import { ko, isKo } from "../locale.js";
+import { ko } from "../locale.js";
 import { PoseTileGrid } from "../posestudio.jsx";
 import { DEFAULT_POSE } from "../poses.js";
 import { poseLabelKo } from "../app-stage.jsx";
@@ -19,7 +19,7 @@ export default function PosePanel({
 					    is the same grid the studio shows, applied to whichever
 					    character the hierarchy has selected. */}
 					<p className="inspector-hint v2-details-hint">
-						{isKo ? `인물 ${activeCharIndex + 1}의 자세입니다.` : `The pose on Subject ${activeCharIndex + 1}.`}
+						{ko(`The pose on Subject ${activeCharIndex + 1}.`, `인물 ${activeCharIndex + 1}의 자세입니다.`, `角色 ${activeCharIndex + 1} 的姿势。`)}
 					</p>
 					<PoseTileGrid
 						poses={selectablePoses}
