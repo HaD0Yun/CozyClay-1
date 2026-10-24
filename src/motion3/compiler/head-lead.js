@@ -54,7 +54,8 @@ function looked(keys, f0, f1) {
 export function leadHead(baked, keys, frameCount, lead = 5) {
 	if (!(lead > 0)) return;
 	const zero = new Array(frameCount).fill(0), yaw = baked.yaw ?? zero, spine = baked.spine_yaw ?? zero;
-	const walks = walkSpans(keys), trunk = heading(yaw.map((v, f) => v + spine[f]), walks), at = f => trunk[Math.min(frameCount - 1, f)];
+	// a retime keeps its keys on fractional frames (fix/retime.js): the spans are frame indices
+	const walks = walkSpans(keys).map(([a, b]) => [Math.ceil(a), Math.floor(b)]), trunk = heading(yaw.map((v, f) => v + spine[f]), walks), at = f => trunk[Math.min(frameCount - 1, f)];
 	const spans = merged([...walks, ...turnSpans(trunk, frameCount, lead + FADE, FADE)]);
 	let head = null;
 	for (const [f0, f1] of spans) {

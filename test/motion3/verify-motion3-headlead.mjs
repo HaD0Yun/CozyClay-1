@@ -45,6 +45,10 @@ const straight = run({ ...turnWalk(), use: [{ skill: "standIdle", f0: 0, args: {
 expect("a turn and back reads its lead; a straight walk reads none", there?.[0] >= 3 && straight === null, json([there, straight]));
 expect("headLead takes whole frames only", (() => { try { run(turnWalk({ flow: { headLead: 2.5 } })); return false; } catch (e) { return /headLead must be true, false or 0\.\.12 whole frames/.test(e.message); } })());
 
+// a retime moves the walk's keys onto fractional frames: the lead still lands on frames
+const retimed = run(turnWalk({ frames: 300, fix: { retime: true }, checks: { limits: { speedCore: 0.02 } } })), hy = retimed.out.baked.head_yaw;
+expect("a retimed walk (keys on fractional frames) leads on whole frames", retimed.out.keys.some(k => k.f % 1) && Object.keys(hy).every(k => /^\d+$/.test(k)) && retimed.observations.life.lead?.[0] >= 3, json(retimed.observations.life.lead));
+
 // a look the keys set during the walk wins: the head yaw is exactly what it is without the lead
 const keys = [{ f: 40, set: { head_yaw: 20 } }, { f: 90, set: { head_yaw: -10 } }];
 const looked = run(turnWalk({ keys })), lookedOff = run(turnWalk({ keys, flow: { headLead: false } }));
