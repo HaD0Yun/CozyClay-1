@@ -52,6 +52,8 @@ async function httpFixture({ modelResponse, live, getBridgeOrigin = () => null, 
   const auth = { getAccessToken: async () => "fixture-token" };
   const fakeModel = createFakeModel();
   const convertInput = (message) => {
+    // the prompt and tool declarations travel in pi's system messages; the fixture passes tools separately
+    if (message.role === "system") return [];
     if (message.role === "user") return { role: "user", content: (Array.isArray(message.content) ? message.content : [{ type: "text", text: message.content }]).map((part) => part.type === "image" ? { type: "input_image", image_url: `data:${part.mimeType};base64,${part.data}` } : { type: "input_text", text: part.text }) };
     if (message.role === "assistant") return { type: "message", role: "assistant", content: (message.content || []).filter((part) => part.type === "text").map((part) => ({ type: "output_text", text: part.text })) };
     if (message.role === "toolResult") {

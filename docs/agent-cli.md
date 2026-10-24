@@ -509,6 +509,7 @@ keep resolving.
 | --- | --- | --- |
 | `openai-codex` | ChatGPT (OpenAI Codex) | your ChatGPT sign-in, unchanged |
 | `anthropic` | Anthropic | API key, `ANTHROPIC_API_KEY` |
+| `anthropic-subscription` | Claude (Anthropic) | Claude sign-in (OAuth); requests run through the official Claude Code binary |
 | `openai` | OpenAI | API key, `OPENAI_API_KEY` |
 | `google` | Google Gemini | API key, `GEMINI_API_KEY` or `GOOGLE_API_KEY` |
 | `openrouter` | OpenRouter | API key, `OPENROUTER_API_KEY` |
@@ -516,8 +517,21 @@ keep resolving.
 
 ChatGPT sign-in did not change: the panel still runs the Codex OAuth flow,
 the token still lives in `~/.config/cozyclay/codex-auth.json`, and it is still
-the only provider you sign in to rather than paste a key for. There are no
-OAuth flows for the other five.
+one of only two providers you sign in to rather than paste a key for.
+
+The second sign-in is `anthropic-subscription`. Anthropic ties a Claude
+Pro/Max OAuth token to Claude Code, so a third-party client cannot spend it
+against the API directly. The lane therefore never calls the Anthropic API
+itself: it spawns the official Claude Code binary through the Claude Agent
+SDK, hands the token over as `CLAUDE_CODE_OAUTH_TOKEN`, and replays the
+session history into each one-shot query (`bin/agent/anthropic-subscription.mjs`).
+The binary resolves from `CLAUDE_CODE_EXECUTABLE` first, then the
+`@anthropic-ai/claude-agent-sdk` platform package npm installed, then `claude`
+on `PATH`. The OAuth credential (access, refresh, expires) lives in
+`auth.json` like any pi OAuth login, and pi refreshes it on the five-minute
+window. Claude Code's own tools are disabled and CozyClay's tools are served
+as an SDK MCP server whose execution is always denied, so every tool call
+comes back to the host and runs where it always ran.
 
 ### Where the keys live
 

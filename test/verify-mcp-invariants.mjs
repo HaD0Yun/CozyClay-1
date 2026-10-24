@@ -8,9 +8,13 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const SOURCE_DIRECTORIES = ["src", "tools", "bin", "mcp"];
 const SOURCE_EXTENSIONS = new Set([".js", ".jsx", ".mjs", ".cjs"]);
 const ROOT_DEPENDENCY_ALLOWLIST = Object.freeze({
-	"@earendil-works/pi-agent-core": "0.85.1",
-	"@earendil-works/pi-ai": "0.85.1",
-	"@earendil-works/pi-codemode": "1.1.0",
+	// the anthropic-subscription lane spawns the official Claude Code binary through the SDK
+	"@anthropic-ai/claude-agent-sdk": "^0.3.306",
+	"@earendil-works/pi-agent-core": "1.4.0",
+	"@earendil-works/pi-ai": "1.4.0",
+	"@earendil-works/pi-codemode": "1.4.0",
+	// JSON Schema → Zod shape for the SDK's tool() definitions (SDK already depends on zod)
+	zod: "^4.6.7",
 });
 const MCP_DEPENDENCY_BASELINE = Object.freeze({
 	"@modelcontextprotocol/sdk": "^1.30.0",

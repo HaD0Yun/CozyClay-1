@@ -134,7 +134,7 @@ assert.ok((await envStore.list()).some((entry) => entry.providerId === "openai-c
 	console.log("PASS codex-auth status() survives a corrupt providers.json");
 
 	const corruptModels = await providers.listAgentModels({ auth, keys, env: process.env });
-	assert.equal(corruptModels.providers.length, 6, "listAgentModels still lists all six providers with a corrupt providers.json");
+	assert.equal(corruptModels.providers.length, 7, "listAgentModels still lists all seven providers with a corrupt providers.json");
 	assert.ok(corruptModels.providers.every((provider) => provider.id !== "anthropic" || provider.signedIn === false), "the key provider reports signed-out, not an unhandled rejection");
 	console.log("PASS listAgentModels tolerates a corrupt providers.json");
 
@@ -302,7 +302,7 @@ assert.ok((await envStore.list()).some((entry) => entry.providerId === "openai-c
 			res.end(JSON.stringify({ data: [
 				{ id: "gpt-6-astra" }, { id: "claude-sonnet-5" }, { id: "not-in-pi" },
 				// Live-only models pi's catalogue does not know, routed by their owner.
-				{ id: "gpt-6-luna", owned_by: "openai" }, { id: "claude-opus-5-5", owned_by: "anthropic" },
+				{ id: "gpt-7-luna", owned_by: "openai" }, { id: "claude-opus-6", owned_by: "anthropic" },
 				{ id: "glm-5.2", owned_by: "opencode-go" }, { id: "opencode-go/glm-5.2", owned_by: "opencode-go" },
 				{ id: "gpt-image-2", owned_by: "openai" },
 			] }));
@@ -322,11 +322,11 @@ assert.ok((await envStore.list()).some((entry) => entry.providerId === "openai-c
 	assert.equal(catalogueCalls, 1);
 	assert.equal(cliproxy.signedIn, true);
 	assert.equal(cliproxy.authSource, "env");
-	assert.deepEqual(cliproxy.models.map((model) => model.id), ["gpt-6-astra", "claude-sonnet-5", "gpt-6-luna", "claude-opus-5-5"]);
-	const luna = envRegistry.getModel("cliproxy", "gpt-6-luna");
+	assert.deepEqual(cliproxy.models.map((model) => model.id), ["gpt-6-astra", "claude-sonnet-5", "gpt-7-luna", "claude-opus-6"]);
+	const luna = envRegistry.getModel("cliproxy", "gpt-7-luna");
 	assert.equal(luna.api, "openai-responses");
 	assert.equal(luna.baseUrl, `${base}/v1`);
-	const opus = envRegistry.getModel("cliproxy", "claude-opus-5-5");
+	const opus = envRegistry.getModel("cliproxy", "claude-opus-6");
 	assert.equal(opus.api, "anthropic-messages");
 	assert.equal(opus.baseUrl, base);
 	assert.equal(opus.compat.supportsMidConvoEffort, false);
@@ -534,7 +534,7 @@ console.log("agent provider verification passed");
 		const noneRegistry = await providers.createModels({ auth: fixtureAuth, codexBaseUrl: fixtureOrigin });
 		await providers.listAgentModels({ models: noneRegistry, codex, auth: fixtureAuth, keys: { readKeys: () => ({}) }, env: {} });
 		const noneModel = noneRegistry.getModel("openai-codex", noneId);
-		checkEffort(() => assert.equal(noneModel?.thinkingLevelMap?.off, "off"));
+		checkEffort(() => assert.equal(noneModel?.thinkingLevelMap?.off, "none"));
 		checkEffort(() => assert.equal(noneModel?.thinkingLevelMap?.minimal, null));
 		checkEffort(() => assert.equal(noneModel?.thinkingLevelMap?.low, null));
 		checkEffort(() => assert.equal(noneModel?.thinkingLevelMap?.medium, "medium"));
@@ -549,7 +549,8 @@ console.log("agent provider verification passed");
 		const noReasoningFrames = [...(await noReasoningResponse.text()).matchAll(/^data: (.+)$/gm)].map((match) => JSON.parse(match[1]));
 		checkEffort(() => assert.deepEqual(noReasoningFrames.filter((frame) => frame.type === "error"), []));
 		checkEffort(() => assert.equal(noReasoningFrames.at(-1)?.type, "done"));
-		checkEffort(() => assert.deepEqual(received, [liveId, "gpt-6-astra", liveId, noneId].map((model, index) => ({ path: "/codex/responses", model, ...(index === 3 ? {} : { effort: "medium" }) })), "the provider preserves no-reasoning instead of escalating it"));
+		// pi sends a model's off mapping on the wire, so no-reasoning arrives as Codex's own "none"
+		checkEffort(() => assert.deepEqual(received, [liveId, "gpt-6-astra", liveId, noneId].map((model, index) => ({ path: "/codex/responses", model, effort: index === 3 ? "none" : "medium" })), "the provider preserves no-reasoning instead of escalating it"));
 		assert.deepEqual(effortMismatches, [], `live no-reasoning effort mismatches: ${JSON.stringify(effortMismatches)}`);
 		const refreshed = await Promise.all([getCatalogue(), getCatalogue()]);
 		assert.ok(refreshed.every((result) => result.models.some((model) => model.id === advertised.id)));

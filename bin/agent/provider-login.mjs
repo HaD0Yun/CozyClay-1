@@ -27,7 +27,9 @@ export async function loginOptions(models, { chatgpt } = {}) {
 		const check = provider.id === "openai-codex"
 			? (chatgpt?.() ? { type: "oauth", source: "ChatGPT" } : undefined)
 			: await models.checkAuth(provider.id).catch(() => undefined);
-		options.push({ id: provider.id, name: provider.name ?? provider.id, methods, connected: !!check, via: check?.type ?? null, source: check?.source ?? null });
+		// pi 0.99 renamed its Codex lane "OpenAI Codex (legacy)"; here it is CozyClay's ChatGPT sign-in, so it keeps its name
+		const name = provider.id === "openai-codex" ? "OpenAI Codex" : provider.name ?? provider.id;
+		options.push({ id: provider.id, name, methods, connected: !!check, via: check?.type ?? null, source: check?.source ?? null });
 	}
 	const rank = (entry) => (entry.connected ? 0 : entry.methods.some((method) => method.subscription) ? 1 : 2);
 	return options.sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
