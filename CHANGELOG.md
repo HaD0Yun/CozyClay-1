@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+## 3.1.3 - 2026-10-24
+
+More ways to connect a model (Claude Pro/Max, OpenAI-compatible servers, MiniMax M3.1 Flash), a Simplified Chinese UI, and easier project opening.
+
+Agent
+
+- Sign in with a Claude Pro/Max subscription and run Claude models in the
+  agent panel without an API key. Turns go through the official Claude Code
+  binary.
+- Connect an OpenAI-compatible server (LM Studio, Ollama) with its address
+  and an optional key. The model list comes from the server.
+- MiniMax M3 and M3.1 Flash, on both the global and the China endpoint.
+- The agent runs on pi 1.4.0, which adds the newer Claude, GPT and Gemini
+  models to the picker. A turn stopped mid-tool keeps its prompt after a
+  reload.
+
+Studio
+
+- Simplified Chinese (简体中文) as an opt-in UI language in Settings.
+- An Open project card on the start screen. A browser that refuses to read
+  the picked file falls back to a file input, a slow pick no longer times
+  out, and a failed open shows its message above the start screen.
+- IK handles answer a press on their drawn sphere, and rotation rings win
+  over an arrow's invisible hit volume.
+
 ## 3.1.2 - 2026-10-23
 
 The Studio agent repairs motion faster and ends with a take, exports can go to a folder you choose, and a round of fixes for the live hub, MCP, prompts and docs.
