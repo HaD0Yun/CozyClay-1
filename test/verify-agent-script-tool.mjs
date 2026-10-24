@@ -60,10 +60,13 @@ const actions = {
 	"object.addSettling": { id: "object.addSettling", kind: "mutation", undoDomain: "objects", exposure: "public" },
 	"take.install": { id: "take.install", kind: "mutation", undoDomain: "motion", exposure: "public" },
 };
+// the call id each invoked action saw in its context (motion.compile's stop rule counts agent calls by it)
+const invokedCalls = [];
 const registry = {
 	state: () => ({}),
 	prepare(id, args) { if (!actions[id]) throw Object.assign(new Error(`Unknown action ${id}`), { code: "INVALID_ARGUMENT" }); return { entry: actions[id], args }; },
-	invoke(entry, args) {
+	invoke(entry, args, context) {
+		invokedCalls.push(context?.callId ?? null);
 		if (entry.id === "take.install") { takes.write(rows => ({ ...rows, [args.characterId]: args.takeId })); return { affectedIds: [args.characterId], summary: "Installed take" }; }
 		objects.write(rows => [...rows, args.object]);
 		if (entry.id === "object.addSettling") renders.push(() => { revision.current++; });
@@ -109,7 +112,7 @@ const commands = [];
 const liveHub = {
 	command: async (name, payload) => {
 		render();
-		commands.push({ name, action: payload?.args?.action ?? null });
+		commands.push({ name, action: payload?.args?.action ?? null, callId: payload?.callId ?? null });
 		if (name === "inspect_studio") return { context: { revision: { scene: revision.current } } };
 		if (name === "verify_result") return { receiptId: null, revision: { scene: revision.current, physics: 9, view: 18 }, stale: false, checks: { coverage: "current-scene-targets" }, visualRefs: [{ imageId: "capture-1" }], unsupportedChecks: [] };
 		if (name === "resolve_studio_image") return { imageId: "capture-1", dataUrl: png, revision: { scene: revision.current } };
@@ -198,9 +201,13 @@ const toolCommands = () => commands.filter(command => command.name !== "resolve_
 	assert.ok(events.indexOf(progress.at(-1)) < events.indexOf(dones[0]), "the progress frames come before the script ends");
 	assert.deepEqual(result.value, { placed: ["pillar-0", "pillar-1", "pillar-2", "pillar-3", "pillar-4"], visualStatus: "attached", carriesImage: false });
 	assert.deepEqual(result.output, ["placed 5 at revision 41"]);
+	// every nested command carries the script's tool call id, and the bus hands it to the action's context
+	assert.deepEqual(toolCommands().filter(command => command.name === "run_action").map(command => command.callId), Array(5).fill("script-1"), "the script's nested run_action commands carry its call id");
+	assert.deepEqual(invokedCalls.slice(-5), Array(5).fill("script-1"), "the bus gives each action context.callId");
 	assert.ok(!JSON.stringify(result).includes("dataUrl"), "no dataUrl anywhere in the script result");
 	assert.ok(!raw.includes("data:image/"), "no image bytes anywhere in the SSE stream");
-	assert.ok(!JSON.stringify(modelCalls.at(-1).messages).includes("data:image/"), "no image bytes reach the model");
+	// the system message holds the prompt and tool declarations, which name data:image/ URLs in prose
+	assert.ok(!JSON.stringify(modelCalls.at(-1).messages.filter(message => message.role !== "system")).includes("data:image/"), "no image bytes reach the model");
 	const placed = objects.read().slice(preTurn.objects.length);
 	assert.equal(placed.length, 5);
 	assert.ok(placed.every(object => Math.abs(Math.hypot(object.x, object.z) - 3) < 0.01), "positions were computed on a 3 m circle");

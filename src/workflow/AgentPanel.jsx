@@ -3,12 +3,11 @@ import { FiAlertTriangle, FiArrowUp, FiCamera, FiCheck, FiChevronRight, FiClock,
 import { ATTACHMENT_ACCEPT, ATTACHMENT_FAILED_NOTICE, ATTACHMENT_LIMIT_NOTICE, ATTACHMENT_TYPE_NOTICE, attachmentFilesFromTransfer, attachmentFromFile, transferCarriesFiles } from "./attachment-image.js";
 import { isImeComposing } from "../ime.js";
 import { useStudioShell } from "../shell/studio-shell-context.js";
-import { ko } from "../locale.js";
+import { ko } from "../locale.js"; import { saveExport } from "../export-workspace.js";
 import {
 	AGENT_PANEL_OVERLAY_BREAKPOINT,
 	AGENT_PANEL_RAIL_WIDTH,
-	AGENT_PANEL_WIDTH_MAX,
-	AGENT_PANEL_WIDTH_MIN,
+	AGENT_PANEL_WIDTH_MAX, AGENT_PANEL_WIDTH_MIN,
 	AGENT_STATES,
 	agentServerUnavailable,
 	describeActivity,
@@ -29,8 +28,7 @@ import {
 	formatTurnClock,
 	formatResetIn,
 	readStoredPanelWidth,
-	storeModel,
-	storePanelWidth,
+	storeModel, storePanelWidth,
 	STUDIO_SESSION_STORAGE_KEY,
 	selectedModelRoles,
 	shortModelId,
@@ -43,6 +41,7 @@ const TaskBoard = lazy(() => import("./TaskBoard.jsx"));
 import { AgentProgressCard } from "./AgentProgressCard.jsx";
 import { LoginPanel } from "./LoginPanel.jsx";
 import { TurnSteps } from "./AgentTurnSteps.jsx";
+import { PlanCard } from "./AgentPlanCard.jsx";
 import { ReplyText } from "./AgentReplyText.jsx";
 import { stepLabel, turnLayout } from "./agent-turn.js";
 
@@ -74,7 +73,7 @@ function ImageResultCard({ image, onUse, onUndo, onRegenerate, onOpen }) {
 			? <div className="agent-placed"><StatusDot tone="ok" />Placed<button type="button" className="agent-image-undo" disabled={applying} onClick={() => onUndo(image)}>{applying ? "Removing…" : "Undo"}</button></div>
 			: <div className="agent-image-actions">
 				<button type="button" className="primary agent-image-use" disabled={applying} onClick={() => onUse(image)}><FiImage size={11} /> {applying ? "Applying…" : "Use in scene"}</button>
-				<a className="agent-image-download" role="button" href={image.dataUrl} download={`${image.imageId || "agent-image"}.png`}><FiDownload size={11} /> Download</a>
+				<a className="agent-image-download" role="button" href={image.dataUrl} download={`${image.imageId || "agent-image"}.png`} onClick={(event) => { event.preventDefault(); void saveExport(image.dataUrl, `${image.imageId || "agent-image"}.png`); }}><FiDownload size={11} /> Download</a>
 				<button type="button" className="agent-image-regenerate" onClick={() => onRegenerate(image)}><FiRotateCw size={11} /> Regenerate</button>
 			</div>}
 		{/* The card states what the editor actually did: an unacknowledged or
@@ -908,6 +907,7 @@ export default function AgentPanel({
 				if (item.kind === "receipt") return <div className="agent-row" key={item.id}><ReceiptCard item={item} /></div>;
 				if (item.kind === "failure") return <div className="agent-row" key={item.id}><FailureCard failure={item.failure} onRetry={() => runTurn(chat.lastPrompt)} onFixKey={openProviderKeys} /></div>;
 				if (item.kind === "supervisor") return <div className="agent-row" key={item.id}><SupervisorCard note={item} onSend={(text) => { store.setDraft(text); runTurn(text); }} /></div>;
+				if (item.kind === "plan") return <PlanCard key={item.id} plan={item} live={streaming && !item.outcome} />;
 				return <div className="agent-row" key={item.id}><ImageResultCard image={item} onUse={(image) => store.applyImage(image.id)} onUndo={(image) => store.undoImage(image.id)} onRegenerate={() => runTurn(chat.lastPrompt)} onOpen={setLightbox} /></div>;
 			})}
 

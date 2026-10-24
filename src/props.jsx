@@ -19,6 +19,7 @@ import { CUTOUT_KIND, MESH_KIND, EMPTY_KIND, EMPTY_MARKER_SIZE, SCULPT_KIND } fr
 import { TEXT_KIND } from "./text/text-record.js";
 import { TextObject } from "./text/text-object.jsx";
 import { buildSculptGroup, disposeSculptGroup } from "./sculpt-geometry.js";
+import { depthRankProps, usePrimitiveLook } from "./primitive-look.js";
 import { subscribeToAssetTexture } from "./scene-asset-cache.js";
 import { ImportedMesh } from "./imported-mesh.jsx";
 import { EffectMarker, EffectsLayer } from "./effects/EffectsLayer.jsx";
@@ -30,29 +31,23 @@ import { LIGHT_KIND, capPracticalShadows } from "./object-look.js";
 import { SceneLight, useLookRefresh } from "./scene-lights.jsx";
 import { placeObjectLook } from "./scene-light-place.js";
 
-// Parts of an assembly can share a plane with an earlier part (hood top and
-// grille top). The depth test can't order them and the winner flips as the
-// camera moves, so a ranked part is pulled toward the camera by `rank` steps
-// (negative = nearer). Rank 0 gets nothing: those materials stay untouched.
-function depthRankProps(rank) {
-	return rank > 0 ? { polygonOffset: true, polygonOffsetFactor: -rank, polygonOffsetUnits: -rank } : null;
-}
-
 /**
  * The creatable primitives, Unity's 3D Object menu in clay. Each one is built
  * with its base on the local floor (y = 0), so an object's `y` reads as height
- * above the deck rather than "half of me is underground".
+ * above the deck rather than "half of me is underground". A surface preset
+ * (primitive-look.js) replaces the clay; glass casts no shadow.
  */
-function Primitive({ kind, color, autoColor, depthRank = 0 }) {
+function Primitive({ kind, object, color, autoColor, depthRank = 0 }) {
 	const side = kind === "plane" ? THREE.DoubleSide : THREE.FrontSide;
-	const material = autoColor ? (
+	const look = usePrimitiveLook(object, kind, side, depthRank), cast = !(look?.transmission > 0);
+	const material = look ? <primitive object={look} attach="material" /> : autoColor ? (
 		<meshStandardMaterial {...autoFlat(autoColor)} side={side} {...depthRankProps(depthRank)} />
 	) : (
 		<meshStandardMaterial color={color} roughness={0.82} side={side} {...depthRankProps(depthRank)} />
 	);
 	if (kind === "sphere") {
 		return (
-			<mesh position={[0, 0.5, 0]} castShadow receiveShadow>
+			<mesh position={[0, 0.5, 0]} castShadow={cast} receiveShadow>
 				<sphereGeometry args={[0.5, 28, 18]} />
 				{material}
 			</mesh>
@@ -60,7 +55,7 @@ function Primitive({ kind, color, autoColor, depthRank = 0 }) {
 	}
 	if (kind === "capsule") {
 		return (
-			<mesh position={[0, 0.7, 0]} castShadow receiveShadow>
+			<mesh position={[0, 0.7, 0]} castShadow={cast} receiveShadow>
 				<capsuleGeometry args={[0.35, 0.7, 6, 18]} />
 				{material}
 			</mesh>
@@ -68,7 +63,7 @@ function Primitive({ kind, color, autoColor, depthRank = 0 }) {
 	}
 	if (kind === "cylinder") {
 		return (
-			<mesh position={[0, 0.5, 0]} castShadow receiveShadow>
+			<mesh position={[0, 0.5, 0]} castShadow={cast} receiveShadow>
 				<cylinderGeometry args={[0.5, 0.5, 1, 26]} />
 				{material}
 			</mesh>
@@ -76,7 +71,7 @@ function Primitive({ kind, color, autoColor, depthRank = 0 }) {
 	}
 	if (kind === "cone") {
 		return (
-			<mesh position={[0, 0.5, 0]} castShadow receiveShadow>
+			<mesh position={[0, 0.5, 0]} castShadow={cast} receiveShadow>
 				<coneGeometry args={[0.5, 1, 26]} />
 				{material}
 			</mesh>
@@ -91,7 +86,7 @@ function Primitive({ kind, color, autoColor, depthRank = 0 }) {
 		);
 	}
 	return (
-		<mesh position={[0, 0.5, 0]} castShadow receiveShadow>
+		<mesh position={[0, 0.5, 0]} castShadow={cast} receiveShadow>
 			<boxGeometry args={[1, 1, 1]} />
 			{material}
 		</mesh>
@@ -162,20 +157,17 @@ function Cutout({ object }) {
 
 /**
  * A sculpt: the clay parts its recipe describes, rebuilt only when the recipe
- * or the look changes. Each part keeps its own clay colour; auto-colour paints
- * the whole sculpt flat like any other prop, because it is one object.
+ * or the look changes. The shaded look is buildSculptGroup's own clay (part
+ * colours, gradients, scatter tints); auto-colour paints the whole sculpt flat
+ * like any other prop, because it is one object. Depth rank rides on either.
  */
 function Sculpt({ object, depthRank = 0 }) {
 	const { recipe, autoColor } = object;
-	const group = useMemo(
-		() => buildSculptGroup(recipe, {
-			materialFor: (part) => new THREE.MeshStandardMaterial({
-				...(autoColor ? autoFlat(autoColor) : { color: part.color, roughness: 0.82, metalness: 0 }),
-				...depthRankProps(depthRank),
-			}),
-		}),
-		[recipe, autoColor, depthRank],
-	);
+	const group = useMemo(() => {
+		const built = buildSculptGroup(recipe, autoColor ? { materialFor: () => new THREE.MeshStandardMaterial(autoFlat(autoColor)) } : {});
+		built.traverse((node) => node.material && Object.assign(node.material, depthRankProps(depthRank)));
+		return built;
+	}, [recipe, autoColor, depthRank]);
 	useEffect(() => () => disposeSculptGroup(group), [group]);
 	return <primitive object={group} />;
 }
@@ -242,7 +234,7 @@ function SceneObjectContent({ object, depthRank = 0 }) {
 	if (renderer === MESH_KIND) return <ImportedMesh object={object} />;
 	if (renderer === SCULPT_KIND) return <Sculpt object={object} depthRank={depthRank} />;
 	if (renderer === TEXT_KIND) return <TextObject object={object} />;
-	if (PRIMITIVE_KINDS.has(renderer)) return <Primitive kind={renderer} color={color} autoColor={autoColor} depthRank={depthRank} />;
+	if (PRIMITIVE_KINDS.has(renderer)) return <Primitive kind={renderer} object={object} color={color} autoColor={autoColor} depthRank={depthRank} />;
 	return null;
 }
 

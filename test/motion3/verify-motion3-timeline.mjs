@@ -2,13 +2,16 @@
 // Lane B (C4): output.timeline. The car-exit scene built from skills gives one beat per skill
 // with the frames expandUse reports, the end pose at each beat's last frame, the planted foot
 // spans (the walk's run to its end) and the cigarette/lighter show/hide events; a walk
-// generator and loose keys are beats of their own; grab/release come from inHandAt; at most 12.
+// generator and loose keys are beats of their own; grab/release come from inHandAt; at most 12. Then
+// observations.asked and output.brief on a walk to a cup.
 import { SCENE_OBJECTS } from "./fixtures/exitcar-scene.mjs";
 import { SCENE_OBJECTS as CUP_OBJECTS } from "./fixtures/cup-scene.mjs";
 import { compileSpec } from "../../src/motion3/pipeline.js";
 import { motionScene } from "../../src/motion3/scene.js";
 import { skeletonFor } from "../../src/motion3/rigs/index.js";
 import { dist } from "../../src/motion3/compiler/math.js";
+import { refPoint } from "../../src/motion3/refs.js";
+import { fitOutput, briefOf, MOTION_OUTPUT_BUDGET } from "../../src/motion3/report.js";
 
 let failures = 0;
 function expect(name, condition, detail = "") {
@@ -68,6 +71,49 @@ expect("grab and release are events at their frames", json(cev) === json(["20 cy
 const mid = compileSpec({ ...cup.spec, keys: [cup.spec.keys[0], { f: 30, set: { head_yaw: 0 } }], frames: 60 }, { sk: ysk, scene: motionScene(CUP_OBJECTS) }, { checks: {} });
 expect("a hand holding an object at f[1] is on that object", mid.timeline[0].end.on_l === "object:cylinder" && mid.timeline[0].end.on_r === null, json(mid.timeline[0].end));
 expect("no hand is on anything after release", kb.end.on_l === null, json(kb.end));
+
+// 5. observations.asked (qa/asked.js) and output.brief (report.js): per skill where the feet end against its args, per
+// contact its frames and gap, per goal its points; the brief's fixed lines; both inside the answer budget.
+const cupScene = motionScene(CUP_OBJECTS), point = (f, ref) => refPoint(walkCup.out, f, ref);
+const walkCup = compileSpec({ schema: "cozyclay.motion-spec.v1", fps: 24, frames: 160,
+	use: [{ skill: "standIdle", args: { at: [0.15, -0.6], heading: 0 }, f0: 0 }, { skill: "walkTo", args: { to: [0.15, 0.3], steps: 3 }, f0: 4 },
+		{ skill: "reachGrip", args: { anchor: "cup", side: "l", define: { kind: "object", object: "cube-6", local: [0, 0.03, 0] } }, f0: 100 }],
+	objects: { "empty-2": { prop: "cupGrip", grab: 120, release: 140 } },
+	checks: { contacts: [{ name: "never touched", point: "joint:RightHand", target: "anchor:cup", when: "w_cup_r" }] },
+	goals: [{ name: "cup lifted", moved: "object:empty-2", by: 0.05, at: [125, 135] }, { name: "fingers at cup top", near: ["joint:LeftHandIndex3", "object:empty-2.top"], tol: 0.05, at: [115, 125] }] },
+{ sk: ysk, scene: cupScene });
+const asked = walkCup.observations.asked ?? [], line = re => asked.find(l => re.test(l)) ?? "", nums = l => (l.match(/-?\d+(\.\d+)?/g) ?? []).map(Number);
+console.log(`  asked: ${json(asked)}`);
+const walkLine = line(/^use\[1\] walkTo/), [, wa, wb] = /f(\d+)-(\d+)/.exec(walkLine) ?? [], wend = walkCup.out.frames[+wb]?.s.P;
+const feet = wend ? [(wend[YI.LeftFoot][0] + wend[YI.RightFoot][0]) / 2, (wend[YI.LeftFoot][2] + wend[YI.RightFoot][2]) / 2] : [NaN, NaN];
+const at = nums(/at \[([^\]]+)\]/.exec(walkLine)?.[1] ?? "");
+expect("a skill line names its frames (used f0..end) and where the feet end (1 mm)", +wa === walkCup.used[1].f0 && +wb === walkCup.used[1].end
+	&& Math.hypot(at[0] - feet[0], at[1] - feet[1]) <= 0.001, walkLine);
+expect("a walkTo whose steps are given says how far it lands from to and why", /; to \[0\.15, 0\.3\]: [\d.]+ m (short|past), args\.steps set the distance/.test(walkLine), walkLine);
+expect("the yaw is the heading channel at the skill's end", nums(/yaw (-?\d+)/.exec(walkLine)?.[1] ?? "")[0] === Math.round(walkCup.out.frames[+wb].c.yaw ?? 0), walkLine);
+const on = walkCup.out.frames.map((fr, f) => ((fr.c.w_cup_l ?? 0) > 0.99 ? f : null)).filter(f => f !== null), grip = line(/^fingers on cup f/);
+expect("a contact line spans the frames its when holds, with its closest and farthest gap", grip.startsWith(`fingers on cup f${on[0]}-${on.at(-1)}: gap `) && /cm f\d+ \.\. [\d.]+ cm f\d+ \(tol 4\)$/.test(grip), `${grip} ${on[0]}-${on.at(-1)}`);
+expect("a contact that never holds says so", line(/^never touched/) === "never touched: never on (w_cup_r never > 0.99)", json(asked));
+const top = line(/^goal fingers at cup top/), res = walkCup.qa.goals.find(g => g.name === "fingers at cup top"), pts = [...top.matchAll(/\[([^\]]+)\]/g)].map(m => nums(m[1]));
+expect("a goal line gives its points on the answered frame and what an object point is", top.startsWith(`goal fingers at cup top f${res.at}: joint:LeftHandIndex3 [`) && top.includes("object:empty-2.top (box top) [")
+	&& pts.length === 2 && dist(pts[0], point(res.at, "joint:LeftHandIndex3")) <= 0.001 && dist(pts[1], point(res.at, "object:empty-2.top")) <= 0.001, top);
+const best = nums(/; best ([\d.]+) f(\d+)/.exec(top)?.slice(1).join(" ") ?? "");
+expect("a near goal held on every frame names its closest frame", best.length === 2 && best[0] <= res.value && best[1] >= 115 && best[1] <= 125, top);
+expect("a moved goal names the object's base", /^goal cup lifted f\d+: object:empty-2\.base \(box base\) \[/.test(line(/^goal cup lifted/)), json(asked));
+const full = { frames: walkCup.out.frameCount, fps: 24, installed: false, specId: "spec-000000000000", qa: walkCup.qa, observations: walkCup.observations, timeline: walkCup.timeline, fixed: walkCup.fixed, skills: walkCup.used, ms: walkCup.ms };
+const fitted = fitOutput(full), brief = fitted.brief ?? [];
+console.log(`  brief: ${json(brief)}; answer ${json(fitted).length} B`);
+expect("the brief is first: the qa line, the goals line with each miss, then groups past GOAL", Object.keys(fitted)[0] === "brief"
+	&& brief[0] === `spec-000000000000 qa ${walkCup.qa.problems} problems (${walkCup.qa.total} issues), not installed`
+	&& /^goals 0\/2; MISS cup lifted [\d.]+ f\d+ \(>= 0\.05\); MISS fingers at cup top [\d.]+ f\d+ \(<= 0\.05\)$/.test(brief[1])
+	&& brief.length === 4 && brief.slice(2).every(l => /^[A-Z]+ .+ x\d+ f\d+-\d+$/.test(l) && !l.startsWith("GOAL")), json(brief));
+expect("brief and asked stay inside the answer budget", json(fitted).length <= MOTION_OUTPUT_BUDGET && json(fitted.observations.asked) === json(asked), json(fitted).length);
+const heavy = { ...full, delta: { base: "spec-000000000001" }, qa: { ...walkCup.qa, groups: walkCup.qa.groups.map(g => ({ ...g, hint: `${g.hint ?? ""} ${"x".repeat(700)}` })) } };
+const tight = fitOutput(heavy), kept = tight.observations.asked ?? [];
+expect("a base + patch answer that does not fit names the units by reference, cuts asked goal lines before full groups and fits",
+	tight.observations.units === "as in the base's answer" && json(tight).length <= MOTION_OUTPUT_BUDGET && kept.every((l, i) => l === asked[i])
+	&& kept.filter(l => l.startsWith("use[")).length === 3 && (kept.length < asked.length || tight.qa.groups.slice(0, 4).every(g => "hint" in g)), `${json(tight).length} B ${json(kept)}`);
+expect("a clean answer's brief is one line", json(briefOf({ specId: "spec-1", installed: true, qa: { ok: true, total: 0, problems: 0, groups: [] } })) === json(["spec-1 qa ok, installed"]));
 
 if (failures) { console.error(`${failures} motion3 timeline check(s) failed`); process.exit(1); }
 console.log("motion3 timeline: all checks passed");

@@ -2,7 +2,7 @@
 // toggle) or the server's COZYCLAY_STUDIO_TASKS flag: the chat then talks to the main agent (POST /agent/main), which
 // answers at once and dispatches tasks; this board shows them. Pure parts here (the reducer, labels, the switch's
 // storage); the network side is createTaskBoardClient; the view is TaskBoard.jsx.
-//   server events (GET /agent/main/<sessionId>/events): task.queued|waiting|started|resumed|paused|done|failed|cancelled
+//   server events (GET /agent/main/<sessionId>/events): task.queued|waiting|started|resumed|paused|review|done|failed|cancelled
 //     carry the task's view { taskId, title, status, scope, reason?, turnId?, usage, summary? }; task.sceneChanged
 //     { taskId, keys, midCommand }; main.turn { turnId } (the main agent reporting on its own)
 //   editor events (the command bus): task.userEdit { taskId, keys } (the user changed something in its scope)
@@ -25,6 +25,7 @@ export const TASK_STATUS_COPY = {
 	starting: ko("Starting", "시작 중"),
 	running: ko("Running", "작업 중"),
 	paused: ko("Paused: Studio lost", "일시정지: Studio 연결 끊김"),
+	review: ko("Being checked", "확인 중"),
 	done: ko("Done", "완료"),
 	failed: ko("Failed", "실패"),
 	cancelled: ko("Cancelled", "취소됨"),
@@ -92,15 +93,16 @@ export function boardGroups(board) {
 	const groups = { failed: [], running: [], waiting: [], done: [] };
 	for (const id of board.order) {
 		const task = board.tasks[id];
-		const group = task.status === "failed" || task.status === "paused" ? "failed" : task.status === "running" || task.status === "starting" ? "running" : ACTIVE_STATUSES.has(task.status) ? "waiting" : "done";
+		// review: the run ended but the coordinator still checks it, so it waits (and offers no cancel: not in ACTIVE_STATUSES).
+		const group = task.status === "failed" || task.status === "paused" ? "failed" : task.status === "running" || task.status === "starting" ? "running" : ACTIVE_STATUSES.has(task.status) || task.status === "review" ? "waiting" : "done";
 		groups[group].push(task);
 	}
 	return groups;
 }
 
-/** The task ids a turn's dispatch_task steps started, in order (a duplicate points at the task it repeats). */
-export const dispatchedTaskIds = steps => (steps ?? []).filter(step => step.kind === "tool" && step.name === "dispatch_task")
-	.map(step => step.result?.taskId ?? step.result?.duplicateOf).filter(Boolean);
+/** The task ids a turn's dispatch_task and dispatch_plan steps started, in order (a duplicate points at the task it repeats). */
+export const dispatchedTaskIds = steps => (steps ?? []).filter(step => step.kind === "tool" && ["dispatch_task", "dispatch_plan"].includes(step.name))
+	.flatMap(step => (step.name === "dispatch_plan" ? step.result?.tasks ?? [] : [step.result])).map(result => result?.taskId ?? result?.duplicateOf).filter(Boolean);
 
 /** What the task view shares between the headless board (TaskBoard.jsx) and the rows in the chat (TaskInline.jsx). */
 function createTaskViewStore() {

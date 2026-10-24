@@ -347,7 +347,8 @@ export function transcriptFromHistory(history = []) {
 		}
 		if (item?.role === "toolResult") {
 			const tool = piCalls.get(item.toolCallId);
-			if (tool) tool.ok = !item.isError;
+			// A result the turn's plan changed in carries the whole list (plan-tool.mjs); the panel keeps its turn's last one.
+			if (tool) tool.ok = !item.isError; if (Array.isArray(item.details?.plan)) transcript.push({ kind: "plan", steps: item.details.plan });
 			const receiptId = item.details?.receiptId;
 			if (receiptId && !seenReceiptIds.has(receiptId)) {
 				seenReceiptIds.add(receiptId);

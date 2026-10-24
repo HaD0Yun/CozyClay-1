@@ -58,7 +58,7 @@ export default function CozySceneNode({ id = "cozy-scene", data: rawData = {}, s
 			// No shotId: the Scene node tracks a scene, not a shot, so the embed
 			// packs the shot under its own playhead — the one being previewed.
 			const result = await requestKeyframePack(frame, { surface: "workflow" });
-			downloadPack(result);
+			await downloadPack(result);
 			attempt.succeed();
 			track("export:keyframe_pack", { entries: result.entries.length, source: "workflow" });
 			// QA hook, mirroring window.__cozyclay in the Studio: the analytics

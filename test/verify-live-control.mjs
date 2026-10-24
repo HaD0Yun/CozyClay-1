@@ -6,6 +6,7 @@ import {
 	listenForWake,
 	loadLiveWorkspaceId,
 	mintLiveWorkspaceId,
+	resolveLiveControlPort,
 	LIVE_DUPLICATE_CLOSE_REASON,
 	LIVE_PING_INTERVAL_MS,
 	LIVE_PONG_TIMEOUT_MS,
@@ -387,6 +388,46 @@ assert.equal(LIVE_WORKSPACE_ID_KEY, "cozyclay:live-workspace-id");
 	const replaced = mintLiveWorkspaceId(storage);
 	assert.notEqual(replaced, fallback);
 	assert.equal(loadLiveWorkspaceId(storage), replaced);
+}
+
+// Given a prebuilt bundle served by the npm launcher with a custom hub port
+// When the launcher injects that port into the page at run time
+// Then the client dials it instead of the build-time default (#862).
+{
+	assert.equal(resolveLiveControlPort(undefined), "5184", "no runtime port keeps the build-time default");
+	assert.equal(resolveLiveControlPort(5824), "5824");
+	assert.equal(resolveLiveControlPort("5824"), "5824");
+	for (const invalid of [null, 0, -1, 65536, 58.5, "nope", Number.NaN]) {
+		assert.equal(resolveLiveControlPort(invalid), "5184", `invalid runtime port ${invalid} falls back`);
+	}
+	globalThis.__COZYCLAY_LIVE_PORT__ = 5824;
+	try {
+		const before = FakeWebSocket.instances.length;
+		const client = createLiveControl({ WebSocketImpl: FakeWebSocket, handlers });
+		assert.equal(FakeWebSocket.instances[before].url, "ws://127.0.0.1:5824/live");
+		client.close();
+	} finally {
+		delete globalThis.__COZYCLAY_LIVE_PORT__;
+	}
+}
+
+// Given an editor connected under its startup label "Untitled" (#864)
+// When the user opens a named project and the editor relabels itself
+// Then the open socket reports the new label and every later hello carries it.
+{
+	const sent = [];
+	class MetaSocket extends FakeWebSocket {
+		send(frame) { sent.push(JSON.parse(frame)); }
+	}
+	const relabeled = createLiveControl({ WebSocketImpl: MetaSocket, handlers, workspaceId: "tab-a", meta: { project: "Untitled" } });
+	relabeled.setMeta({ project: "Before open" });
+	assert.equal(sent.length, 0, "a socket that is not open yet sends nothing");
+	const first = FakeWebSocket.instances.at(-1);
+	first.open();
+	assert.deepEqual(sent.shift(), { type: "hello", role: "editor", version: 1, workspaceId: "tab-a", meta: { project: "Before open" } });
+	relabeled.setMeta({ project: "Example project", scene: "Scene 1" });
+	assert.deepEqual(sent.shift(), { type: "meta", meta: { project: "Example project", scene: "Scene 1" } });
+	relabeled.close();
 }
 
 console.log("all live control checks PASS");

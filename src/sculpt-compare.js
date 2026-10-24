@@ -16,6 +16,7 @@
  * Pure: image buffers in, numbers and RGBA out. The MCP tool owns the files.
  */
 import { expandSculptParts, patchSculptRecipe } from "./sculpt-recipe.js";
+import { SCULPT_SHAPE_SPECS } from "./sculpt-shapes.js";
 
 const COMPARE_SIZE = 256;
 
@@ -117,37 +118,6 @@ function applyMatrix(m, [x, y, z]) {
 	return [m[0] * x + m[4] * y + m[8] * z + m[12], m[1] * x + m[5] * y + m[9] * z + m[13], m[2] * x + m[6] * y + m[10] * z + m[14]];
 }
 
-function partSurfaceSamples(part) {
-	const [sx, sy, sz] = part.size.map((v) => v / 2);
-	const points = [];
-	if (part.shape === "box") {
-		for (const x of [-sx, sx]) for (const y of [-sy, sy]) for (const z of [-sz, sz]) points.push([x, y, z]);
-		return points;
-	}
-	const p = 2 + 6 * (part.roundness ?? 0);
-	const taper = part.taper ?? 0;
-	for (let i = 0; i <= 16; i += 1) {
-		const v = -1 + (2 * i) / 16;
-		const k = taper > 0 ? 1 - taper * 0.6 * ((v + 1) / 2) : taper < 0 ? 1 + taper * 0.6 * ((1 - v) / 2) : 1;
-		for (let j = 0; j < 24; j += 1) {
-			const t = (j / 24) * 2 * Math.PI;
-			if (part.shape === "cylinder") {
-				const r = 1 - Math.max(0, part.taper) * ((v + 1) / 2) - Math.max(0, -part.taper) * ((1 - v) / 2);
-				points.push([Math.cos(t) * sx * r, v * sy, Math.sin(t) * sz * r]);
-			} else if (part.shape === "torus" || part.shape === "frame") {
-				points.push([Math.cos(t) * sx, Math.sin(t) * sy, v * sz]);
-				if (part.shape === "frame") points.push([Math.sign(Math.cos(t)) * sx, Math.sign(Math.sin(t)) * sy, v * sz]);
-			} else {
-				const ring = Math.max(0, 1 - Math.abs(v) ** p) ** (1 / p);
-				const c = Math.cos(t), s = Math.sin(t);
-				const norm = (Math.abs(c) ** p + Math.abs(s) ** p) ** (1 / p);
-				points.push([(c / norm) * sx * ring * k, v * sy, (s / norm) * sz * ring * k]);
-			}
-		}
-	}
-	return points;
-}
-
 function convexHull(points) {
 	const pts = points.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
 	const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
@@ -157,26 +127,19 @@ function convexHull(points) {
 	return lower.slice(0, -1).concat(upper.slice(0, -1));
 }
 
-/** Projected convex outline of every drawn part, in view metres. Frames keep their hole. */
+/** Projected convex outline of every drawn part, in view metres. Frames keep their hole. A cutter (op) adds no area and cuts no hole: the reference mask fills enclosed holes anyway, and an intersect's parent keeps its uncut outline. */
 export function sculptViewPolygons(recipe, { yaw = 0, elevation = 0 } = {}) {
-	return expandSculptParts(recipe).map((part) => {
-		const local = partSurfaceSamples(part);
-		const polygon = convexHull(local.map((point) => viewProject(applyMatrix(part.matrix, point), yaw, elevation)));
-		let hole = null;
-		if (part.shape === "frame" || part.shape === "torus") {
-			const ix = part.size[0] / 2 - (part.shape === "frame" ? part.border : part.size[2]);
-			const iy = part.size[1] / 2 - (part.shape === "frame" ? part.border : part.size[2]);
-			if (ix > 0 && iy > 0) {
-				const corners = [[-ix, -iy], [ix, -iy], [ix, iy], [-ix, iy]].flatMap(([x, y]) => [[x, y, -part.size[2] / 2], [x, y, part.size[2] / 2]]);
-				const projected = corners.map((point) => viewProject(applyMatrix(part.matrix, point), yaw, elevation));
-				// See-through only where the front and back openings overlap; the back
-				// face's opening alone is a slightly generous stand-in.
-				const opening = convexHull(projected.filter((_, i) => i % 2 === 0));
-				hole = opening.length >= 3 ? opening : null;
-			}
-		}
-		return { id: part.id, polygon, hole };
-	});
+	return expandSculptParts(recipe).filter((part) => !part.op).map((part) => {
+		const project = (point) => viewProject(applyMatrix(part.matrix, point), yaw, elevation);
+		const spec = SCULPT_SHAPE_SPECS[part.shape];
+		// See-through only where the front and back openings overlap; the front
+		// face's opening alone is a slightly generous stand-in.
+		const opening = spec.hole?.(part);
+		const holeHull = opening ? convexHull(opening.map(project)) : [];
+		const hole = holeHull.length >= 3 ? holeHull : null;
+		// One polygon per sample group, all carrying the part's id.
+		return spec.samples(part).map((group) => ({ id: part.id, polygon: convexHull(group.map(project)), hole }));
+	}).flat();
 }
 
 function insidePolygon(polygon, x, y) {

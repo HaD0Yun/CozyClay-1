@@ -61,6 +61,23 @@ assert.match(sparseReadme, /last\.png: not included/i, "the README explains a mi
 assert.match(sparseReadme, /clip\.mp4: not included/i, "the README explains a missing clip");
 console.log("PASS keyframe pack: optional entries are omitted and the README says so");
 
+// The README lists as included exactly the files in the pack (#865).
+{
+	const listed = (readmeText) => readmeText.split("\n")
+		.map((line) => /^- ([\w.-]+): (?!not included)/.exec(line)?.[1])
+		.filter(Boolean)
+		.sort();
+	const members = (entries) => entries.map((entry) => entry.name.split("/")[1]).filter((name) => name !== "README.txt").sort();
+	for (const variant of [args, { ...args, lastFramePng: null }, { ...args, clip: null }, { ...args, lastFramePng: null, clip: null }, { ...args, stylizedPng: png }]) {
+		const entries = keyframePackEntries(variant);
+		const readmeText = text(entries.find((entry) => entry.name.endsWith("/README.txt")).data);
+		assert.deepEqual(listed(readmeText), members(entries), "README lists exactly the pack members as included");
+		assert.ok(!entries.some((entry) => entry.name.endsWith("/blocking-depth.mp4")), "the pack holds no depth video");
+		assert.match(readmeText, /Not in this pack: [^]*blocking-depth\.mp4[^]*separate export/, "README says the depth video is a separate export");
+	}
+	console.log("PASS keyframe pack: README lists exactly the pack members; depth is a separate export");
+}
+
 // A still (storyboard panel) pack: one picture held for its hold, no clip.
 {
 	const still = { title: "Panel one", index: 1, startFrame: 48, endFrame: 71, kind: "still" };

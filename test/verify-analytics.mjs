@@ -10,7 +10,6 @@ import {
 	normalizeOrigin,
 	parseAllowlist,
 	resolveAnalyticsRuntime,
-	motionBackendState,
 	sanitizeProps,
 	bucketCount,
 	bucketProjectAge,
@@ -65,14 +64,6 @@ assert.deepEqual(
 	{ backend: "local_kimodo", duration_bucket: "gte30s" },
 );
 assert.deepEqual(sanitizeProps("motion:job_failed", { error_code: Number.POSITIVE_INFINITY }), {});
-assert.deepEqual(motionBackendState(null), { backend: "none", host_configured: false });
-assert.deepEqual(motionBackendState({ ok: true, host: "local" }), { backend: "local_kimodo", host_configured: true });
-assert.deepEqual(motionBackendState({ ok: true, host: "user@gpu-box" }), { backend: "local_kimodo", host_configured: true });
-assert.deepEqual(motionBackendState({ ok: true, backend: "hosted", host_configured: false }), { backend: "hosted", host_configured: false });
-assert.deepEqual(
-	sanitizeProps("motion:backend_state", { backend: "hosted", host_configured: true, host: "user@gpu-box" }),
-	{ backend: "hosted", host_configured: true },
-);
 assert.deepEqual(sanitizeProps("motion:generate_blocked", { surface: "timeline", prompt: "private" }), {});
 
 import { readStudioSource } from "./bus/verify-domain-modules.mjs";
@@ -88,87 +79,10 @@ const motionId = "0123456789abcdef0123456789abcdef";
 assert.deepEqual(sanitizeProps("motion:generate_requested", {
 	surface: "timeline", input_mode: "prompt", request_id: motionId, prompt: "private", host: "user@private",
 }), { surface: "timeline", input_mode: "prompt", request_id: motionId });
-for (const event of ["motion:generate_requested", "motion:preflight_blocked", "motion:preflight_passed", "motion:job_started", "motion:job_succeeded", "motion:job_failed", "motion:result_applied", "motion:backend_state"]) {
+for (const event of ["motion:generate_requested", "motion:preflight_blocked", "motion:preflight_passed", "motion:job_started", "motion:job_succeeded", "motion:job_failed", "motion:result_applied"]) {
 	assert.deepEqual(sanitizeProps(event, { surface: "private", input_mode: true, backend: "user@private", reason: "private", error_code: "PrivateError", duration_bucket: 503, host_configured: "yes", request_id: motionId.toUpperCase() }), {}, `${event} accepts only normalized values`);
 }
-const remoteHealth = { ok: true, host: "private@gpu", device: "cuda:0" };
-const localHealth = { ok: true, host: "local", device: "local" };
-const { motionPreflightReason, motionFailureCode, startMotionRequest } = analytics;
-assert.equal(typeof startMotionRequest, "function");
-assert.equal(motionPreflightReason(null), "unconfigured");
-assert.equal(motionPreflightReason({ ok: false, host_configured: false }), "unconfigured");
-assert.equal(motionPreflightReason({ ok: false, reason: "unconfigured" }), "unconfigured", "checkBridge retains normalized server reason but drops extra fields");
-assert.equal(motionPreflightReason({ ok: false, reason: "private raw failure" }), "unreachable");
-assert.equal(motionPreflightReason(remoteHealth, { body: { lineEdit: {} }, lineEditSupported: false }), "unsupported_route");
-assert.equal(motionPreflightReason(remoteHealth, { body: { lineEdit: {} }, lineEditSupported: true }), null);
-assert.equal(motionPreflightReason(remoteHealth, { body: { replay: [{}] }, lineEditSupported: false }), "unsupported_route");
-assert.equal(motionPreflightReason(localHealth, { body: { prompt: "private" } }), null, "#267 supports a local unconstrained prompt");
-for (const body of [{ segments: [{}, {}] }, { posePin: true }, { waypoints: [{}] }, { motionEdit: {} }, { preserve: {} }]) {
-	assert.equal(motionPreflightReason(localHealth, { body }), "unsupported_route");
-}
-assert.equal(motionPreflightReason(remoteHealth, { body: { motionEdit: {} } }), null);
-assert.equal(motionFailureCode(new DOMException("private", "AbortError")), "aborted");
-assert.equal(motionFailureCode(new Error("private")), "generation_failed");
-assert.equal(motionFailureCode({ name: "private" }), "unknown");
-
-const motionEvents = [];
-let motionNow = 0;
-const newMotionRequest = () => startMotionRequest({ surface: "timeline", input_mode: "prompt" }, {
-	capture: (event, props) => motionEvents.push({ event, props }), now: () => motionNow,
-});
-for (const [health, options, reason] of [
-	[null, {}, "unconfigured"],
-	[{ ok: false }, {}, "unreachable"],
-	[remoteHealth, { body: { lineEdit: {} } }, "unsupported_route"],
-]) {
-	motionEvents.length = 0;
-	const request = newMotionRequest();
-	request.preflight(health, options);
-	request.preflight(remoteHealth);
-	request.start(); request.succeed(); request.fail(new Error("private")); request.apply();
-	assert.deepEqual(motionEvents.map(({ event }) => event), ["motion:generate_requested", "motion:preflight_blocked"]);
-	assert.equal(motionEvents[1].props.reason, reason);
-	assert.match(motionEvents[0].props.request_id, /^[a-f0-9]{32}$/);
-	assert.equal(motionEvents[0].props.request_id, motionEvents[1].props.request_id);
-}
-motionEvents.length = 0;
-const successfulMotion = newMotionRequest();
-successfulMotion.apply(); successfulMotion.succeed();
-successfulMotion.preflight(remoteHealth); successfulMotion.preflight(remoteHealth);
-successfulMotion.start(); successfulMotion.start();
-motionNow = 1500;
-successfulMotion.succeed(); successfulMotion.succeed();
-successfulMotion.fail(new Error("decode failed after generation"));
-assert.equal(motionEvents.at(-1).event, "motion:job_succeeded", "application failure cannot rewrite job success");
-successfulMotion.apply(); successfulMotion.apply();
-assert.deepEqual(motionEvents.map(({ event }) => event), ["motion:generate_requested", "motion:preflight_passed", "motion:job_started", "motion:job_succeeded", "motion:result_applied"]);
-assert.equal(new Set(motionEvents.map(({ props }) => props.request_id)).size, 1);
-assert.equal(motionEvents[3].props.duration_bucket, "1-3s");
-const priorMotionId = motionEvents[0].props.request_id;
-for (const error of [new Error("private"), new DOMException("private", "AbortError")]) {
-	motionEvents.length = 0;
-	const request = newMotionRequest();
-	request.preflight(remoteHealth); request.start(); request.fail(error); request.fail(error); request.succeed(); request.apply();
-	assert.deepEqual(motionEvents.map(({ event }) => event), ["motion:generate_requested", "motion:preflight_passed", "motion:job_started", "motion:job_failed"]);
-	assert.equal(motionEvents.at(-1).props.error_code, error.name === "AbortError" ? "aborted" : "generation_failed");
-	assert.notEqual(motionEvents[0].props.request_id, priorMotionId);
-}
-for (const capture of [() => { throw new Error("transport"); }, () => Promise.reject(new Error("transport"))]) {
-	const request = startMotionRequest({ surface: "trail", input_mode: "edit" }, { capture, now: () => { throw new Error("clock"); } });
-	assert.doesNotThrow(() => { request.preflight(remoteHealth); request.start(); request.succeed(); request.apply(); });
-}
-const motionCryptoDescriptor = Object.getOwnPropertyDescriptor(globalThis, "crypto");
-try {
-	Object.defineProperty(globalThis, "crypto", { configurable: true, value: { getRandomValues() { throw new Error("randomness unavailable"); } } });
-	motionEvents.length = 0;
-	const request = newMotionRequest();
-	assert.doesNotThrow(() => { request.preflight(remoteHealth); request.start(); request.succeed(); request.apply(); });
-	assert.deepEqual(motionEvents, [], "no weak or content-derived fallback ID");
-} finally {
-	Object.defineProperty(globalThis, "crypto", motionCryptoDescriptor);
-}
 assert.doesNotMatch(appSource, /latency_bucket/);
-console.log("PASS motion request/preflight/job/application telemetry state machine");
 assert.deepEqual(sanitizeProps("feature:used", { name: "pose_edit", prompt: "secret" }), { name: "pose_edit" });
 assert.deepEqual(sanitizeProps("feature:used", { name: "private-feature" }), {});
 assert.deepEqual(sanitizeProps("install:first_launch", { heard_from: "github" }), { heard_from: "github" });
@@ -481,7 +395,6 @@ for (const row of privacyHtml.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/g)) {
 	}
 }
 const motionSchemas = {
-	"motion:backend_state": ["backend", "host_configured"],
 	"motion:generate_requested": ["surface", "input_mode", "request_id"],
 	"motion:preflight_blocked": ["reason", "surface", "request_id"],
 	"motion:preflight_passed": ["backend", "surface", "request_id"],
@@ -499,7 +412,6 @@ for (const [event, properties] of Object.entries(motionSchemas)) {
 for (const [event, property, values] of [
 	["motion:generate_requested", "surface", ["timeline", "line_edit", "trail", "mcp"]],
 	["motion:generate_requested", "input_mode", ["prompt", "pose", "edit"]],
-	["motion:backend_state", "backend", ["none", "local_kimodo", "hosted"]],
 	["motion:preflight_blocked", "reason", ["unconfigured", "unreachable", "unsupported_route"]],
 	["motion:job_failed", "error_code", ["aborted", "unsupported_route", "generation_failed", "unknown"]],
 ]) {
@@ -1048,7 +960,7 @@ console.log("PASS Workflow, Agent and MCP execution allowlists and disclosure sc
 {
 	const {
 		EDIT_BUCKET_KEYS, EDIT_GROUPS, FEATURE_USAGE_NAMES, HEARD_FROM_SOURCES, TEAM_VALUES, USE_CASE_VALUES,
-		bucketCpu, bucketFrameRate, bucketMemory, classifyGpu, describeError, startMotionRequest,
+		bucketCpu, bucketFrameRate, bucketMemory, classifyGpu, describeError,
 	} = analytics;
 	const rowTokens = (event) => {
 		for (const row of privacyHtml.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/g)) {
@@ -1163,7 +1075,7 @@ console.log("PASS Workflow, Agent and MCP execution allowlists and disclosure sc
 	assert.ok(FEATURE_USAGE_NAMES.includes("pose_save"));
 	for (const name of ["export_depth_video", "export_keyframe_pack"]) assert.ok(FEATURE_USAGE_NAMES.includes(name), `${name} is no longer silently dropped`);
 	assert.deepEqual(sanitizeProps("feature:used", { name: "pose_save" }), { name: "pose_save" });
-	for (const name of ["pose_edit", "pose_save", "fal_motion_open"]) {
+	for (const name of ["pose_edit", "pose_save"]) {
 		assert.ok(FEATURE_USAGE_NAMES.includes(name), `${name} is a closed feature name`);
 		assert.ok(rowTokens("feature:used").has(name), `feature:used discloses ${name}`);
 	}
@@ -1182,28 +1094,7 @@ console.log("PASS Workflow, Agent and MCP execution allowlists and disclosure sc
 			assert.ok(tokens.has(value), `${event} discloses ${value}`);
 		}
 	}
-	const motionEvents = [];
-	const capture = (event, props) => motionEvents.push([event, props]);
-	const locked = startMotionRequest({ surface: "fal_card", input_mode: "a_to_b" }, { capture });
-	locked.block("locked"); locked.pass("fal"); locked.start(); locked.succeed(); locked.apply();
-	assert.deepEqual(motionEvents.map(([event]) => event), ["motion:generate_requested", "motion:preflight_blocked"], "a locked request ends at its refusal");
-	assert.deepEqual(motionEvents[1][1], { reason: "locked", surface: "fal_card", request_id: motionEvents[0][1].request_id });
-	motionEvents.length = 0;
-	let clock = 0;
-	const fal = startMotionRequest({ surface: "agent", input_mode: "still", prompt: "private" }, { capture, now: () => clock });
-	fal.pass("fal"); fal.block("locked"); fal.start(); clock = 42_000; fal.succeed(); fal.apply(); fal.apply();
-	assert.deepEqual(motionEvents.map(([event]) => event), ["motion:generate_requested", "motion:preflight_passed", "motion:job_started", "motion:job_succeeded", "motion:result_applied"]);
-	assert.equal(motionEvents[1][1].backend, "fal");
-	assert.equal(motionEvents[3][1].duration_bucket, "gte30s");
-	assert.equal(new Set(motionEvents.map(([, props]) => props.request_id)).size, 1, "one request_id pairs the whole Fal request");
-	assert.equal(JSON.stringify(motionEvents).includes("private"), false);
-	motionEvents.length = 0;
-	const capped = startMotionRequest({ surface: "fal_card", input_mode: "a_to_b" }, { capture });
-	capped.pass("fal"); capped.start(); capped.fail(Object.assign(new Error("daily cap private"), { status: 429 }), "quota");
-	assert.deepEqual(motionEvents.at(-1)[0], "motion:job_failed");
-	assert.equal(motionEvents.at(-1)[1].error_code, "quota");
-	assert.equal(JSON.stringify(motionEvents).includes("daily cap"), false);
-	console.log("PASS Fal A->B request on the motion contract: locked, missing input, passed, quota and applied");
+	console.log("PASS Fal A->B values on the motion contract: locked, missing input, fal and quota");
 
 	const { FIRST_LAUNCH_SOURCES } = await import("../bin/telemetry-state.mjs");
 	assert.deepEqual([...HEARD_FROM_SOURCES].sort(), [...FIRST_LAUNCH_SOURCES].sort(), "the CLI and the browser agree on install sources");

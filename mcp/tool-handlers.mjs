@@ -71,6 +71,7 @@ import {
 import { classifyMove, captureFraming, moveSlate } from "../src/camera-move.js";
 import { DEFAULT_PREVIS_MODE, PREVIS_MODES, createProjectDocument, readProjectDocument } from "../src/project.js";
 import { kindRefusal } from "../src/character-kind.js";
+import { documentWithCamera, splitSavedCamera } from "./project-camera.mjs";
 
 /** The authoring state. One scene document, one camera, one project name. */
 export const state = {
@@ -1155,10 +1156,10 @@ export const createToolHandlers = ({ projectRootPromise } = {}) => {
 				title: "Sculpt a clay prop from a recipe of soft parts",
 				description:
 					"Unlike place_object, import_mesh and compare_sculpt, sculpt_object builds or changes a clay prop from a recipe of parts you write, typically after reading a reference image. It needs no file and no catalogue entry. " +
-					"recipe = { version: 1, parts: [{ id, shape, size: [x, y, z], position?, rotation?, color?, parent?, mirror?, roundness?, taper?, border? }] }. " +
+					"recipe = { version: 1, parts: [{ id, shape, size: [x, y, z], position?, rotation?, color?, parent?, mirror?, ...shape fields, material?, finish?, detail?, gradient?, op? }] }. " +
 					"Units are metres and degrees. The floor is y = 0, front is +z, and the subject's own left is +x. size is the full extent; position is the part's centre, in its parent part's frame when parent is set. " +
 					"shape: blob (soft superellipsoid: roundness 0 is an ellipsoid, 1 is a rounded box; taper narrows the top when positive and the bottom when negative), box (roundness bevels the edges), " +
-					"cylinder (taper 1 is a cone), torus (size [outer, outer, tube]), frame (a rectangular ring in x/y with a border width, for glasses rims, windows and picture frames). " +
+					"cylinder (taper 1 is a cone), torus (size [outer, outer, tube]), frame (a rectangular ring in x/y with a border width, for glasses rims, windows and picture frames), " + "lathe { profile: [[r 0..1 of half-width, y 0..1 of height], ...] bottom to top, smooth? } for turned objects (pot, vase, bottle, bowl, lampshade, mushroom), " + "tube { path: [[x, y, z] each -0.5..0.5 of size], thickness (m, diameter), taper?, closed? } for ropes, vines, cables, handles, branches and bike frames, " + "extrude { outline: [[x, y] -0.5..0.5 of size], holes?, roundness? } for flat cut shapes pushed through size z (sign, leaf, gable, gear, star), " + "loft { sections: [{ y 0..1, points: [[x, z]...] } or { y, w, d, x?, z?, roundness? }] bottom to top (first y 0, last y 1), smooth? } for cross-sections that change (hull, car body, shoe, loaf; lay it down with rotation [-90,0,0]), " + "convex { points: [[x, y, z]...] or seed + facetCount?, facets? } for rocks, boulders, gems and crystals, " + "scatter { item: blade|tuft|flower|leaf|pebble|twig, count <= 4000, spread: ground|shell, seed? } for thousands of small items as ONE part (grass, flower beds, gravel; shell covers a crown or bush it is parented to; 12000 items per recipe). " + "Any part also takes material clay|wood|straw|stone|brick|concrete|metal|glass|ceramic|plastic|rubber|fabric|paper|foliage (real texture and shine; color tints it; never fake glass with opacity or thatch with stripes) and finish matte|satin|gloss; detail { amount 0..1, scale?, seed? } for a lumpy surface (clouds, bushes, rocks, hay, bread), gradient { color, axis? y|x|z, from?, to? } to blend into a second colour (sky-lit clouds, fruit, sunset walls), " + "and op: subtract|intersect, which makes the part an undrawn cutter of its parent (windows, doors, arches; hollow a lathe with a smaller lathe of the same profile; cut deeper than the wall; mirror cuts both sides). " +
 					"mirror: true adds a copy reflected across x = 0 of the parent frame, with its children; author the subject's left (+x) side once. color is #rrggbb. At most 48 parts after mirrors. " +
 					"To fix a sculpt, pass its id with edits instead of a whole recipe: [{ set: partId, ...fields }, { add: part }, { remove: partId }] (parent: null and mirror: false clear; remove takes the part's children). " +
 					"capture: true also returns the editor's frame (connected editor only), so one call is one round. " +
@@ -1697,7 +1698,7 @@ export const createToolHandlers = ({ projectRootPromise } = {}) => {
 				// the current stage shape rather than trusted as-is.
 				const scenes = readSceneDocument(serializeSceneDocument(result.project.scenesDocument));
 				if (!scenes.document) return text(`That project was written by a newer CozyClay: ${full}`);
-				const nextDocument = scenes.document;
+				const { document: nextDocument, camera: savedCamera } = splitSavedCamera(scenes.document);
 				if (liveHub?.connected) {
 					try {
 						const loaded = await executeStudioCommand({ ...admission, action: "load_scenes", args: { document: nextDocument } });
@@ -1713,11 +1714,10 @@ export const createToolHandlers = ({ projectRootPromise } = {}) => {
 					}
 				}
 				state.doc = nextDocument;
+				Object.assign(state.camera, savedCamera);
 				state.previsMode = result.project.previsMode ?? DEFAULT_PREVIS_MODE;
 				state.name = result.project.name;
-				state.focus = null;
-				state.focusLocked = false;
-				state.markedFraming = null;
+				Object.assign(state, { focus: null, focusLocked: false, markedFraming: null });
 				return text(`Opened ${full}.\n\n${sceneReport()}`);
 			},
 		),
@@ -1753,7 +1753,7 @@ export const createToolHandlers = ({ projectRootPromise } = {}) => {
 					return text(`Could not write project: ${error.message}`);
 				}
 				const project = createProjectDocument({
-					scenesDocument: state.doc,
+					scenesDocument: documentWithCamera(state.doc, state.camera),
 					workspaceLayout: null,
 					customPoses: [],
 					name: state.name,

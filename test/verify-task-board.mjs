@@ -8,7 +8,7 @@ import { test } from 'node:test';
 import { answerOf, runCompileJob } from '../src/motion3/compile-job.js';
 import { compileActivity, createCompileRunner, watchCompileActivity } from '../src/commands/motion3-compile.js';
 import { motionScene } from '../src/motion3/scene.js';
-import { boardGroups, compileState, costLabel, dispatchedTaskIds, emptyBoard, progressLine, reduceBoard, reduceScopes, scopeLabel, seedBoard, taskLine, taskReason } from '../src/workflow/task-board.js';
+import { TASK_STATUS_COPY, boardGroups, compileState, costLabel, dispatchedTaskIds, emptyBoard, progressLine, reduceBoard, reduceScopes, scopeLabel, seedBoard, taskLine, taskReason } from '../src/workflow/task-board.js';
 
 const view = (taskId, status, extra = {}) => ({ taskId, title: `Task ${taskId}`, status, scope: [`object:${taskId}`], usage: { cost: 0 }, ...extra });
 
@@ -22,7 +22,11 @@ test('a task row reads in the author\'s words: the blocking task by title, never
 	assert.equal(scopeLabel('object:cube-1') === 'object:cube-1', false);
 	const groups = boardGroups(['a', 'b', 'c', 'd'].reduce((board, id, i) => reduceBoard(board, { type: 'task.seed', ...view(id, ['running', 'waiting', 'failed', 'done'][i]) }), emptyBoard()));
 	assert.deepEqual(Object.fromEntries(Object.entries(groups).map(([key, list]) => [key, list.map(task => task.taskId)])), { failed: ['c'], running: ['a'], waiting: ['b'], done: ['d'] });
+	const reviewed = reduceBoard(emptyBoard(), { type: 'task.review', ...view('r', 'review', { verify: true, summary: { reply: 'Cup made.' } }) });
+	assert.deepEqual(boardGroups(reviewed).waiting.map(task => task.taskId), ['r'], 'a task in review waits for the coordinator');
+	assert.equal(taskLine(reviewed.tasks.r), TASK_STATUS_COPY.review); assert.ok(TASK_STATUS_COPY.review.length <= 16);
 	assert.deepEqual(dispatchedTaskIds([{ kind: 'tool', name: 'dispatch_task', result: { taskId: 't1' } }, { kind: 'tool', name: 'quick_edit', result: { taskId: 'x' } }, { kind: 'tool', name: 'dispatch_task', result: { duplicateOf: 't1' } }, { kind: 'tool', name: 'dispatch_task' }]), ['t1', 't1']);
+	assert.deepEqual(dispatchedTaskIds([{ kind: 'tool', name: 'dispatch_plan', result: { tasks: [{ ref: 'a', taskId: 'p1' }, { ref: 'b', duplicateOf: 't1', taskId: 't1' }] } }, { kind: 'tool', name: 'dispatch_plan' }]), ['p1', 't1'], 'a plan places every task it queued under its turn');
 });
 
 test('board events make one card per task, in arrival order, with the latest state', () => {

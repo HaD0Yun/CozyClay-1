@@ -12,7 +12,8 @@ import { buildCollisionCapsules, detectPenetrations, supportsCollisionCleanup } 
 import { collisionBlockers, blockerSummary } from './motion/collision-blockers.js';
 import { createGroundSampler } from './motion/ground.js';
 import { OBJECT_LIBRARY } from './scene-objects.js';
-import { objectTransformAt } from './object-path.js';
+import { sceneObjectsAt } from './object-travel.js';
+import { objectTracksOf } from './motion3/object-tracks.js';
 import { sampleAt } from './sample-at.js';
 import { isProxyFigure } from './scenes.js';
 
@@ -88,7 +89,7 @@ function stageCast(env, characterId, cast) {
 
 /* One take under evaluation, `t`: {evaluator, motion, env, cast, characterId,
  * character, protectedFrames, range, poseCast?, yieldTask, checkpoint}. */
-function blockersAt(t, frame) {
+function blockersAt(t, frame, objects) {
   t.checkpoint();
   const rigs = {};
   for (const member of t.cast) {
@@ -99,18 +100,19 @@ function blockersAt(t, frame) {
     rigs[member.character.id] = member.evaluator.rig;
   }
   const cast = t.cast.map((member) => member.character).filter(Boolean);
-  return collisionBlockers({ rigs, activeId: t.characterId, characterIds: cast, sceneObjects: t.env.objects, library: OBJECT_LIBRARY, frame, take: { frameCount: t.env.frameCount, fps: 24 } });
+  // `objects` already stand where this frame renders them (routes and take tracks), so no re-sampling here.
+  return collisionBlockers({ rigs, activeId: t.characterId, characterIds: cast, sceneObjects: objects, library: OBJECT_LIBRARY });
 }
 async function samples(t, layer) {
   const rows = [], poses = [], collisions = [], blockers = [];
   const cast = t.cast.map((member) => member.character).filter(Boolean);
   for (let frame = t.range.startFrame; frame < t.range.endFrameExclusive; frame++) {
     t.checkpoint(); poseFrame(t.evaluator, t.motion, layer, frame);
-    const shapes = blockersAt(t, frame);
-    const objects = t.env.objects.map(object => {
-      const at = objectTransformAt(object, frame, { frameCount: t.env.frameCount, fps: 24 });
-      return at ? { ...object, x: at.x, y: at.y, z: at.z, rot: at.rot ?? object.rot } : object;
-    });
+    // Objects as the editor renders them at this frame: travel routes plus the
+    // object tracks the installed takes bake (object-travel.js sceneObjectsAt).
+    const objects = sceneObjectsAt(t.env.objects, frame, t.objectTake);
+    for (const o of objects) if (!o.hidden && (o.rotX || o.rotZ)) t.tilted.add(o.id);
+    const shapes = blockersAt(t, frame, objects);
     rows.push(readSample(t.evaluator, createGroundSampler(objects, { floorY: t.env.floor.y, characters: cast })));
     poses.push(poseValues(t.evaluator.rest));
     const capsules = buildCollisionCapsules(t.evaluator.rig);
@@ -136,7 +138,7 @@ function judge(t, before, after) {
   }
   const supportedCollisionFrames = after.collisions.filter(p => p.length).length;
   const elevatedFrames = after.rows.flatMap((row, f) => Object.values(row.ground).some(y => y !== t.env.floor.y) ? [t.range.startFrame + f] : []);
-  const unsupportedObjects = t.env.objects.filter(o => o.attach || o.rotX || o.rotZ);
+  const unsupportedObjects = t.env.objects.filter(o => o.attach || o.rotX || o.rotZ || t.tilted.has(o.id));
   const missingCast = t.cast.filter(m => !m.evaluator || ((m.character.layer?.waypoints?.length ?? 0) > 0 && !t.poseCast));
   const measuredSupportFrames = after.support.frames.filter(f => f.measured).length;
   const flat = t.env.floor.model === 'flat' && elevatedFrames.length === 0 && Math.abs(t.character.y ?? 0) < 1e-8;
@@ -164,6 +166,13 @@ function receiptVerification(v) {
     limitations: v.limitations, surfaceMeasured: m.surfaceMeasured, maxFloorPenetrationM: m.maxFloorPenetrationM, maxContactSlipM: m.maxContactSlipM, maxContactFloatM: m.maxContactFloatM,
     unsupportedFrames: m.unsupportedFrames, supportedCollisionFrames: m.supportedCollisionFrames, continuityRegressed: m.continuityRegressed, semanticStatus: 'unavailable' };
 }
+/** Object tracks the installed takes bake (this take and the other cast's), keyed by object id. */
+function installedObjectTracks(target, environment) {
+  const takes = new Map((environment.cast ?? []).map(member => [member.character?.id, member.motion]));
+  takes.set(target.character.id, target.motion);
+  const characters = [...takes.keys()].filter(id => typeof id === 'string').map(id => ({ id }));
+  return objectTracksOf({ motionFor: id => takes.get(id) }, characters);
+}
 /** Motion verification of an installed take, on a private rig clone over
  * `range` (default and upper bound: the whole take). target: {character, rig,
  * motion, ikState?, protectedFrames?}; environment has readEnvironment()'s
@@ -177,6 +186,7 @@ export async function verifyInstalledTake({ target, environment, range, poseCast
   const deadline = now() + verificationBudget(endFrameExclusive - startFrame, verificationMs);
   const t = { evaluator: isolatedRig(target.rig), motion, env, cast: [], characterId: target.character.id, character: target.character,
     protectedFrames: target.protectedFrames ?? [], range: { startFrame, endFrameExclusive }, poseCast, yieldTask,
+    objectTake: { frameCount: env.frameCount, fps: 24, objectTracks: installedObjectTracks(target, environment) }, tilted: new Set(),
     checkpoint: () => { if (now() > deadline) fail('VERIFICATION_FAILED', 'Private verification budget exceeded.'); } };
   try {
     stageCast(environment, t.characterId, t.cast);

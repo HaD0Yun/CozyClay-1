@@ -55,10 +55,14 @@ function readmeText({ shot, fps, hasLast, hasClip, ext, hasStylized }) {
 	lines.push(
 		"- camera.json: camera reference. The recorded camera move, fps, and",
 		"  frame range to reproduce the framing over time.",
-		"- blocking-depth.mp4: shot-wide normalised depth video; lighter pixels are closer.",
 		"- prompt.txt: the text prompt describing the intended action.",
 	);
 	if (hasStylized) lines.push("- stylized.png: the stylized picture of this panel; first.png is its greybox.");
+	lines.push(
+		"",
+		"Not in this pack: the shot-wide depth video (blocking-depth.mp4) is a",
+		"separate export - use Depth (mp4) in the export menu.",
+	);
 	return lines.join("\n") + "\n";
 }
 

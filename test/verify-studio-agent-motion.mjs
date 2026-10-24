@@ -81,6 +81,20 @@ test('installed take: moving props and other cast are sampled off the playhead w
   assert((await f.verify()).supportedCollisionFrames > 0); assert.deepEqual(bones(other), before);
   f.environment.cast[0].rig = null; assert.equal((await f.verify()).status, 'unverified');
 });
+test('installed take: objects the take animates are measured where the take puts them (#868)', async () => {
+  // A free-object track (take.v3 objects[id], world space) holding the cube at `x` every frame.
+  const tracked = (f, x) => {
+    const F = f.target.motion.frames, pos = new Float32Array(F * 3), quat = new Float32Array(F * 4);
+    for (let i = 0; i < F; i++) { pos[i * 3] = x; quat[i * 4 + 3] = 1; }
+    f.target.motion = { ...f.target.motion, objects: { cube: { pos, quat } } };
+  };
+  const into = fixture(); into.environment.objects = [{ ...createSceneObject('cube'), id: 'cube', x: 3 }]; tracked(into, 0);
+  const hit = await into.verify();
+  assert(hit.supportedCollisionFrames > 0); assert.equal(hit.status, 'unverified');
+  const away = fixture(); away.environment.objects = [{ ...createSceneObject('cube'), id: 'cube', x: 0 }]; tracked(away, 3);
+  const clear = await away.verify();
+  assert.equal(clear.supportedCollisionFrames, 0); assert.equal(clear.status, 'verified');
+});
 test('installed take: authored IK continuity and protected poses remain verification inputs', async () => {
   const f = fixture(), before = bones(f.target.rig);
   f.target.ikState.keys.set(23, new Map([['hips', { p: new THREE.Vector3(0, 160, 0), q: [new THREE.Quaternion()] }]]));

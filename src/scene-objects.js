@@ -28,7 +28,7 @@ import { retireObjectKind } from "./retired-kinds.js";
 import { objectSize } from "./object-size.js";
 import { EFFECT_ENTRY, effectFields } from "./effects/effect-record.js";
 import { TEXT_ENTRY, TEXT_KIND, textFields, textPatch } from "./text/text-record.js";
-import { LIGHT_KIND, LIGHT_MENU_ENTRIES, lightLibraryEntry, objectLookFields, objectLookPatch, objectGraspFields, objectGraspPatch } from "./object-look.js";
+import { LIGHT_KIND, LIGHT_MENU_ENTRIES, lightLibraryEntry, objectLookFields, objectLookPatch, objectGraspFields, objectGraspPatch, objectMaterialKeys } from "./object-look.js";
 export { OBJECT_COLORS, normalizeObjectColor, rememberObjectColor, readStoredObjectColors, writeStoredObjectColors } from "./object-colors.js";
 export { isEffectivelyHidden };
 
@@ -547,7 +547,7 @@ const TRANSFORM_LIMITS = {
 /** The patch keys updateSceneObject reads for this object; any other key is
  * silently ignored there, so callers that must not be silent check against this. */
 export function objectPatchFields(object) {
-	const fields = [...Object.keys(TRANSFORM_LIMITS), "name", "color", "hidden", "opacity", "path", "glow", "grasp"];
+	const fields = [...Object.keys(TRANSFORM_LIMITS), "name", "color", "hidden", "opacity", "path", "glow", "grasp", ...objectMaterialKeys(object?.renderer)];
 	if (object?.renderer === LIGHT_KIND) fields.push("light");
 	if (object?.renderer === CUTOUT_KIND) fields.push("assetId", "sourceAssetId", "matteAssetId", "matteScale", "height", "aspect", "width", "stretch");
 	if (object?.renderer === MESH_KIND) fields.push("clay", "assetId", "height");

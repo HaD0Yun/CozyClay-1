@@ -62,7 +62,7 @@ export function keyHint(X, g) {
 
 const r1 = v => Math.round(v * 10) / 10, r2 = v => Math.round(v * 100) / 100;
 /** observations.held units: what a row of a keyed object says. */
-export const HELD_UNITS = "held: per key, deg = the drawn +Y off the asked one (aim, or rot's +Y), cm = the drawn base off pos, got = the drawn +Y (when 1 deg off or more), rot = what an aim key used";
+export const HELD_UNITS = "held: per key, deg = the drawn +Y off the asked one (aim, or rot's +Y), cm = the drawn base off pos, got = the drawn +Y (when 1 deg off or more), rot = what an aim key used, lean = the lean a mouth key took by default (give lean 0 to hold aim exactly)";
 
 /**
  * Every key of every keyed carry as drawn: { <id>: [{ f, deg, cm, got?, rot? }] } in key order
@@ -72,11 +72,12 @@ export function heldReadings(out) {
 	const held = keyedEntries(out.ctx.spec);
 	if (!held.length) return null;
 	return Object.fromEntries(held.map(([id, o]) => {
-		const curve = curveIn(out, id), keys = [...o.keys].sort((a, b) => a.f - b.f);
+		// the keys as the compile holds them: a mouth key the compile leaned says so (object-keys.js faceLeaned)
+		const curve = curveIn(out, id), keys = [...(out.ctx.hold?.entry?.(id) ?? o).keys].sort((a, b) => a.f - b.f);
 		return [id, keys.map((k, i) => {
 			const got = rootPoseAt(out, id, Math.round(curve.t[i])), y = [got.R[0][1], got.R[1][1], got.R[2][1]];
 			const want = k.aim ? norm(k.aim) : apply(matFromQuat(curve.q[i]), [0, 1, 0]), deg = r1(angle(want, y));
-			return { f: k.f, deg, cm: r1(dist(k.pos, got.pos) * 100), ...(deg >= 1 ? { got: y.map(r2) } : {}), ...(k.aim ? { rot: curve.rots[i] } : {}) };
+			return { f: k.f, deg, cm: r1(dist(k.pos, got.pos) * 100), ...(deg >= 1 ? { got: y.map(r2) } : {}), ...(k.aim ? { rot: curve.rots[i] } : {}), ...(k.leaned ? { lean: k.lean } : {}) };
 		})];
 	}));
 }

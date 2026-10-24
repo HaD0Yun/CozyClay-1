@@ -3,6 +3,7 @@ import { parseSync } from 'rolldown/experimental';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createServer } from 'vite';
+import { fileURLToPath } from 'node:url';
 import { castFixture, proxyCast } from './cast-fixture.mjs';
 import { appFixture } from './app-fixture.mjs';
 
@@ -32,7 +33,7 @@ function include(name) {
 }
 for (const node of [motionSource].flatMap(text => parseSync('motion.js', text).program.body)) if (node.type === 'ImportDeclaration' && node.source.value.endsWith('/app-stage.jsx')) for (const spec of node.specifiers) include(spec.imported.name);
 const stageSubset = ast.body.filter(node => selected.has(node)).map(node => stage.slice(node.start, node.end)).join('\n');
-const server = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false }, optimizeDeps: { noDiscovery: true, include: [] }, appType: 'custom',
+const server = await createServer({ configFile: false, root: fileURLToPath(new URL('../../', import.meta.url)), server: { middlewareMode: true, hmr: false }, optimizeDeps: { noDiscovery: true, include: [] }, appType: 'custom',
   plugins: [{ name: 'motion-without-renderer', enforce: 'pre', load(id) {
     if (id.endsWith('/src/app-stage.jsx')) return stageSubset;
     

@@ -21,11 +21,12 @@ export function createStudioTools({ liveHub, workspaceHandle, session, resolveIm
   const rebaser = createRebaser({ session, liveHub, workspaceHandle, mutationNames, attempt: (name, args, scratch) => attempt(name, args, scratch) });
   // One admission attempt. `scratch` carries what the recovery path needs from
   // a refusal: the revision it was admitted at and the context re-read for it.
+  // scratch.callId: the model's tool call this command belongs to (a script's nested commands share the script's)
   const attempt = async (name, args, scratch = {}) => {
     const command = validateStudioCommand({ name, args });
     const action = name === "run_action" ? declared.get(command.args.action) : undefined;
     const payload = mutationNames.has(name) && session?.admission
-      ? { name, args: command.args, commandId: session.admission.commandId(), host: session.admission.host, expectedRevision: session.admission.revision, ...(session.admission.turnId ? { turnId: session.admission.turnId } : {}), ...(session.admission.taskId ? { taskId: session.admission.taskId } : {}) }
+      ? { name, args: command.args, commandId: session.admission.commandId(), host: session.admission.host, expectedRevision: session.admission.revision, ...(session.admission.turnId ? { turnId: session.admission.turnId } : {}), ...(session.admission.taskId ? { taskId: session.admission.taskId } : {}), ...(typeof scratch.callId === "string" && scratch.callId ? { callId: scratch.callId } : {}) }
       : command.args;
     Object.assign(scratch, { refusedRevision: payload.expectedRevision });
     let result;
@@ -64,7 +65,7 @@ export function createStudioTools({ liveHub, workspaceHandle, session, resolveIm
     return result;
   };
 	const availableTools = STUDIO_TOOLS;
-	const tools = availableTools.map(name => ({ ...schema(name), handler: args => rebaser.run(name, args) }));
+	const tools = availableTools.map(name => ({ ...schema(name), handler: (args, call = {}) => rebaser.run(name, args, call.callId ?? call.toolCallId) }));
   tools.resolveImage = async (imageId, correlation = {}) => {
     if (typeof resolveImage !== "function") return { visualStatus: "unavailable", reason: "image resolver unavailable" };
     try {

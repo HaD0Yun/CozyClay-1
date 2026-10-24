@@ -2,7 +2,8 @@
 // moves (object-checks.js), the other people in the scene (people-checks.js, PERSON), its goals (goals.js) and the style checks it opted into by naming
 // their limit (style.js; otherwise style is measured, not judged: observeMotion). Groups are
 // ranked by severity.js. total counts frame-level issues (a goal held on "all" frames adds one per failing frame); problems
-// counts the groups, which is what a person reads (src/qa-label.js).
+// counts the groups, which is what a person reads (src/qa-label.js). qa.warnings (arm-checks.js) reads an awkward
+// working arm and never fails a take.
 import { generalChecks, QA_LIMITS } from "./checks.js";
 import { styleChecks, floatChecks } from "./style.js";
 import { specChecks } from "./spec-checks.js";
@@ -12,6 +13,7 @@ import { loadChecks } from "../load.js";
 import { goalChecks } from "./goals.js";
 import { wristIssues } from "./wrist-checks.js";
 import { peopleChecks } from "./people-checks.js";
+import { armWarnings } from "./arm-checks.js";
 import { explainGroups } from "./explain.js";
 import { LOW_IS_BAD, groupKey, rankGroups } from "./severity.js";
 
@@ -42,5 +44,6 @@ export function runMotionQa(sk, out, spec, opts = {}) {
 	if (out.f0) for (const i of issues) i.frame += out.f0;
 	const groups = summarizeIssues(issues);
 	if (opts.explain !== false) explainGroups(sk, out, spec, groups, { userSpec: opts.userSpec });
-	return { ok: issues.length === 0, total: issues.length, problems: groups.length, ...(spec.goals ? { goals: goals.results } : {}), groups };
+	const warnings = armWarnings(sk, out);
+	return { ok: issues.length === 0, total: issues.length, problems: groups.length, ...(spec.goals ? { goals: goals.results } : {}), groups, ...(warnings.length ? { warnings } : {}) };
 }

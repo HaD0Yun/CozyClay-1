@@ -83,7 +83,7 @@ function outputWatcher(child) {
 	};
 }
 
-function launch(port, extraArgs = []) {
+function launch(port, extraArgs = [], extraEnv = {}) {
 	const child = spawn(process.execPath, [
 		"bin/cozyclay.mjs",
 		"--port", String(port),
@@ -98,6 +98,7 @@ function launch(port, extraArgs = []) {
 			...process.env,
 			CI: "",
 			XDG_CONFIG_HOME: stateRoot,
+			...extraEnv,
 		},
 		stdio: ["ignore", "pipe", "pipe"],
 		detached: process.platform !== "win32",
@@ -208,7 +209,8 @@ try {
 
 	const secondPort = await freePort();
 	// An unknown --via never blocks a launch and never rewrites the first-launch source.
-	const second = launch(secondPort, ["--via=private text"]);
+	const secondLivePort = await freePort();
+	const second = launch(secondPort, ["--via=private text"], { COZYCLAY_LIVE_PORT: String(secondLivePort) });
 	try {
 		await second.output.waitFor(/CozyClay is running at/);
 		const html = await (await fetch(`http://127.0.0.1:${secondPort}/app/`)).text();
@@ -220,6 +222,9 @@ try {
 		assert.equal(JSON.stringify(runtime).includes("private text"), false);
 		const persisted = JSON.parse(readFileSync(join(stateRoot, "cozyclay", "state.json"), "utf8"));
 		assert.equal(runtime.installationId, persisted.installationId);
+		// The prebuilt bundle baked its own hub port; the launcher must tell it
+		// the COZYCLAY_LIVE_PORT this launch chose (#862).
+		assert.match(html, new RegExp(`window\\.__COZYCLAY_LIVE_PORT__ = ${secondLivePort};`), "the served studio is told the launcher's live hub port");
 	} finally {
 		await terminateOwned(second.child);
 	}

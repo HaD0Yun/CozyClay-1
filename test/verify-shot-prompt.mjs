@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { buildShotPrompt, shotSizeFromFov } from "../src/shot-prompt.js";
+import { buildShotPrompt, lensWordFromFocalMm, shotSizeFromFov } from "../src/shot-prompt.js";
+import { SENSOR_FORMATS, focalMmToFov } from "../src/shot.js";
 
 const CAMERA_SENTENCE = "follow the reference clip's framing and camera motion exactly";
 const MOTION_SENTENCE = "motion and blocking come from the reference; keep timing";
@@ -60,14 +61,28 @@ const stillCamera = buildShotPrompt(stillMeta, { target: "image", referenceOwnsC
 assert.match(stillCamera, /locked-off/i, "no moves means a locked-off camera");
 console.log("PASS referenceOwnsCamera:false swaps the CAMERA line for plain move words");
 
-// Shot-size word is derived from fov, not from the focal length alone.
-assert.equal(shotSizeFromFov(90), "wide", "90 degrees of fov reads wide");
-assert.equal(shotSizeFromFov(60), "normal", "60 degrees of fov reads normal");
-assert.equal(shotSizeFromFov(30), "long", "30 degrees of fov reads long");
+// #848: the lens word follows the editor's own focal <-> fov calibration
+// (shot.js), not a second 35mm-film conversion. The issue's measured fovs are
+// the editor's Super 35 16:9 gate (7 mm half-height): 24 mm -> 32.52 deg, etc.
+const EXPECTED_WORDS = [[24, 32.52, "wide"], [28, 28.07, "wide"], [35, 22.62, "normal"], [50, 15.94, "normal"]];
+const super35 = { sensorId: "super35", aspectRatio: 16 / 9 };
+for (const [mm, issueFovDeg, word] of EXPECTED_WORDS) {
+	const editorFovDeg = (focalMmToFov(mm, super35.sensorId, super35.aspectRatio) * 180) / Math.PI;
+	assert.ok(Math.abs(editorFovDeg - issueFovDeg) < 0.01, `${mm}mm is ${editorFovDeg} deg in the editor`);
+	assert.equal(lensWordFromFocalMm(mm), word, `${mm}mm reads ${word}`);
+	assert.equal(shotSizeFromFov(editorFovDeg, super35), word, `${mm}mm's fov on Super 35 reads ${word}`);
+	for (const sensorId of Object.keys(SENSOR_FORMATS)) {
+		const fovDeg = (focalMmToFov(mm, sensorId, 16 / 9) * 180) / Math.PI;
+		assert.equal(shotSizeFromFov(fovDeg, { sensorId, aspectRatio: 16 / 9 }), word, `${mm}mm on ${sensorId} reads ${word}`);
+	}
+	const lensLine = buildShotPrompt({ ...meta, focalMm: mm, fovDeg: issueFovDeg }, { target: "image" }).split("\n")[1];
+	assert.equal(lensLine, `LENS: ${mm}mm, ${word} shot`, `the exported LENS line agrees with the editor at ${mm}mm`);
+	const fovOnly = buildShotPrompt({ ...meta, focalMm: null, fovDeg: editorFovDeg, sensorId: "super35" }, { target: "image" }).split("\n")[1];
+	assert.ok(fovOnly.endsWith(`, ${word} shot`), `a fov-only meta falls back through the editor filmback at ${mm}mm`);
+}
+assert.equal(lensWordFromFocalMm(85), "long", "85mm reads long");
 assert.equal(shotSizeFromFov(0), "normal", "a degenerate fov falls back to normal");
-const longMeta = { ...meta, focalMm: 35, fovDeg: 30 };
-assert.equal(buildShotPrompt(longMeta, { target: "image" }).split("\n")[1], "LENS: 35mm, long shot", "the LENS line uses the fov-derived word");
-console.log("PASS shotSizeFromFov maps fov degrees to wide/normal/long");
+console.log("PASS lens word follows the editor's focal <-> fov calibration (24/28/35/50mm)");
 
 // Fallbacks: empty intent, no key light, empty cast, partial-second shots.
 const bare = buildShotPrompt(

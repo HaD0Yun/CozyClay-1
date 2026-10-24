@@ -173,12 +173,13 @@ export function createCommandBus({ registry, ports }) {
       affectedIds: [...tx.affectedIds], delta: [], checks: { coverage: 'wire-transaction' }, warnings: toastWarnings(tx.toasts),
       undo: tx.historyEntryId ? { historyEntryId: tx.historyEntryId, entries: 1, canUndoDirect: true } : null });
   }
+  // a refusal may list every problem of the request at once (a motion spec: up to 12 lines), so it keeps 2000 characters
   function refusal(request, before, error, mutated) {
     const changed = mutated ?? (ports.read().revision !== before.revision);
     return validateReceipt({ ok: false, commandId: request.commandId, host: before.host,
       code: refusalCode(error), phase: changed ? 'commit' : 'admission', affectedIds: [], expectedTargets: [], currentTargets: [],
       mutated: changed, preserved: { authoredState: changed ? 'changed' : 'unchanged' }, recovery: { action: 'inspect', retryAllowed: false },
-      message: [...String(error.message || error)].slice(0, 500).join('') });
+      message: [...String(error.message || error)].slice(0, 2000).join('') });
   }
   /** Findings first, toasts after; past the schema's twelve, say how many were left out. */
   const receiptWarnings = (findings = [], toasts = [], omitted = 0, limit = 12) => {
@@ -283,17 +284,19 @@ export function createCommandBus({ registry, ports }) {
       const rebase = () => {
         const current = ports.read();
         token = targetId ? ports.readTarget?.(targetId) : null;
-        domainRevision = domain ? current.domainRevisions?.[domain] : null;
+        domainRevision = domain ? current.domainRevisions?.[domain] : null; if (scoped?.keys.length) tasks.rebase(scoped);
       };
       const nestedIds = new Set();
-      const context = { origin: request.origin, signal: controller.signal, taskId: request.taskId ?? null,
+      // callId: the agent's tool call (a script's nested commands share it), for motion.compile's stop rule (repair-watch.js)
+      const context = { origin: request.origin, signal: controller.signal, taskId: request.taskId ?? null, turnId: request.turnId ?? null, callId: typeof request.callId === 'string' ? request.callId : null,
         check() {
           controller.signal.throwIfAborted();
           const current = ports.read();
           // Name the fence that tripped: the three share one code, and a bare "something changed" leaves the user and the agent guessing.
           if (!same(current.host, before.host)) fail('STALE_TARGET', 'The open document or scene changed while the job was running.');
           if (domain && !task && current.domainRevisions?.[domain] !== domainRevision) fail('STALE_TARGET', `The ${domain} data changed while the job was running (revision ${domainRevision} to ${current.domainRevisions?.[domain]}); an edit landed between the request and its result.`);
-          if (targetId && ports.readTarget?.(targetId) !== token) fail('STALE_TARGET', `${targetId} changed while the job was running.`);
+          // Inside a task the fence is the task's own keys (bus-tasks.js moved): another task's layer of the target is not a change under it.
+          const moved = scoped?.keys.length ? tasks.moved(scoped) : targetId && ports.readTarget?.(targetId) !== token ? [targetId] : []; if (moved.length) fail('STALE_TARGET', `${moved.join(', ')} changed while the job was running.`);
         },
         commit(apply) {
           context.check();

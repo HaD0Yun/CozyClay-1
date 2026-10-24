@@ -58,7 +58,7 @@ const keyed = { ...idle, keys: [{ f: 0, set: { spine_pitch: 0 } }] };
 const base = compile({ spec: keyed }).output.specId;
 const patched = compile({ base, patch: [{ op: "replace", path: "/keys/0/set/head_pitch", value: 10 }] });
 expect("replace on a missing member adds it, named", /patch\[0\] \(replace \/keys\/0\/set\/head_pitch\): \/keys\/0\/set\/head_pitch did not exist \(set has spine_pitch\); added/.test(patched.output.adjusted?.[0]), json(patched.output.adjusted));
-expect("a replace at a missing array index is still refused", /\/keys\/3 does not exist \(keys has 1 entries\)/.test(refused(() => compile({ base, patch: [{ op: "replace", path: "/keys/3/f", value: 1 }] }))));
+expect("a replace at a missing array index is still refused", /\/keys\/3 does not exist \(keys has 1 entries; by f: \/keys\/@f=<f>, f 0\)/.test(refused(() => compile({ base, patch: [{ op: "replace", path: "/keys/3/f", value: 1 }] }))));
 expect("applyPatch without notes (repair) stays strict", /does not exist \(set has spine_pitch\)/.test(refused(() => applyPatch(keyed, [{ op: "replace", path: "/keys/0/set/head_pitch", value: 10 }]))));
 const unknown = refused(() => compile({ base, patch: [{ op: "replace", path: "/keys/0/set/zzz", value: 10 }] }));
 expect("an added member the spec does not know is then refused by the validator", /sets unknown channel "zzz"/.test(unknown), unknown);

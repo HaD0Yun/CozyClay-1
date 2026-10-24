@@ -4,7 +4,9 @@
 //
 // spec.fix = { reach: true, slide: true, penetration: 0.02, self: true, retime: false } (false = all off)
 //   reach        wrist targets past the arm's reach go onto it through a soft knee (no snap);
-//                ankle targets past the leg's reach lower the hips just enough, eased in and out
+//                ankle targets past the leg's reach lower the hips just enough, eased in and out; a hand
+//                on a pinned target (a world or a scene object's anchor) that the straight arm misses brings
+//                the body to it: lean, hip shift, lower hips, the feet kept (reach-body.js, fixed.reachBody)
 //   slide        a sole under the floor lifts its ankle onto it (ground.js); a planted heel or ball
 //                that drifts less than 1 cm stays put, and a foot turning on its planted ball (heel
 //                up) or heel pivots about it whatever the drift; a flat planted foot (heel and ball
@@ -19,6 +21,7 @@
 //   grasp        a holding hand's fingers close on what it holds and the object rests in the hand (#816);
 //                false keeps the preset grip and the grab-frame offset
 import { lowerHips, armReach } from "./reach.js";
+import { reachBody } from "./reach-body.js";
 import { lockFeet } from "./slide.js";
 import { holdTurns } from "./turn.js";
 import { liftSoles } from "./ground.js";
@@ -46,6 +49,7 @@ export function applyFixes(out, fix, engine, { whole = true } = {}) {
 	if (fix.retime && whole) put("retime", retime(out, engine));
 	if (fix.slide) put("ground", liftSoles(out, engine));
 	if (fix.reach) put("reachLegs", lowerHips(out, engine));
+	if (fix.reach) put("reachBody", reachBody(out, engine));
 	if (fix.slide) put("slide", withTurns(holdTurns(out, engine), lockFeet(out, engine)));
 	// a pivot can hold a foot past the leg's reach: the hips go down for those frames too
 	if (fix.reach && fixed.slide?.pivots) put("reachLegs", mergeReach(fixed.reachLegs, lowerHips(out, engine)));

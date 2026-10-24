@@ -22,6 +22,7 @@ import { qaSay } from "../qa-label.js";
 import { carryEdit } from "../motion3/edit-carry.js";
 import { normalizeCompileArgs } from "../motion3/lenient.js";
 import { createCompileRunner } from "./motion3-compile.js";
+import { createRepairWatch } from "../motion3/repair-watch.js";
 import { peopleOf } from "../motion3/people.js";
 
 const TIMELINE_FPS = 24;
@@ -84,6 +85,8 @@ function asArgument(run) {
 
 export function register(registry, ports) {
 	const store = createSpecStore();
+	// the stop rule: output.stuck when more compiles stopped paying (repair-watch.js)
+	const watch = createRepairWatch();
 	const owner = () => ports.storeDomain("motion");
 	const mounted = () => Boolean(ports.storeDomain?.("motion")) || "The motion owner is not mounted.";
 	const always = () => true;
@@ -105,10 +108,21 @@ export function register(registry, ports) {
 	 * spec on the character's rig and the current scene (compile-job.js) -> { stored (the spec a take keeps and its specId
 	 * names), qa, ..., take when bake is given }, at once or as a promise. opts: probes, checks, lenient, repair.
 	 */
-	const compile = (character, spec, opts = {}, bake, taskId = null) => {
+	const compile = (character, spec, opts = {}, bake, taskId = null, scene = sceneFor(character)) => {
 		rigOf(character);
 		const placed = bake && { position: [character.x ?? 0, character.y ?? 0, character.z ?? 0], yaw: character.rot ?? 0, ...bake };
-		return runner.run({ model: character.model, scene: sceneFor(character), spec, ...opts, ...(placed ? { bake: placed } : {}) }, { taskId, characterId: character.id });
+		return runner.run({ model: character.model, scene, spec, ...opts, ...(placed ? { bake: placed } : {}) }, { taskId, characterId: character.id });
+	};
+	// where a take was baked: the body's place and a hash of the scene's bodies (a take kept for the stop rule fits only
+	// there): 0.14 ms for 860 bodies, where their JSON took 0.9 ms and 295 KB a key
+	const placeKey = (character, scene) => {
+		let h = 2166136261;
+		const mix = v => { h = Math.imul(h ^ Math.round(v * 1e4), 16777619); };
+		for (const [id, o] of Object.entries(scene.objects ?? {})) {
+			for (let i = 0; i < id.length; i++) mix(id.charCodeAt(i) / 1e4);
+			for (const list of [o.pos, o.half, ...o.R]) for (let i = 0; i < list.length; i++) mix(list[i]);
+		}
+		return `${character.model} ${[character.x ?? 0, character.y ?? 0, character.z ?? 0, character.rot ?? 0].join(" ")} ${(h >>> 0).toString(36)}`;
 	};
 	/** The whole output, kept in the store (motion.report, delta) and cut to the receipt budget (report.js). */
 	const report = (r, head, extra = {}) => {
@@ -144,8 +158,9 @@ export function register(registry, ports) {
 		// a base the store forgot (a reload) may still be the installed take's spec: a document read names it by specId
 		const installedSpec = () => { const take = owner().motionFor(characterId); return take?.spec && specIdOf(take.spec) === base ? structuredClone(take.spec) : null; };
 		const patched = [], source = spec ?? asArgument(() => applyPatch(store.get(base) ?? installedSpec() ?? unknownSpec("base", base), patch ?? [], patched));
+		const scene = sceneFor(character), at = placeKey(character, scene);
 		// the take is always baked: the user watches every draft, installed or not
-		return after(compile(character, source, { probes, repair }, {}, context?.taskId), r => {
+		return after(compile(character, source, { probes, repair }, {}, context?.taskId, scene), r => {
 			const { qa, take } = r, notes = [...patched, ...(r.notes ?? [])];
 			// ifClean: install only a clean final result (qa.ok includes the goals; after repair when asked)
 			const wanted = install === "ifClean" ? qa.ok : install;
@@ -158,11 +173,16 @@ export function register(registry, ports) {
 				if (installs) timing = put(character, take, context);
 			}
 			const delta = base === undefined ? {} : { delta: deltaOf(store.parts(base)?.groups ?? [], qa.groups, base) };
-			const how = kept ? "; already installed, unchanged" : install === "ifClean" ? (installs ? "; installed" : "; not installed") : "";
-			const output = report(r, { frames: r.frameCount, fps: TIMELINE_FPS, installed: wanted, ...adjustedOf(notes) }, { ...delta, ...(r.repair ? { repair: r.repair } : {}), ...(timing ? { timing } : {}) });
+			// the stop rule (repair-watch.js): a note, and the best take so far put on when the note would leave the take empty or worse
+			const own = specIdOf(r.stored), carried = owner().motionFor(characterId)?.spec, current = carried ? specIdOf(carried) : null;
+			const { say: stuck, install: best } = watch.note({ characterId, turnId: context?.turnId, callId: context?.callId, specId: own, base, qa, at, take, installed: Boolean(installs || kept), current });
+			if (best) timing = put(character, best.take, context) ?? timing;
+			const self = best?.specId === own, how = kept ? "; already installed, unchanged" : self ? "; installed as the best take so far"
+				: best ? `; not installed; the best take so far, ${best.specId}, installed` : install === "ifClean" ? (installs ? "; installed" : "; not installed") : "";
+			const output = report(r, { frames: r.frameCount, fps: TIMELINE_FPS, installed: Boolean(wanted) || self, ...(stuck ? { stuck } : {}), ...adjustedOf(notes) }, { ...delta, ...(r.repair ? { repair: r.repair } : {}), ...(timing ? { timing } : {}) });
 			// agent-progress.js: viewport ghost, timeline beats, agent panel
-			publishDraft(characterId, { take, installed: installs || kept, specId: output.specId, label: r.label, qa, timeline: r.timeline });
-			return { affectedIds: installs ? [characterId] : [], summary: `Compiled ${r.frameCount} frames; QA ${qaSay(qa)}${how}${adjustedSay(notes)}.`, output, ...workerWarning() };
+			publishDraft(characterId, { take, installed: installs || kept || self, specId: output.specId, label: r.label, qa, timeline: r.timeline });
+			return { affectedIds: installs || best ? [characterId] : [], summary: `Compiled ${r.frameCount} frames; QA ${qaSay(qa)}${how}${adjustedSay(notes)}.`, output, ...workerWarning() };
 		});
 	} });
 	registry.register({ ...declarations[1], available: mounted, run({ characterId, checks }) {

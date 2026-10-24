@@ -45,7 +45,6 @@ await new Promise((resolvePromise, reject) => {
 });
 
 const children = [];
-const removeSignalCleanup = installSignalCleanup(() => children, () => {});
 const agentHandler = createAgentHandler({ port: mainPort });
 const oauthServer = createServer((req, res) => {
 	const path = (req.url || "").split("?")[0];
@@ -62,6 +61,16 @@ const oauthPort = configuredOAuthPort ? Number(configuredOAuthPort) : 0;
 await new Promise((resolvePromise, reject) => { oauthServer.once("error", reject); oauthServer.listen({ port: oauthPort, host: "127.0.0.1" }, resolvePromise); });
 const actualOAuthPort = oauthServer.address().port;
 
+// The oauth/agent HTTP server and the agent's live hub (its own listener on
+// COZYCLAY_LIVE_PORT) keep the event loop alive, so shutdown must close both
+// (dropping open keep-alive/SSE sockets) or the process never exits.
+const closeServers = async () => {
+	const httpClosed = new Promise((resolvePromise) => oauthServer.close(() => resolvePromise()));
+	oauthServer.closeAllConnections();
+	await Promise.allSettled([httpClosed, agentHandler.close()]);
+};
+const removeSignalCleanup = installSignalCleanup(() => children, closeServers);
+
 const vite = spawnOwned(process.execPath, ["node_modules/vite/bin/vite.js", ...viteArgs], {
 	cwd: REPO,
 		env: {
@@ -77,7 +86,7 @@ const first = await Promise.race(
 );
 
 removeSignalCleanup();
-await new Promise((resolvePromise) => oauthServer.close(resolvePromise));
+await closeServers();
 await Promise.allSettled(
 	children.filter((child) => child !== first.child).map((child) => terminateOwned(child)),
 );

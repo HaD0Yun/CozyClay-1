@@ -137,7 +137,7 @@ import {
 	pathMetrics,
 	strokeToPathPoints,
 } from "./object-path.js";
-import { carriedPointAt, sceneObjectsAt } from "./object-travel.js"; import { objectTracksOf } from "./motion3/object-tracks.js"; import { ViewGhosts } from "./view-ghosts.jsx"; import { DraftGhost } from "./draft-ghost.jsx";
+import { carriedPointAt, sceneObjectsAt } from "./object-travel.js"; import { objectTracksOf } from "./motion3/object-tracks.js"; import { ViewGhosts } from "./view-ghosts.jsx"; import { DraftGhost } from "./draft-ghost.jsx"; import { SculptSketch } from "./sculpt-sketch.jsx";
 import { routeOwnerFor } from "./route-owner.js";
 import {
 	analyticsActive,
@@ -152,6 +152,7 @@ import {
 	trackFeature,
 } from "./analytics.js";
 import { ko, isKo } from "./locale.js";
+import { saveExport } from "./export-workspace.js";
 import { characterCapabilities, kindRefusal, proxyFigureBounds } from "./character-kind.js";
 import { STARTER_SCENES, resolveSceneParam } from "./starter-scenes.js";
 import { PART_COLOURS } from "./part-colours.js";
@@ -213,11 +214,14 @@ import {
 	shotAtFrame,
 	shotIndexAtFrame,
 } from "./cuts.js";
+import { playbackFrame } from "./motion/playback-frame-store.js";
+import { usePlaybackSubjectPosition } from "./motion/playback-subject.js";
+import { characterGizmoObject as buildCharacterGizmoObject, characterGizmoView, followCameraActive, playbackSceneWithTrack, updateShotMetrics } from "./stage-gizmo.js";
 import {
 	CameraGlide,
 	CameraRailScenePreview,
 	CaptureRig,
-	Character,
+	PlaybackCharacter,
 	ContextLossGuard,
 	CraneHandles,
 	DEFAULT_CAMERA_POSITION,
@@ -600,6 +604,11 @@ export default function App() {
 	// Preview is the player for the finished motion: entering starts playback,
 	// leaving pauses it. The editor view stays the manipulation surface.
 	const [tlPlaying, setTlPlaying] = useState(false);
+	// Playback ticks stay outside React; stopping commits the live frame back to
+	// the edit-time state so exports and agent reads see the stopped frame.
+	useEffect(() => {
+		if (playgroundMode && tlPlaying) window.parent?.postMessage({ type: "cozyclay:playground-nav", kind: "play" }, "*");
+	}, [playgroundMode, tlPlaying]);
 	const cameraPreviewEndRef = useRef(null);
 	// Once the operator touches the viewport, the physical camera stays in
 	// their hands. Follow/Rail only take it back through an explicit Preview or
@@ -1089,6 +1098,7 @@ export default function App() {
 		get tlFrame() { return tlFrame; },
 		get tlFrameCount() { return tlFrameCount; },
 		get tlFrameRef() { return tlFrameRef; },
+		get propFrameRef() { return propFrameRef; },
 		
 		
 		get waitForRig() { return waitForRig; },
@@ -1756,9 +1766,9 @@ export default function App() {
 	// The frame props follow. Live playback keeps it at the playhead; the
 	// offscreen export drives it per captured frame without re-rendering.
 	const propFrameRef = useRef(0);
-
 	const [cameraPos, setCameraPos] = useState(DEFAULT_CAMERA_POSITION);
 	const [subjectVisible, setSubjectVisible] = useState(true);
+	const subjectVisibleRef = useRef(true);
 	const mcpCaptureRef = useRef(null);
 	const liveControlRef = useRef(null);
 	const [liveWorkspaceHandle, setLiveWorkspaceHandle] = useState(null);
@@ -1971,7 +1981,11 @@ export default function App() {
 	}
 
 
-	const renderActive = useRenderActivity(tlPlaying || movePlaying);
+	const renderActive = useRenderActivity(tlPlaying || movePlaying, { playing: tlPlaying, commit: shotsDomain.commitPlaybackFrame, onStop: () => {
+		const position = shotCameraPosRef.current;
+		if (position) setCameraPos(position);
+		setSubjectVisible(subjectVisibleRef.current);
+	} });
 	 // the clip length on the production clock
 
 	// Keep the imperative frame in step with the playhead for live playback;
@@ -2450,6 +2464,17 @@ export default function App() {
 			capture_plan_png: (args = {}) => appContext.live.state.capturePlanPng(requestedCaptureOutput(args) ?? undefined),
 	};
 
+	const liveSceneName = scenes.find((entry) => entry.id === activeSceneId)?.name ?? "";
+	const liveMeta = () => ({
+		project: projectName ?? "Untitled", scene: liveSceneName, cast: appContext.live.characters.length,
+		// The Workflow page's embedded preview is a live editor too; mark it apart from the authoring tab.
+		// Commands: what this editor answers; a stale tab from an older build answers a different set.
+		...(embedMode ? { embed: true } : {}), commands: [...Object.keys(liveQueries), ...Object.keys(studioBindingRef.current.handlers)],
+	});
+	// The client is created once; opening a project must still relabel the tab
+	// in live status and the --workspace <project> selector (#864).
+	useEffect(() => { liveControlRef.current?.setMeta(liveMeta()); }, [projectName, liveSceneName, appContext.live.characters.length]);
+
 	useEffect(() => {
 		const enabled = import.meta.env.DEV || window.__COZYCLAY_LIVE__ === true;
 		if (!enabled) return undefined;
@@ -2461,19 +2486,7 @@ export default function App() {
 					// Tapped so a sculpt run hears the agent's object.sculpt / sculpt.compare.
 					handlers: sculptTap.wrap({ ...liveQueries, ...studioBindingRef.current.handlers }),
 					workspaceId: liveWorkspaceIdRef.current,
-					meta: {
-						project: projectName ?? "Untitled",
-						scene: scenes.find((entry) => entry.id === activeSceneId)?.name ?? "",
-						cast: appContext.live.characters.length,
-						// The Workflow page embeds this same Studio as a preview. It is a
-						// live editor too, so an agent choosing a workspace must be able to
-						// tell the preview apart from the tab the user is authoring in.
-						...(embedMode ? { embed: true } : {}),
-						// Which live commands this editor answers. A stale tab from an
-						// older build (or a different app on the same port) answers a
-						// different set; the agent picks a workspace that has what it needs.
-						commands: [...Object.keys(liveQueries), ...Object.keys(studioBindingRef.current.handlers)],
-					},
+					meta: liveMeta(),
 					// The shared client intentionally has no disconnect UI callback.
 					// Observe only this owned socket; a stale handle must never be sent.
 					WebSocketImpl: class extends WebSocket {
@@ -2566,6 +2579,8 @@ export default function App() {
 		});
 		return [{
 			id: entry.id,
+			entry,
+			clip,
 			model: entry.model,
 			...(isProxyFigure(entry) ? {} : { url: characterModelUrl(entry.model) }),
 			position: [placement.x, entry.y ?? 0, placement.z],
@@ -2589,33 +2604,14 @@ export default function App() {
 	// character so the motion tab keeps working, but a move gizmo hanging in
 	// the viewport while the camera or a prop is selected reads as a stray
 	// widget.
-	const gizmoView = useMemo(() => {
-		if (!charIdFromHierarchyId(selectedHierarchyId)) return null;
-		const entry = characters.find((item) => item.id === activeChar.id);
-		if (!entry || entry.hidden) return null;
-		const hasTake = activeChar.id === activeCharacterId ? Boolean(motion) : Boolean(activeChar.sessionMotion);
-		const placement = hasTake ? entry : placementAt(entry, tlFrame, { shotAt: frame => shotAtFrame(shots, frame) });
-		return { position: [placement.x, entry.y ?? 0, placement.z], rot: placement.rot };
-	}, [characters, activeChar.id, motion, shots, tlFrame, selectedHierarchyId]);
+	const gizmoView = characterGizmoView({
+		selected: Boolean(charIdFromHierarchyId(selectedHierarchyId)), characters, activeCharacterId,
+		activeCharacter: activeChar, motion, shots, activeId: activeChar.id, frame: tlFrame,
+	});
 	// The cast rides the SAME gizmo as scene objects — one movement grammar
 	// for everything on stage. The proxy hands ObjectGizmo the object shape
 	// it expects; `height` puts the pivot at the hips like a prop's centre.
-	const characterGizmoObject = useMemo(() => {
-		if (!gizmoView) return null;
-		const entry = characters.find((item) => item.id === activeChar.id);
-		return {
-			id: "__character__",
-			x: gizmoView.position[0],
-			y: gizmoView.position[1],
-			z: gizmoView.position[2],
-			height: 1.15,
-			footprint: { width: 0.6, depth: 0.6 },
-			rotY: gizmoView.rot ?? entry?.rot ?? 0,
-			scaleX: entry?.scale ?? 1,
-			scaleY: entry?.scale ?? 1,
-			scaleZ: entry?.scale ?? 1,
-		};
-	}, [gizmoView, characters, activeChar.id]);
+	const characterGizmoObject = buildCharacterGizmoObject(gizmoView, characters.find((item) => item.id === activeChar.id));
 
 	/* --------------------- per-character layer buffers ---------------------
 	 * waypoints / motion above are the EDITING BUFFER of the
@@ -2780,7 +2776,7 @@ export default function App() {
 			case "unsupported_codec": return ko("MP4 encoding is unavailable. Use a current browser with H.264 WebCodecs support (such as Chrome or Edge), enable hardware acceleration, then retry.", "MP4 인코딩을 사용할 수 없어요. H.264 WebCodecs를 지원하는 최신 Chrome·Edge 등에서 하드웨어 가속을 켠 뒤 다시 시도하세요.");
 			case "encode_failed": return ko("Video encoding failed. Retry the same request. If resources are tight, shorten the shot range or lower output resolution before starting a new export.", "영상 인코딩에 실패했어요. 같은 요청을 다시 시도하세요. 리소스가 부족하면 샷 범위를 줄이거나 출력 해상도를 낮춘 뒤 새로 내보내세요.");
 			case "render_failed": return ko("Frame rendering failed. Let the scene finish loading, then retry. If it repeats, shorten the range or reduce output resolution for a new export.", "프레임 렌더링에 실패했어요. 장면 로딩이 끝난 뒤 다시 시도하세요. 반복되면 범위나 출력 해상도를 줄여 새로 내보내세요.");
-			case "aborted": return ko("Export cancelled. No further downloads will be requested.", "내보내기를 취소했어요. 추가 다운로드는 요청하지 않아요.");
+			case "aborted": return ko("Export cancelled. No further files will be handed off.", "내보내기를 취소했어요. 추가 파일은 전달하지 않아요.");
 			default: return ko("Export could not finish. Retry the same request. For memory or resource problems, close other heavy tabs or use a shorter range / lower output resolution in a new export.", "내보내기를 완료하지 못했어요. 같은 요청을 다시 시도하세요. 메모리·리소스 문제라면 무거운 탭을 닫거나 범위·출력 해상도를 줄여 새로 내보내세요.");
 		}
 	}
@@ -2825,7 +2821,7 @@ export default function App() {
 			job.controller.signal.throwIfAborted();
 			attempt?.succeed();
 			updateExportStatus(job, "completed", { message: request.download
-				? ko("Export completed. Download requested; check your browser's downloads. The OS save is not confirmed.", "내보내기를 완료하고 다운로드를 요청했어요. 브라우저 다운로드를 확인하세요. OS 저장 완료는 확인할 수 없어요.")
+				? ko("Export completed. Check your export folder or browser downloads; the OS save is not confirmed.", "내보내기를 완료했어요. 내보내기 폴더나 브라우저 다운로드를 확인하세요. OS 저장 완료는 확인할 수 없어요.")
 				: ko("Export pipeline completed. The requesting tool handles the file handoff.", "내보내기 처리를 완료했어요. 요청한 도구에서 파일 전달을 처리합니다.") });
 			if (!request.external) {
 				if (request.kind === "video") { track("export:video_succeeded", { format: "mp4" }); trackFeature("export_video"); }
@@ -3014,11 +3010,9 @@ export default function App() {
 			const slate = (moveSequence?.slate ?? "shot").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "shot";
 			// Default plate filename: const name = `cozyclay-${slate}.mp4`
 			const name = fileName ?? `cozyclay-${slate}.mp4`;
-			const url = URL.createObjectURL(result.blob);
-			try { saveDownload(url, name); }
-			finally { setTimeout(() => URL.revokeObjectURL(url), 10_000); }
+			await saveExport(result.blob, name);
 			setRecordedVideoName(name);
-			setToast((isKo, ko) => isKo ? `${name} 다운로드 요청 · ${result.frameCount}프레임` : `Download requested: ${name} · ${result.frameCount} frames`);
+			setToast((isKo, ko) => isKo ? `${name} 내보내기 완료 · ${result.frameCount}프레임` : `${name} exported · ${result.frameCount} frames`);
 			return { ...result, fileName: name };
 		}
 		return result;
@@ -3083,13 +3077,13 @@ export default function App() {
 				{busy && !message && <p>{stage === "mux"
 					? ko("Finalizing MP4. Progress is indeterminate; this stage cannot be interrupted.", "MP4 마무리 중이에요. 진행률은 알 수 없으며 이 단계는 중단할 수 없어요.")
 					: stage === "flush" ? ko("Finishing encoder output. Progress is indeterminate.", "인코더 출력을 마무리하고 있어요. 진행률은 알 수 없어요.")
-					: kind === "frame" ? ko("Handing off existing PNGs. Synchronous downloads cannot be cancelled.", "기존 PNG를 전달하고 있어요. 동기 다운로드는 취소할 수 없어요.")
-					: stage === "archive" ? ko("Building the ZIP. Cancel takes effect after the current work unit, before download.", "ZIP을 만드는 중이에요. 취소는 현재 작업이 끝난 뒤 다운로드 전에 적용돼요.")
-					: stage === "depth" || stage === "frames" ? ko("Cancel stops at the next frame boundary, before download.", "취소하면 다운로드 전 다음 프레임 경계에서 멈춰요.")
+					: kind === "frame" ? ko("Handing off existing PNGs. The file handoff cannot be cancelled.", "기존 PNG를 전달하고 있어요. 파일 전달은 취소할 수 없어요.")
+					: stage === "archive" ? ko("Building the ZIP. Cancel takes effect after the current work unit, before the file handoff.", "ZIP을 만드는 중이에요. 취소는 현재 작업이 끝난 뒤 파일 전달 전에 적용돼요.")
+					: stage === "depth" || stage === "frames" ? ko("Cancel stops at the next frame boundary, before the file handoff.", "취소하면 파일 전달 전 다음 프레임 경계에서 멈춰요.")
 					: phase === "preparing" ? ko("Preparing the renderer and checking MP4 support…", "렌더러를 준비하고 MP4 지원을 확인하고 있어요…")
 					: ko("Encoding the requested frames, not yet a completed file.", "요청한 프레임을 인코딩 중이에요. 아직 파일이 완성되지 않았어요.")}</p>}
 				{retryable && <p>{ko("Retry keeps the original shot, camera, range and settings; it does not change your edits.", "다시 시도하면 원래 샷·카메라·범위·설정을 사용하며 편집 내용은 바꾸지 않아요.")}</p>}
-				{handedOff > 0 && <p>{ko(`${handedOff} file(s) already handed off. Retry skips those downloads; check browser downloads because OS saves cannot be confirmed.`, `파일 ${handedOff}개는 이미 전달했어요. 다시 시도할 때 해당 다운로드는 건너뛰어요. OS 저장은 확인할 수 없으니 브라우저 다운로드를 확인하세요.`)}</p>}
+				{handedOff > 0 && <p>{ko(`${handedOff} file(s) already handed off. Retry skips those files; check your export folder or browser downloads because OS saves cannot be confirmed.`, `파일 ${handedOff}개는 이미 전달했어요. 다시 시도할 때 해당 파일은 건너뛰어요. OS 저장은 확인할 수 없으니 내보내기 폴더나 브라우저 다운로드를 확인하세요.`)}</p>}
 				<div className="export-status-actions">
 					{busy && cancellable && <button type="button" data-testid="export-cancel" onClick={stopShotRecording}>{ko("Cancel export", "내보내기 취소")}</button>}
 					{retryable && <button type="button" data-testid="export-retry" disabled={recState === "recording"} onClick={() => void retryExport()}>{ko("Retry same export", "같은 내보내기 재시도")}</button>}
@@ -3098,7 +3092,7 @@ export default function App() {
 		);
 	}
 
-	function downloadOtioCutList() {
+	async function downloadOtioCutList() {
 		if (!shots.length) {
 			setToast(ko("Add at least one Shot before exporting OTIO", "OTIO를 내보내려면 샷을 하나 이상 추가하세요"));
 			return;
@@ -3117,16 +3111,11 @@ export default function App() {
 			};
 			const serialized = serializeOtio(exportScene, shots);
 			const blob = new Blob([serialized], { type: "application/json" });
-			const url = URL.createObjectURL(blob);
-			const anchor = document.createElement("a");
 			const slug = (activeScene?.name ?? "cut-list")
 				.toLowerCase()
 				.replace(/[^a-z0-9]+/g, "-")
 				.replace(/^-+|-+$/g, "") || "cut-list";
-			anchor.href = url;
-			anchor.download = `cozyclay-${slug}.otio`;
-			anchor.click();
-			setTimeout(() => URL.revokeObjectURL(url), 10_000);
+			await saveExport(blob, `cozyclay-${slug}.otio`);
 			const frameCount = shots.reduce((total, shot) => total + shot.endFrame - shot.startFrame + 1, 0);
 			setToast(isKo
 				? `OTIO 저장됨 · ${shots.length}샷 · ${frameCount}프레임`
@@ -3144,15 +3133,6 @@ export default function App() {
 	 *   - depth + normal conditioning passes of the current framing,
 	 *   - a storyboard contact sheet of the whole cut.
 	 */
-
-	function saveDownload(href, name) {
-		const anchor = document.createElement("a");
-		anchor.href = href;
-		anchor.download = name;
-		document.body.appendChild(anchor);
-		anchor.click();
-		anchor.remove();
-	}
 
 	function loadImage(dataUrl) {
 		return new Promise((resolve, reject) => {
@@ -3283,21 +3263,20 @@ export default function App() {
 				job.label = ko(`Shot ${order + 1} of ${targets.length}`, `샷 ${order + 1} / ${targets.length}`);
 				const pack = await buildShotKeyframePack(job.request.context.shots[index], index, null, job);
 				job.controller.signal.throwIfAborted();
-				const url = URL.createObjectURL(new Blob([pack.bytes], { type: "application/zip" }));
-				try { saveDownload(url, pack.name); job.request.handedOff.add(index); }
-				finally { setTimeout(() => URL.revokeObjectURL(url), 10_000); }
-				setToast(isKo ? `${pack.name} 다운로드 요청 · 파일 ${pack.entries.length}개` : `Download requested: ${pack.name} · ${pack.entries.length} files`);
+				await saveExport(new Blob([pack.bytes], { type: "application/zip" }), pack.name);
+				job.request.handedOff.add(index);
+				setToast(isKo ? `${pack.name} 내보내기 완료 · 파일 ${pack.entries.length}개` : `${pack.name} exported · ${pack.entries.length} files`);
 				await exportBoundary(job);
 			}
 		}));
 	}
 
 	/** Depth and normal conditioning passes of the framing on screen now. */
-	function exportRenderPasses() {
+	async function exportRenderPasses() {
 		try {
 			const dataUrls = renderPassDataUrls();
-			for (const kind of ["depth", "normal"]) saveDownload(dataUrls[kind], passFileName(kind));
-			setToast(ko("Depth and normal passes downloaded", "뎁스·노멀 패스를 다운로드했어요"));
+			for (const kind of ["depth", "normal"]) await saveExport(dataUrls[kind], passFileName(kind));
+			setToast(ko("Depth and normal passes exported", "뎁스·노멀 패스를 내보냈어요"));
 			trackFeature("export_render_pass");
 		} catch (error) {
 			setToast(error?.message || String(error));
@@ -3356,7 +3335,7 @@ export default function App() {
 				cell: { width: 480, height: 300 },
 				createCanvas: storyboardCanvas,
 			});
-			saveDownload(canvas.toDataURL("image/png"), "cozyclay-storyboard.png");
+			await saveExport(canvas.toDataURL("image/png"), "cozyclay-storyboard.png");
 			setToast(isKo ? `스토리보드 저장됨 · ${cells.length}샷` : `Storyboard saved · ${cells.length} shots`);
 			trackFeature("export_storyboard");
 		} catch (error) {
@@ -3447,8 +3426,8 @@ export default function App() {
 			}
 			const canvas = composeStoryboard({ shots: cells, columns: Math.min(3, cells.length), cell: { width: 480, height: 300 }, createCanvas: storyboardCanvas });
 			job.controller.signal.throwIfAborted();
-			saveDownload(canvas.toDataURL("image/png"), "cozyclay-storyboard.png");
-			setToast(isKo ? `콘택트 시트 다운로드 요청 · 패널 ${cells.length}개` : `Download requested: contact sheet · ${cells.length} panels`);
+			await saveExport(canvas.toDataURL("image/png"), "cozyclay-storyboard.png");
+			setToast(isKo ? `콘택트 시트 내보내기 완료 · 패널 ${cells.length}개` : `Contact sheet exported · ${cells.length} panels`);
 			return { fileName: "cozyclay-storyboard.png", panelCount: cells.length };
 		}));
 	}
@@ -3501,10 +3480,8 @@ export default function App() {
 			const bytes = every ? buildZip(entries) : buildKeyframePack(packs[0]);
 			const name = every ? "cozyclay-panels.zip" : `cozyclay-${packs[0].folder}-${slugifyTitle(target.name)}.zip`;
 			await exportBoundary(job);
-			const url = URL.createObjectURL(new Blob([bytes], { type: "application/zip" }));
-			try { saveDownload(url, name); }
-			finally { setTimeout(() => URL.revokeObjectURL(url), 10_000); }
-			setToast(isKo ? `${name} 다운로드 요청 · 파일 ${entries.length}개` : `Download requested: ${name} · ${entries.length} files`);
+			await saveExport(new Blob([bytes], { type: "application/zip" }), name);
+			setToast(isKo ? `${name} 내보내기 완료 · 파일 ${entries.length}개` : `${name} exported · ${entries.length} files`);
 			return { fileName: name, entries: entries.map((entry) => entry.name) };
 		}));
 	}
@@ -3677,7 +3654,7 @@ export default function App() {
 	// (test/motion3/qa-motion3-*-browser.mjs). Harmless in normal use.
 	useEffect(() => {
 	window.__cozyclay = {
-			runStudioAction, setFrame: setTlFrame,
+			runStudioAction, setFrame: setTlFrame, setPlaying: setTlPlaying,
 			rigA: activeRig, motion, tlFrame, frameCount: tlFrameCount, playing: tlPlaying, ikMode, ikChains, ikFocus, contactRadii: ikChains?.values().next().value?.contactRadii ?? null, ik: ikStateRef.current,
 			rangePins, rangePinResiduals,
 			rangePinApplySpec: motionDomain.rangePinApplySpec,
@@ -3859,11 +3836,7 @@ export default function App() {
 			return { x: at.x, z: at.z };
 		};
 	}, [charA.parent, charA.y, sceneObjects, tlFrameCount, tlFps]);
-	const motionPos = useMemo(() => {
-		if (!motion && !subjectCarry) return null;
-		const subject = sampleAt(playbackSceneBase, null, tlFrame).subject;
-		return subjectCarry ? subjectCarry(subject, tlFrame) : subject;
-	}, [motion, subjectCarry, playbackSceneBase, tlFrame]);
+	const motionPos = usePlaybackSubjectPosition({ motion, subjectCarry, scene: playbackSceneBase, frame: tlFrame });
 
 	// The subject's full per-frame scene trajectory — what the follow camera
 	// is derived from. Without a loaded motion, and riding nothing, the subject
@@ -3884,11 +3857,7 @@ export default function App() {
 	// A rail shot with an aim holds its cast (or a world point) instead of the subject.
 	const followTrack = useShotCameraTracks({ shots, subjectTrack, subjectId: charA.id, fps: tlFps, yawDeg: charA.rot, filmback, characters, objects: sceneObjects, frameCount: tlFrameCount, activeId: activeChar.id, motion });
 
-	const playbackScene = useMemo(() => ({
-		...playbackSceneBase,
-		subjectTrack,
-		cameraTrack: followTrack,
-	}), [playbackSceneBase, subjectTrack, followTrack]);
+	const playbackScene = useMemo(() => playbackSceneWithTrack(playbackSceneBase, subjectTrack, followTrack), [playbackSceneBase, subjectTrack, followTrack]);
 
 	// Browser acceptance seam: it invokes the exact production exporter but
 	// suppresses the download, returning only serializable evidence.
@@ -3929,8 +3898,7 @@ export default function App() {
 
 	// The follow camera owns the shot camera in the same situations key
 	// following would: never while an authoring mode holds the viewport.
-	const followCamActive =
-		activeCamera.mode !== "keys" && !!followTrack?.[tlFrame] && (preview || (!ikMode && !waypointMode && !posing));
+	const followCamActive = followCameraActive(activeCamera.mode, followTrack, tlPlaying ? playbackFrame() : tlFrame, preview, ikMode, waypointMode, posing);
 
 	// Implied locomotion speed per authored segment, on the timeline clock
 	// (m/s is physical, so the judge always uses tlFps). Shown in the
@@ -4199,27 +4167,24 @@ export default function App() {
 		}
 		const snapshot = structuredClone(result);
 		const frameJob = { source: result, done: false, request: null };
-		frameJob.request = exportRequest("frame", (job) => {
+		frameJob.request = exportRequest("frame", async (job) => {
 			if (!snapshot?.frame) throw Object.assign(new Error("The captured frame is not ready"), { exportFailureCode: "render_failed" });
 			updateExportStatus(job, "finalizing", { stage: "download", cancellable: false });
-			const save = (href, name) => {
+			const save = async (source, name) => {
 				if (job.request.handedOff.has(name)) return;
-				saveDownload(href, name);
+				await saveExport(source, name);
 				job.request.handedOff.add(name);
 			};
 			if (snapshot.partColours && !job.request.handedOff.has("blocking-frame-palette.json")) {
-				const blob = new Blob([JSON.stringify({ partColours: snapshot.partColours }, null, 2)], { type: "application/json" });
-				const url = URL.createObjectURL(blob);
-				try { save(url, "blocking-frame-palette.json"); }
-				finally { setTimeout(() => URL.revokeObjectURL(url), 1000); }
+				await save(new Blob([JSON.stringify({ partColours: snapshot.partColours }, null, 2)], { type: "application/json" }), "blocking-frame-palette.json");
 			}
 			if (snapshot.frameB) {
-				save(snapshot.frame, "blocking-frame-A-start.png");
-				save(snapshot.frameB, "blocking-frame-B-end.png");
-			} else save(snapshot.frame, "blocking-frame.png");
+				await save(snapshot.frame, "blocking-frame-A-start.png");
+				await save(snapshot.frameB, "blocking-frame-B-end.png");
+			} else await save(snapshot.frame, "blocking-frame.png");
 			frameJob.done = true;
 			setResult((current) => current === frameJob.source ? { ...current, downloaded: true } : current);
-			setToast(ko("Frame download requested. Check your browser's downloads.", "프레임 다운로드를 요청했어요. 브라우저 다운로드를 확인하세요."));
+			setToast(ko("Frame export finished. Check your export folder or browser downloads.", "프레임 내보내기가 끝났어요. 내보내기 폴더나 브라우저 다운로드를 확인하세요."));
 		});
 		frameExportRef.current = frameJob;
 		return executeExportRequest(frameJob.request);
@@ -4787,7 +4752,10 @@ export default function App() {
 									take={{ frameCount: tlFrameCount, fps: tlFps, objectTracks }}
 									registryRef={carrierRegistryRef}
 								>
-									<Character
+									<PlaybackCharacter
+										entry={view.entry}
+										clip={view.clip}
+										shots={shots}
 										url={view.url}
 										{...{ model: view.model, posture: view.posture }}
 										position={view.position}
@@ -4801,7 +4769,7 @@ export default function App() {
 									/>
 								</ObjectCarrier>
 							))}
-							<ViewGhosts rig={rigs[activeChar.id]} take={motion} frame={tlFrame} objects={sceneObjects} propTake={{ frameCount: tlFrameCount, fps: tlFps, objectTracks }} /><DraftGhost rigs={rigs} objects={sceneObjects} />
+							<ViewGhosts rig={rigs[activeChar.id]} take={motion} frame={tlFrame} objects={sceneObjects} propTake={{ frameCount: tlFrameCount, fps: tlFps, objectTracks }} /><DraftGhost rigs={rigs} objects={sceneObjects} /><SculptSketch objects={sceneObjects} />
 
 							{/* Selection marker: XYZ tripod + ring on the picked cast
 							    member; the X/Z arrows drag it across the deck. */}
@@ -4844,19 +4812,10 @@ export default function App() {
 								charA={charA}
 								charB={charB}
 								showB={showB}
-								probeX={motionPos ? motionPos.x : charA.x}
-								probeZ={motionPos ? motionPos.z : charA.z}
+								probe={{ scene: playbackSceneBase, frameRef: propFrameRef, carry: subjectCarry }}
 								camRef={shotCamRef}
 								look={look}
-								onMetrics={(p, visible) => {
-									shotCameraPosRef.current = { x: p.x, y: p.y, z: p.z };
-									setCameraPos((prev) =>
-										Math.abs(prev.x - p.x) + Math.abs(prev.y - p.y) + Math.abs(prev.z - p.z) > 1e-4
-											? { x: p.x, y: p.y, z: p.z }
-											: prev,
-									);
-									setSubjectVisible((prev) => (prev === visible ? prev : visible));
-								}}
+								onMetrics={(p, visible) => updateShotMetrics({ position: p, visible, playing: tlPlaying, setCameraPos, setSubjectVisible, cameraRef: shotCameraPosRef, visibleRef: subjectVisibleRef })}
 							/>
 							<MoveRig
 								playing={movePlaying}

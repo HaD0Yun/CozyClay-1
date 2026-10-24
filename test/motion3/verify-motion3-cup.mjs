@@ -65,7 +65,11 @@ const late = run("motion.compile", { characterId: CHARACTER.id, base: first.spec
 expect("base + patch answers a new id and a delta against the base", late.specId && late.specId !== first.specId && late.delta?.base === first.specId
 	&& late.delta.new >= 1 && late.qa.ok === false, JSON.stringify({ id: late.specId, delta: late.delta }));
 const grabGroup = late.qa.groups.find(g => g.kind === "GRAB");
-expect("an early grab is a GRAB group on the cup with a patch", grabGroup && /empty-2/.test(grabGroup.subject) && Array.isArray(grabGroup.patch) && grabGroup.patch.length > 0, JSON.stringify(grabGroup));
+// a plain compile keeps each hint's words and offers no patch; a compile with repair offers a patch only once compiled (hint-check.js)
+expect("an early grab is a GRAB group on the cup with a hint; a plain compile offers no patch", grabGroup && /empty-2/.test(grabGroup.subject) && /set objects\.empty-2\.grab to 28/.test(grabGroup.hint)
+	&& late.qa.groups.every(g => !g.patch && !g.patchTried), JSON.stringify(grabGroup));
+const lateRepaired = run("motion.compile", { characterId: CHARACTER.id, base: first.specId, patch: [{ op: "replace", path: "/objects/empty-2/grab", value: 24 }], install: false, repair: { rounds: 1 } });
+expect("with repair, every patch offered was compiled and helped", lateRepaired.qa.groups.every(g => !g.patch || g.patchChecked), JSON.stringify(lateRepaired.qa.groups.map(g => [g.kind, Boolean(g.patch), Boolean(g.patchChecked)])));
 
 // ---- repair --------------------------------------------------------------------------------
 const repaired = run("motion.compile", { characterId: CHARACTER.id, base: late.specId, repair: { rounds: 4 }, install: false });

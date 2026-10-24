@@ -2,12 +2,13 @@ import { readFileSync } from 'node:fs';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createServer } from 'vite';
+import { fileURLToPath } from 'node:url';
 import { createStudioAppActions } from '../../src/commands/index.js';
 import { createSceneObject } from '../../src/scene-objects.js';
 import { stageFixture } from './stage-fixture.mjs';
 const source = readFileSync(new URL('../../src/stage-attach-frames.js', import.meta.url), 'utf8');
 const carried = source.slice(source.indexOf('export const ATTACH_BONE_ROWS'));
-const server = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false }, optimizeDeps: { noDiscovery: true, include: [] }, appType: 'custom', plugins: [{
+const server = await createServer({ configFile: false, root: fileURLToPath(new URL('../../', import.meta.url)), server: { middlewareMode: true, hmr: false }, optimizeDeps: { noDiscovery: true, include: [] }, appType: 'custom', plugins: [{
   name: 'objects-without-renderer', enforce: 'pre', load(id) {
     if (id.endsWith('/src/scene-assets.js')) return `export * from './scene-assets.js?real';
       import { db } from '../test/bus/objects-asset-db.mjs';

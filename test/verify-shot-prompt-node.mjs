@@ -28,7 +28,7 @@ const image = shotPromptFromInputs({ meta, target: "image", referenceOwnsCamera:
 assert.equal(image.error, null);
 const lines = image.prompt.split("\n");
 assert.equal(lines[0], "SHOT: Shot 1, 3s, 16:9");
-assert.equal(lines[1], "LENS: 35mm, long shot", "a 38deg field of view reads as a long shot");
+assert.equal(lines[1], "LENS: 35mm, normal shot", "a 35mm lens reads as the editor reports it: normal (#848)");
 assert.match(image.prompt, /^CAMERA: follow the reference clip's framing/m, "the reference owns the camera by default");
 assert.match(image.prompt, /^CAST: Alpha$/m);
 assert.match(image.prompt, /^LOOK: clay previs, neutral look$/m, "no intent falls back to the neutral look");

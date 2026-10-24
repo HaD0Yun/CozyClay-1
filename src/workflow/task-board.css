@@ -31,7 +31,7 @@
 
 .task-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--text-3, var(--agent-text-dim)); }
 [data-status="running"] > .task-dot, [data-status="starting"] > .task-dot { background: var(--select, var(--agent-accent)); animation: task-dot-pulse 1.2s ease-in-out infinite; }
-[data-status="waiting"] > .task-dot, [data-status="queued"] > .task-dot { background: none; box-shadow: inset 0 0 0 1.5px var(--text-3, var(--agent-text-dim)); }
+[data-status="waiting"] > .task-dot, [data-status="queued"] > .task-dot, [data-status="review"] > .task-dot { background: none; box-shadow: inset 0 0 0 1.5px var(--text-3, var(--agent-text-dim)); }
 [data-status="done"] > .task-dot { background: var(--ok, var(--agent-ok)); }
 [data-status="failed"] > .task-dot, [data-status="paused"] > .task-dot { background: var(--danger, var(--agent-alert)); }
 @keyframes task-dot-pulse { 50% { opacity: 0.35; } }

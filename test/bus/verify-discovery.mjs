@@ -8,6 +8,7 @@
 // handlers, the agent's tools and the CLI child process are the shipped ones.
 // Run one case with COZYCLAY_DISCOVERY_CASE=<name> (the App fixture owns argv).
 import assert from 'node:assert/strict';
+import { getCurrentSystemPrompt } from '@earendil-works/pi-ai';
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -318,7 +319,7 @@ cases['milestone'] = async () => {
     assert.deepEqual(done[0].result.actions.map(row => row.input), [STAMP.input], 'the schema arrives on request');
     assert.deepEqual({ action: done[1].result.action, status: done[1].result.status, output: done[1].result.output }, { action: STAMP.id, status: 'completed', output: { note: 'agent' } });
     const seen = faux.calls[0].messages.flatMap(message => Array.isArray(message.content) ? message.content : []).map(part => part.text ?? '').join('\n');
-    const actions = JSON.parse(/\n<actions>\n(.*)\n<\/actions>$/s.exec(faux.calls[0].systemPrompt)[1]);
+    const actions = JSON.parse(/\n<actions>\n(.*)\n<\/actions>$/s.exec(getCurrentSystemPrompt(faux.calls[0].messages))[1]);
     assert.deepEqual(actions.find(row => row.id === STAMP.id), { id: STAMP.id, label: STAMP.label, timeoutMs: STAMP.timeoutMs }, 'the model sees the command in its index');
     assert.ok(!seen.includes(STAMP.description), 'and not its description or schema');
     // MCP and the CLI: the same command, listed and run.

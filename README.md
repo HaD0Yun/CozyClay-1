@@ -12,6 +12,7 @@
   <a href="https://www.npmjs.com/package/cozyclay"><img alt="npm" src="https://img.shields.io/npm/v/cozyclay"></a>
   <img alt="Node 22.19+" src="https://img.shields.io/badge/node-22.19%2B-brightgreen">
   <a href="https://github.com/NomaDamas/CozyClay/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/NomaDamas/CozyClay?style=flat"></a>
+  <a href="https://discord.gg/Hp9V5wwgjF"><img alt="Discord" src="https://img.shields.io/badge/discord-join-5865F2?logo=discord&logoColor=white"></a>
 </p>
 
 <p align="center">
@@ -19,7 +20,8 @@
   <a href="#quick-start">Quick start</a> ·
   <a href="INSTALL_FOR_AGENTS.md">Guide for AI agents</a> ·
   <a href="#docs">Docs</a> ·
-  <a href="CHANGELOG.md">Changelog</a>
+  <a href="CHANGELOG.md">Changelog</a> ·
+  <a href="https://discord.gg/Hp9V5wwgjF">Discord</a>
 </p>
 
 <table>
@@ -104,6 +106,15 @@ npm test
 | [`docs/studio-ui-ia.md`](docs/studio-ui-ia.md) | Every control and where it lives |
 | [`docs/privacy.md`](docs/privacy.md) | Anonymous telemetry and how to turn it off (`cclay telemetry off`) |
 | [`AGENTS.md`](AGENTS.md) | Contribution rules |
+
+## Guides
+
+| Read | For |
+| --- | --- |
+| [Greybox to AI video](https://cozyclay.org/greybox-to-video/) | Why a grey blockout is the most reliable input for a video model, and the block-then-generate loop |
+| [Previs software compared](https://cozyclay.org/previs-software/) | Free, open source and browser-based previs tools side by side |
+| [Seedance 2.5 camera control](https://cozyclay.org/seedance-camera-control/) | Getting the same camera on every take with a reference clip |
+| [Camera control for AI video](https://cozyclay.org/ai-camera-control/) | Why camera prompts drift and what the models actually accept |
 
 Found a bug or want a feature? [Open an issue](https://github.com/NomaDamas/CozyClay/issues).
 

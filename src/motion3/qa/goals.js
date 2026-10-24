@@ -1,6 +1,7 @@
 // Goals (C8): what the motion must achieve, measured on the compiled frames. A goal names one
 // predicate and the frames it must hold on (at: an absolute frame or [f0, f1]):
-//   near:  [a, b]  refDistance(a, b) <= tol (default 0.05 m)
+//   near:  [a, b]  refDistance(a, b) <= tol (default 0.05 m); a round body's .top and the mouth measure its rim
+//                  (nearRefs), and a failing near goal on a .top says which point it read
 //   above: [a, b]  a.y - b.y >= by (default 0 m)
 //   moved: ref     an object's point (default its base) is at least by (default 0.05 m) from
 //                  where the scene put it; any other point ref (prop:, joint:, landmark:, anchor:)
@@ -19,7 +20,7 @@
 // count and first..last show how much of at fails and the search (search.js) sees progress; "any"
 // one, at the best frame. Issue frames index out.frames (out.f0 + i); goals[].at and every frame in
 // a message are absolute.
-import { refPoint, refDistance } from "../refs.js";
+import { refPoint, refDistance, openingOf } from "../refs.js";
 import { partsOf } from "../object-pose.js";
 import { add, apply, len, sub } from "../compiler/math.js";
 import { m3 } from "./fmt.js";
@@ -42,13 +43,14 @@ export const goalNeed = (g, kind) => (AT_MOST.has(kind) ? g.tol : g.by) ?? DEFAU
 const goalMode = (g, kind) => g.mode ?? (kind === "speed" ? "any" : "all");
 
 /** moved and still measure the named point of an object ref (its base when none is named), any other ref as it is. */
-export const movedRef = ref => (!ref.startsWith("object:") || /\.(center|top|base)$/.test(ref) ? ref : `${ref}.base`);
+export const movedRef = ref => (!ref.startsWith("object:") || /\.(center|top|base|rim)$/.test(ref) ? ref : `${ref}.base`);
 
 /** Where the scene put the point of a moved object ref: the same AABB point refs.js answers, from the scene boxes. */
 function scenePoint(scene, ref) {
-	const [, id, which] = /^object:(.+)\.(center|top|base)$/s.exec(movedRef(ref)) ?? [];
+	const [, id, which] = /^object:(.+)\.(center|top|base|rim)$/s.exec(movedRef(ref)) ?? [];
 	const boxes = partsOf(scene, id).map(p => scene.objects[p]);
 	if (!boxes.length) return null;
+	if (which === "rim") return openingOf(boxes).o;
 	const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
 	for (const b of boxes) for (const x of [-1, 1]) for (const y of [0, 2]) for (const z of [-1, 1]) {
 		const p = add(b.pos, apply(b.R, [x * b.half[0], y * b.half[1], z * b.half[2]]));
@@ -74,9 +76,35 @@ function speedAt(out, ref, f) {
 	return q ? len(sub(p, q)) * fps : null;
 }
 
+const MOUTH = "landmark:mouth", TOP = /^object:(.+)\.top$/s;
+
+/**
+ * A near goal of an object's .top and the mouth, on a body whose highest part is round (a cylinder: a cup, a can, a
+ * bottle), measures its opening's rim nearest the mouth (refs.js .rim): .top is the top-face centre of its world
+ * bounding box, which a tilted cup lifts off the rim it is drunk from (a session read 8 failures in a row off it).
+ * -> the refs measured, as given when nothing changes.
+ */
+export function nearRefs(scene, g) {
+	const [a, b] = g.near, top = [a, b].map(r => TOP.exec(r)?.[1]), i = top[0] && b === MOUTH ? 0 : top[1] && a === MOUTH ? 1 : -1;
+	if (i < 0) return g.near;
+	const parts = partsOf(scene, top[i]).map(p => scene.objects[p]).filter(p => p?.half && p.pos && p.R);
+	const high = parts.length ? parts.reduce((p, q) => (q.pos[1] + 2 * q.half[1] > p.pos[1] + 2 * p.half[1] ? q : p)) : null;
+	if (high?.renderer !== "cylinder") return g.near;
+	return g.near.map((r, j) => (j === i ? `object:${top[i]}.rim` : r));
+}
+
+/** What a near goal's .top measured, said in its message (refs.js): the rim it was read at, or the bounding-box top it is. */
+function topNote(scene, g) {
+	const ref = g.near.find(r => TOP.test(r));
+	if (!ref) return "";
+	const id = TOP.exec(ref)[1];
+	return nearRefs(scene, g) !== g.near ? ` (measured at ${id}'s rim nearest the mouth, object:${id}.rim; its .top is its bounding box's top)`
+		: ` (${ref} is the top-face centre of its world bounding box; object:${id}.rim is its opening, which tilts with it)`;
+}
+
 /** The measured value of goal g at absolute frame f (metres, m/s for speed), or null when a ref is unknown there. */
 function measure(out, g, kind, f, home) {
-	if (kind === "near") return refDistance(out, f, g.near[0], g.near[1]);
+	if (kind === "near") { const [a, b] = nearRefs(out.ctx.scene, g); return refDistance(out, f, a, b); }
 	if (kind === "above") {
 		const a = refPoint(out, f, g.above[0]), b = refPoint(out, f, g.above[1]);
 		return a && b ? a[1] - b[1] : null;
@@ -139,9 +167,9 @@ function windowOf(X, i) {
 	return { a, b };
 }
 
-function message(name, kind, row, need, any, from) {
+function message(name, kind, row, need, any, from, note = "") {
 	const where = any ? `f${row.f}, the best of f${any[0]}-f${any[1]}` : `f${row.f}`;
-	if (kind === "near") return `${name}: ${m3(row.v)} m at ${where} (needs <= ${need})`;
+	if (kind === "near") return `${name}: ${m3(row.v)} m at ${where} (needs <= ${need})${note}`;
 	if (kind === "above") return `${name}: ${m3(row.v)} m above at ${where} (needs >= ${need})`;
 	if (kind === "speed") return `${name}: ${m3(row.v)} m/s at ${where} (needs >= ${need})`;
 	if (kind === "still") return `${name}: ${m3(row.v)} m from ${from === undefined ? "its scene pose" : `f${from}`} at ${where} (needs <= ${need})`;
@@ -183,8 +211,9 @@ export function goalChecks(out, goals) {
 		const ok = pick.short <= 0;
 		results.push({ name, kind, ok, value: m3(pick.v), at: pick.f, need });
 		if (ok) return;
+		const note = kind === "near" ? topNote(out.ctx.scene, g) : "";
 		for (const r of any ? [pick] : rows.filter(r => r.short > 0)) {
-			issues.push({ kind: "GOAL", msg: message(name, kind, r, need, any && cut ? [w.a, w.b] : null, from), frame: r.f - f0, value: round4(r.short), limit: 0 });
+			issues.push({ kind: "GOAL", msg: message(name, kind, r, need, any && cut ? [w.a, w.b] : null, from, kind === "near" ? note : ""), frame: r.f - f0, value: round4(r.short), limit: 0 });
 		}
 	});
 	return { issues, results };

@@ -1,4 +1,5 @@
 import { createContext, useContext } from "react";
+import { playbackFrame, usePlaybackSnapshot } from "../motion/playback-frame-store.js";
 
 // App owns the document/domain wiring. Region components consume this one
 // render snapshot and call its named actions; they never acquire domain state
@@ -19,4 +20,8 @@ export const StudioShellContext = createContext(null);
 
 export function useStudioShell() {
 	return useContext(StudioShellContext);
+}
+
+export function useStudioPlaybackFrame() {
+	return usePlaybackSnapshot(playbackFrame);
 }

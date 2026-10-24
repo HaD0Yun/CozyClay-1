@@ -46,7 +46,7 @@ Units are metres, angles are degrees, the floor is `y = 0`, front is `+z`, and t
 | Field | Meaning |
 |---|---|
 | `id` | Unique part name, `a-z 0-9 -`. |
-| `shape` | `blob`, `box`, `cylinder`, `torus` or `frame`. |
+| `shape` | `blob`, `box`, `cylinder`, `torus`, `frame`, `lathe`, `tube`, `extrude`, `loft`, `convex` or `scatter`. See [Shapes beyond primitives](#shapes-beyond-primitives). |
 | `size` | Full extents `[x, y, z]`. A torus reads `[outer diameter, outer diameter, tube diameter]`. |
 | `roundness` | `blob`: 0 is an ellipsoid and 1 is a rounded box. `box`: the edge bevel as a fraction of the smallest side. |
 | `taper` | `blob`, `cylinder`: −1 to 1. Positive values narrow the top and negative values narrow the bottom. A cylinder with taper 1 is a cone. |
@@ -57,6 +57,31 @@ Units are metres, angles are degrees, the floor is `y = 0`, front is `+z`, and t
 | `color` | `#rrggbb` clay colour. |
 
 Limits: at most 48 parts after mirroring, each extent between 0.005 and 20 m, and parent chains at most 8 deep. A recipe that breaks a limit is refused with the reason. It is never clamped into a different shape.
+
+### Shapes beyond primitives
+
+Every shape stays inside its declared `size`, so the measured box never lies. Point lists are fractions of `size`, not metres.
+
+| Shape | Fields | Use it for | Geometry |
+|---|---|---|---|
+| `lathe` | `profile: [[r, y], ...]` (3–32, r 0..1 of the half-width, y 0..1 bottom to top), `smooth?` | pot, vase, bottle, bowl, cup, lampshade, mushroom, bell | `LatheGeometry`, elliptical when size x ≠ z, capped ends |
+| `tube` | `path: [[x, y, z], ...]` (2–32, each −0.5..0.5), `thickness` (m, diameter), `taper?`, `closed?` | rope, vine, cable, handle, hose, tail, branch, bike frame | `TubeGeometry` along a monotone cubic (no overshoot), round caps |
+| `extrude` | `outline: [[x, y], ...]` (3–64, −0.5..0.5), `holes?` (≤ 4), `roundness?` bevel | sign, leaf, gable, gear, star, arrow, cutout silhouette | `ExtrudeGeometry` through `size[2]` |
+| `loft` | `sections: [{ y, points: [[x, z]...] } \| { y, w, d, x?, z?, roundness? }]` (2–12, first y 0, last y 1), `smooth?` | boat hull, car body, shoe, squared bottle, loaf, wedge roof | `LoftGeometry` (three r185) with caps |
+| `convex` | `points: [[x, y, z]...]` (4–48) or `seed` + `facetCount?` (6–40), `facets?` | rock, boulder, gem, crystal | `ConvexGeometry`, flat facets by default |
+| `scatter` | `item: blade\|tuft\|flower\|leaf\|pebble\|twig`, `count` (≤ 4000), `spread: ground\|shell`, `seed?` | grass, flower bed, gravel, leaves on a crown | one `InstancedMesh`; counts as one part; ≤ 12000 items per recipe |
+
+Fields any part takes:
+
+| Field | Meaning |
+|---|---|
+| `material` | `clay` (default), `wood`, `straw`, `stone`, `brick`, `concrete`, `metal`, `glass`, `ceramic`, `plastic`, `rubber`, `fabric`, `paper` or `foliage`: a procedural, triplanar-mapped surface with bump and shine (`src/material-look.js`); `color` stays the tint. Glass refracts and casts no shadow. Plain objects take the same field through `object.set`. |
+| `finish` | `matte`, `satin` or `gloss`: overrides the preset's shine (metal + gloss = chrome, glass + matte = frosted). |
+| `detail` | `{ amount 0..1, scale? 1..12, seed? }`: seeded noise pushes the surface in and out (clouds, bushes, rocks, hay, bread). Seams are welded first. |
+| `gradient` | `{ color, axis? y\|x\|z, from? 0..1, to? 0..1 }`: vertex colours blend `color` into the second colour along the part's axis. Ignored by the flat display modes. |
+| `op` | `subtract` or `intersect`: the part is not drawn; it cuts its `parent` with three-bvh-csg (windows, doors, arches). Hollow a lathe with a smaller lathe of the same profile: a boxy cutter pokes through a round wall. Cut deeper than the wall; `mirror: true` cuts both sides. A cutter has no children and never enlarges the standing box. |
+
+Compare scores these by their outline: a tube is hulled per segment, an extrude per triangle and a loft per pair of sections, so concave shapes stay honest. It ignores cutters and detail lumps, and treats a ground scatter as its whole box.
 
 The record stores the normalized recipe, plus `footprint` and `height` measured from the parts' bounds, so the plan board, the drop logic and the selection cage work without building geometry.
 

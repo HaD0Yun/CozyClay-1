@@ -3,11 +3,13 @@
 // name, the motion scene (scene.js motionScene of the editor's objects: oriented boxes; shapes.js reads a sphere or a cylinder round from them), the spec as sent, and
 // what to do with it (probes, checks, lenient, repair, bake). The answer is plain data and typed arrays
 // only (the compiler's out holds closures), so it crosses a worker boundary: QA, observations, the stored
-// spec, and the baked take when asked.
+// spec, and the baked take when asked. The hint patches QA offers are compiled first (hint-check.js).
 // A refusal is an Error with a code (INVALID_ARGUMENT, MOTION_SPEC_INVALID turned into it), which the
 // client turns back into the Studio's protocol error.
 import { compileSpec, liftRequest } from "./pipeline.js";
+import { prepareSpec } from "./correct.js";
 import { repairSpec } from "./repair.js";
+import { checkHints } from "./hint-check.js";
 import { bakeTake } from "./take.js";
 import { skeletonFor } from "./rigs/index.js";
 import { keptPeople } from "./people.js";
@@ -49,7 +51,17 @@ export function runCompileJob({ model, scene, spec: asked, probes: sentProbes, c
 		const r = asArgument(() => compileSpec(sent, { sk, scene }, { ...opts, probes }));
 		return { ...r, stored: r.spec === sent ? spec : r.spec };
 	};
-	const t0 = performance.now(), fixed = repair ? repairSpec(asked, repair, once) : { spec: asked, result: once(asked) };
+	// repair patches address the stored spec, so a repair starts from it corrected (correct.js), and says what was
+	const corrected = [], start = repair && !lenient ? prepareSpec(asked, { sk, scene }, corrected) : asked;
+	// every compile's QA by its spec, so a hint patch repair already tried is not compiled again (hint-check.js)
+	const seen = new Map(), measured = s => { const r = once(s); seen.set(JSON.stringify(s), r.qa); return r; };
+	const t0 = performance.now(), fixed = repair ? repairSpec(start, repair, measured) : { spec: asked, result: measured(asked) };
+	// a hint's patch is offered only when its compile helped (hint-check.js), and only by a compile that repairs: repair has
+	// compiled most of the patches already (seen), where a plain compile paid two more compiles for them (bench replay: first
+	// compile 1.6 -> 5.2 s median) and the agent applied an offered patch as sent once in the 60 bench runs (374 direct
+	// compiles, 319 with repair; a plain compile is mostly a variant in a sweep); a plain compile keeps the hint's words only
+	if (repair) checkHints(fixed.spec, fixed.result.qa, s => seen.get(JSON.stringify(s)) ?? measured(s).qa);
+	else for (const g of fixed.result.qa?.groups ?? []) delete g.patch;
 	// ms.repair: the whole repair's wall time, so a sweep that repairs every variant shows what it costs
 	const r = fixed.result, label = fixed.spec?.label ?? null, ms = fixed.repair ? { ...r.ms, repair: Math.round(performance.now() - t0) } : r.ms;
 	const take = bake ? bakeTake(sk, r.out, { position: bake.position, yaw: bake.yaw }, { spec: r.stored, prompt: ("prompt" in bake ? bake.prompt : label) ?? "" }) : undefined;
@@ -57,7 +69,7 @@ export function runCompileJob({ model, scene, spec: asked, probes: sentProbes, c
 	const people = take && keptPeople(scene, [r.expanded, r.stored]);
 	if (people) take.people = people;
 	return { stored: r.stored, qa: r.qa, observations: r.observations, used: r.used, fixed: r.fixed, search: r.search, timeline: r.timeline,
-		...(r.probes ? { probes: r.probes } : {}), ...(r.notes ? { notes: r.notes } : {}), ms, frameCount: r.out.frameCount, label,
+		...(r.probes ? { probes: r.probes } : {}), ...(r.notes || corrected.length ? { notes: [...corrected, ...(r.notes ?? [])] } : {}), ms, frameCount: r.out.frameCount, label,
 		...(fixed.repair ? { repair: fixed.repair } : {}), ...(take ? { take } : {}) };
 }
 

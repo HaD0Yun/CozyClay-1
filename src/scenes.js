@@ -115,8 +115,6 @@ export function normalizeReferenceImage(value) {
 
 /** Stature band for a cast member: the gizmo's scale handles are a deliberate
  * artistic ask, and a previs giant or child is legitimate. */
-export const CHARACTER_SCALE_MIN = CHARACTER_SCALE_LIMITS.min;
-export const CHARACTER_SCALE_MAX = CHARACTER_SCALE_LIMITS.max;
 const clampScale = (value) => (Number.isFinite(value) && value > 0
 	? Math.max(CHARACTER_SCALE_LIMITS.min, Math.min(CHARACTER_SCALE_LIMITS.max, value))
 	: 1);

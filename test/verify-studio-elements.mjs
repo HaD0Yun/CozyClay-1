@@ -141,6 +141,8 @@ function makeCase(entry) {
 		if (field === "name") input.name = "Authored prop";
 		if (field === "color") input.color = "#a1b2c3";
 		if (field === "opacity") input.opacity = 0.3;
+		if (field === "material") input.material = "wood";
+		if (field === "finish") input.finish = "gloss";
 		if (field === "parent") input.parent = "parent-object";
 		if (field === "attach") input.attach = { characterId: "char-test", bone: "rightHand" };
 		if (field === "path") input.path = { points: [{ x: 1, y: 0, z: 2 }, { x: 4, y: 1, z: 5 }] };
@@ -221,6 +223,8 @@ const expected = new Map([
 	["object.name", "Authored prop"],
 	["object.color", "#a1b2c3"],
 	["object.opacity", 0.3],
+	["object.material", "wood"],
+	["object.finish", "gloss"],
 	["object.parent", "parent-object"],
 	["object.attach", { characterId: "char-test", bone: "rightHand" }],
 	["object.path", { points: [{ x: 1, y: 0, z: 2 }, { x: 4, y: 1, z: 5 }], marks: [], timing: null, speed: 0, faceTravel: true, loop: false, extend: false }],

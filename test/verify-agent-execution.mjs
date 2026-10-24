@@ -161,7 +161,9 @@ for (const explicit of [true, false]) {
 		assert.ok(Array.isArray(body.input), "the fixture receives a Responses input array");
 		const input = body.input;
 		const hasOutput = input.some((item) => item.type === "function_call_output");
-		if (!hasOutput) assert.ok(Array.isArray(body.tools) && body.tools.length > 0, "the fixture receives the Workflow tools");
+		// pi-ai 1.4 declares a capable model's tools in `additional_tools` input items, not the top-level list.
+		const declared = [...(Array.isArray(body.tools) ? body.tools : []), ...input.filter((item) => item.type === "additional_tools").flatMap((item) => item.tools ?? [])];
+		if (!hasOutput) assert.ok(declared.length > 0, "the fixture receives the Workflow tools");
 		res.writeHead(200, { "content-type": "text/event-stream" });
 		if (!hasOutput) {
 			const name = scenario === "unknown" ? "private_unknown_tool" : scenario === "failure" ? "update_workflow_node" : scenario === "read" ? "describe_workflow" : "add_workflow_node";

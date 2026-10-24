@@ -217,11 +217,11 @@ jobs:
           done
           exit "$failed"
 
-  # Real-browser rendering regressions via the CDP QA wrapper. The two suites
-  # proven green on the hosted runner gate pull requests; the four observation
-  # suites run in browser-observation.yml so they remain visible without
-  # extending the required PR path. The previs-mode suites (#654) run here as
-  # observation: a failure is a warning in the step summary, not a red check.
+  # Real-browser rendering regressions via the CDP QA wrapper. The suites
+  # proven green on the hosted runner gate pull requests; the motion3 suites
+  # that still fail are tracked in browser-observation.yml. The previs-mode
+  # suites (#654) run here as observation: a failure is a warning in the step
+  # summary, not a red check.
   browser:
     if: needs.changes.outputs.source == 'true'
     needs: changes
@@ -238,6 +238,14 @@ jobs:
             tier: gating
           - suite: qa-speed-graph-browser
             tier: gating
+          - suite: motion3/qa-motion3-playback-browser
+            tier: gating
+          - suite: motion3/qa-motion3-objects-browser
+            tier: gating
+          - suite: motion3/qa-motion3-grab-browser
+            tier: observation
+          - suite: motion3/qa-motion3-held-gizmo-browser
+            tier: observation
           - suite: qa-proxy-figure-browser
             tier: observation
           - suite: qa-storyboard-board-browser
@@ -270,6 +278,8 @@ jobs:
         run: |
           t="${{ matrix.suite }}"
           tier="${{ matrix.tier }}"
+          # Suites under test/motion3/ log to /tmp/motion3/; the redirect needs the dir.
+          mkdir -p "$(dirname "/tmp/$t.log")"
           {
             echo "## $t ($tier)"
             echo ""

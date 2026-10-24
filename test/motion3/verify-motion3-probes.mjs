@@ -80,7 +80,7 @@ const inSpec = compileSpec({ ...spec, probes: [probes[2]] }, { sk, scene }, { pr
 expect("spec.probes join the request's probes and are not in the filled-in spec", json(Object.keys(inSpec.probes)) === '["hands","hips"]'
 	&& json(inSpec.probes.hips) === json(res.hips) && !("probes" in inSpec.spec), json(Object.keys(inSpec.probes ?? {})));
 const bareRef = refused([{ name: "a", distance: ["LeftHand", CUP.group] }]);
-expect("a bare ref in a probe is refused with the prefixed forms it could mean", bareRef.endsWith(`probes[0].distance[1] "${CUP.group}" must be joint:<Bone>, bone:<Bone>, prop:<prop>.<point>, anchor:<name>, landmark:mouth, object:<id>[.center|.top|.base], person:<id>.<Bone>; did you mean "object:${CUP.group}"?`)
+expect("a bare ref in a probe is refused with the prefixed forms it could mean", bareRef.endsWith(`probes[0].distance[1] "${CUP.group}" must be joint:<Bone>, bone:<Bone>, prop:<prop>.<point>, anchor:<name>, landmark:mouth, object:<id>[.center|.top|.base|.rim], person:<id>.<Bone>; did you mean "object:${CUP.group}"?`)
 	&& bareRef.includes('did you mean "joint:LeftHand"?'), bareRef);
 
 // 3. Through motion.compile and motion.sample.

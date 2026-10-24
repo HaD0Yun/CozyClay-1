@@ -3,6 +3,7 @@ import { parseSync } from 'rolldown/experimental';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createServer } from 'vite';
+import { fileURLToPath } from 'node:url';
 import { appFixture } from './app-fixture.mjs';
 import { createStudioAppActions } from '../../src/commands/index.js';
 import { createCharacterEntry, PROXY_FIGURE_MODEL } from '../../src/scenes.js';
@@ -20,7 +21,7 @@ const source = readFileSync(new URL('../../src/app-stage.jsx', import.meta.url),
 const names = new Set(['DEFAULT_SUBJECT', 'DEFAULT_SUBJECT2', 'nextCharacterId', 'MAX_WAYPOINTS', 'TIMELINE_FPS']);
 const constants = parseSync('stage.jsx', source).program.body.filter(node => node.type === 'ExportNamedDeclaration' &&
   names.has(node.declaration?.id?.name ?? node.declaration?.declarations?.[0]?.id?.name)).map(node => source.slice(node.start, node.end)).join('\n');
-const server = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false },
+const server = await createServer({ configFile: false, root: fileURLToPath(new URL('../../', import.meta.url)), server: { middlewareMode: true, hmr: false },
   optimizeDeps: { noDiscovery: true, include: [] }, appType: 'custom', plugins: [{ name: 'cast-without-renderer', enforce: 'pre', load(id) {
     if (id.endsWith('/src/app-stage.jsx')) return `import { DEFAULT_SUBJECT_ONE, DEFAULT_SUBJECT_TWO } from './scenes.js';\n${constants}`;
   } }] });

@@ -47,7 +47,7 @@ function ExportStatus({ status, label, recording }) {
 	const detail = [
 		message,
 		retryable && ko("Retry keeps the original shot, camera, range and settings; it does not change your edits.", "다시 시도하면 원래 샷·카메라·범위·설정을 사용하며 편집 내용은 바꾸지 않아요."),
-		handedOff > 0 && ko(`${handedOff} file(s) already handed off. Retry skips those downloads.`, `파일 ${handedOff}개는 이미 전달했어요. 다시 시도할 때 해당 다운로드는 건너뛰어요.`),
+		handedOff > 0 && ko(`${handedOff} file(s) already handed off. Retry skips those files.`, `파일 ${handedOff}개는 이미 전달했어요. 다시 시도할 때 해당 파일은 건너뛰어요.`),
 		busy && stage === "mux" && ko("Finalizing MP4; this stage cannot be interrupted.", "MP4 마무리 중이에요. 이 단계는 중단할 수 없어요."),
 	].filter(Boolean).join(" ");
 	return (

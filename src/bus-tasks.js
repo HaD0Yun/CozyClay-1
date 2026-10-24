@@ -8,7 +8,7 @@
 // next command on a target the user changed answers STALE_TARGET once. Ctrl+Z stops at a running task's entry.
 // A single agent turn (agent.turn.*) is untouched: tasks and a turn never run together.
 import { StudioProtocolError, validateReceipt } from './studio-agent-protocol.js';
-import { commandKeys, keyOfId, scopeConflict, isScopeKey } from './bus-task-scopes.js';
+import { commandKeys, keyOfId, scopeConflict, isScopeKey, layerOf, expandScope, keysOverlap } from './bus-task-scopes.js';
 
 const fail = (code, message) => { throw new StudioProtocolError(code, message); };
 const VERBS = ['begin', 'requestScope', 'mark', 'rollback', 'finish', 'cancel', 'undo'];
@@ -17,7 +17,11 @@ const listOf = keys => [...keys].slice(0, 6).join(', ') + (keys.length > 6 ? ` a
 
 export function createBusTasks({ ports, emit }) {
 	const open = new Map(), finished = new Map(), entryTask = new Map();
+	// A character layer has its own token (its fields only), so another task's edit of her other layers never makes it
+	// stale; an editor without layer reads falls back to the whole character's.
 	const tokenOf = key => {
+		const of = layerOf(key);
+		if (of?.layer) return ports.readLayer?.(key) ?? ports.readTarget?.(of.id) ?? 'absent';
 		const [kind, id] = key.split(/:(.*)/s);
 		if (id !== undefined) return ports.readTarget?.(id) ?? 'absent';
 		const state = ports.read();
@@ -32,14 +36,16 @@ export function createBusTasks({ ports, emit }) {
 		if (!ports.restoreTargets) fail('CAPABILITY_MISSING', 'This editor cannot restore task targets.');
 		const { historyEntryId = null } = ports.restoreTargets(values) ?? {};
 		if (historyEntryId) entryTask.set(historyEntryId, task.taskId);
-		task.restored = [...new Set(values.map(({ key }) => key.includes(':') ? key.slice(key.indexOf(':') + 1) : ports.read().host.sceneId))];
+		task.restored = [...new Set(values.map(({ key }) => layerOf(key)?.id ?? (key.includes(':') ? key.slice(key.indexOf(':') + 1) : ports.read().host.sceneId)))];
 		for (const { key } of values) task.tokens.set(key, tokenOf(key));
 		emit?.({ type: `task.${action}`, taskId: task.taskId, keys: values.map(v => v.key) });
 		return historyEntryId;
 	}
-	function grant(task, keys) {
-		const bad = keys.find(key => !isScopeKey(key));
-		if (bad !== undefined) fail('INVALID_ARGUMENT', `"${bad}" is not a scope key: object:<id>, character:<id>, shot:<id>, stage, timeline or scene.`);
+	// A plain character:<id> is held as its four layers: the commands name layers, and each layer keeps its own token.
+	function grant(task, scope) {
+		const bad = scope.find(key => !isScopeKey(key));
+		if (bad !== undefined) fail('INVALID_ARGUMENT', `"${bad}" is not a scope key: object:<id>, character:<id> (or one layer: character:<id>:placement, :take, :ik, :props), shot:<id>, stage, timeline or scene.`);
+		const keys = expandScope(scope);
 		const conflict = scopeConflict(task.taskId, keys, open);
 		if (conflict) fail('SCOPE_BUSY', `${conflict}; wait for it, or ask for what is free.`);
 		for (const key of keys) if (!task.keys.has(key)) { task.keys.add(key); task.tokens.set(key, tokenOf(key)); }
@@ -121,7 +127,7 @@ export function createBusTasks({ ports, emit }) {
 			if (!task && !open.size) return null;
 			const keys = entry?.id ? commandKeys(entry.id, args, before, entry) : [];
 			// The user's own edit is never refused; a running task whose scope it touches hears of it (the panel's card).
-			if (!task && request.origin === 'ui') { for (const other of open.values()) { const mine = keys.filter(key => other.keys.has(key)); if (mine.length) emit?.({ type: 'task.userEdit', taskId: other.taskId, keys: mine }); } return null; }
+			if (!task && request.origin === 'ui') { for (const other of open.values()) { const mine = keys.filter(key => [...other.keys].some(held => keysOverlap(key, held))); if (mine.length) emit?.({ type: 'task.userEdit', taskId: other.taskId, keys: mine }); } return null; }
 			if (!task) {
 				const held = keys.find(key => scopeConflict(null, [key], open));
 				if (held) fail('SCOPE_BUSY', `${scopeConflict(null, [held], open)}; this command waits for that task.`);
@@ -135,18 +141,25 @@ export function createBusTasks({ ports, emit }) {
 				fail('STALE_TARGET', `${listOf(moved)} changed outside this task (the user, or an undo) since it last looked; read it again, then retry.`);
 			}
 			for (const key of keys) if (!task.pre.has(key)) task.pre.set(key, snapshot(key));
-			return { task, keys, values: keys.map(snapshot), mark: task.mark };
+			return { task, keys, values: keys.map(snapshot), mark: task.mark, fence: new Map(keys.map(key => [key, tokenOf(key)])) };
 		},
+		/**
+		 * A task's job fences on its own keys, not the whole target: another task placing the character while this one
+		 * compiles her take is not a change under the compile. moved(point) names what changed since admit or rebase(point).
+		 */
+		moved: point => [...point.fence].filter(([key, token]) => tokenOf(key) !== token).map(([key]) => key),
+		rebase(point) { for (const key of point.fence.keys()) point.fence.set(key, tokenOf(key)); },
 		/** Files a task's receipt: ids it created join its scope, it may be undone newest first, readers hear of it. */
 		record(point, recorded) {
 			if (!point || !recorded?.ok) return recorded;
 			const { task } = point, state = ports.read(), warnings = [];
 			let grew = false;
+			// A character the task holds one layer of is its own: the command was admitted on that layer.
 			for (const id of recorded.affectedIds ?? []) {
 				const key = keyOfId(id, state);
-				if (!key || task.keys.has(key)) continue;
-				if (scopeConflict(task.taskId, [key], open)) warnings.push({ code: 'SCOPE_DENIED', message: `${key} changed outside the task's scope.` });
-				else { task.keys.add(key); grew = true; if (!point.keys.includes(key)) { task.pre.set(key, { key, value: undefined }); point.values.push({ key, value: undefined }); } }
+				if (!key || [...task.keys].some(held => keysOverlap(key, held))) continue;
+				if (scopeConflict(task.taskId, [key], open)) { warnings.push({ code: 'SCOPE_DENIED', message: `${key} changed outside the task's scope.` }); continue; }
+				for (const made of expandScope([key])) { task.keys.add(made); grew = true; if (!point.keys.includes(made)) { task.pre.set(made, { key: made, value: undefined }); point.values.push({ key: made, value: undefined }); } }
 			}
 			if (grew) emit?.({ type: 'task.scope', taskId: task.taskId, scope: [...task.keys] });
 			for (const key of task.keys) task.tokens.set(key, tokenOf(key));

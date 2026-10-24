@@ -17,9 +17,11 @@ const sentences = text => text.split(/(?<=[.;:])\s+/).map(s => s.trim()).filter(
 // +291 characters for the efficiency round (the motion reference, describe topics, one script for sweeps): budgets +300
 // +332 for the camera round (a new view is a cut, a move is one rail, no camera-key chains): +350
 // +253 for physical grasp (#816: let the hand hold, throwObject/catchObject, read LOAD): +260
-check("the whole prompt is at most 12,160 characters", () => assert.ok(prompt.length <= 12160, `${prompt.length}`));
-check("the motion part is at most 2,060 characters", () => {
-	assert.ok(motion.length > 0 && motion.length <= 2060, `${motion.length}`);
+// +457 for key writing (extremes not a beat, lead with root and end effectors, break symmetry, read observations.life): +460
+// +168 for the repair loop (patch by frame or name after the first compile, obey output.stuck): +170
+check("the whole prompt is at most 12,790 characters", () => assert.ok(prompt.length <= 12790, `${prompt.length}`));
+check("the motion part is at most 2,690 characters", () => {
+	assert.ok(motion.length > 0 && motion.length <= 2690, `${motion.length}`);
 });
 check("the prompt names describe, grab, goals, repair, base, beats and the 0.01 m scale floor", () => {
 	for (const word of ["motion.describe", "grab", "goals", "repair", "base", "\"beats\"", "0.01 m"]) assert.ok(prompt.includes(word), word);
@@ -31,8 +33,10 @@ check("the motion part keeps the coordinate rules", () => {
 check("the motion part states the procedure", () => {
 	for (const rule of [/The <motion-reference> block below is motion\.describe/, /read them there, not by a call/, /topics: \[\.\.\.\]/, /never probe the schema/, /reachGrip/, /grab\/release/, /frames: "auto"/,
 		/group \(Empty\) is carried or hinged as one unit/, /at least one goals entry per motion request: first list its causes, contacts, effects and what must not happen/, /report the lines no goal measures \(Unmeasured/, /install: "ifClean" and repair: \{ rounds \}/, /topic: "essentials"/, /topic: "goals"/, /never sweep values by hand/, /loop in one script without repair \(tools\.run_action/, /then repair the pick until clean \(install: "ifClean"\)/, /independent calls in the same turn/,
-		/base .*plus patch/, /probes and output\.timeline instead of .*motion\.sample/, /qa\.ok, which includes the goals\) installs in that call/,
-		/visual: "contact_sheet", frames: "beats"/, /visual: "trace"/, /Report qa\.problems, not qa\.total, the goals and output\.fixed/, /read output\.observations near and wrist and verify_result exportFraming/, /output\.observations, not QA/, /views, focus, trail/]) assert.match(motion, rule);
+		/base .*plus patch addressed by frame or name/, /never by index; send a whole spec only to start over/, /Obey output\.stuck/, /probes and output\.timeline instead of .*motion\.sample/, /qa\.ok, which includes the goals\) installs in that call/,
+		/visual: "contact_sheet", frames: "beats"/, /visual: "trace"/, /Report qa\.problems, not qa\.total, the goals and output\.fixed/, /read output\.observations near and wrist and verify_result exportFraming/, /output\.observations, not QA/, /views, focus, trail/,
+		/Key the extremes .*never an even beat: vary the gaps/, /Lead with root, hands and feet; leave spine, head and arm swing to flow/, /a few frames off the pelvis/, /same pose on the same frame only when the action needs it/,
+		/fix the worst output\.observations\.life warning/]) assert.match(motion, rule);
 });
 check("no sentence describes objects only as hinged doors", () => {
 	assert.doesNotMatch(prompt, /\(doors\)/);
@@ -41,8 +45,9 @@ check("no sentence describes objects only as hinged doors", () => {
 check("the channel and field tables left the prompt", () => {
 	for (const word of ["wtwist", "fingers_l", "armw_", "fpitch", "w_<anchor>", "cozyclay.motion-spec.v1", "search.budget"]) assert.ok(!prompt.includes(word), word);
 });
-check("the compile help is at most 1,200 characters and every help is short", () => {
-	assert.ok(HELP.compile.length <= 1200, `${HELP.compile.length}`);
+// +271 for stable patch addressing (/keys/@f=, move, selectors by name) and output.stuck
+check("the compile help is at most 1,480 characters and every help is short", () => {
+	assert.ok(HELP.compile.length <= 1480, `${HELP.compile.length}`);
 	for (const [id, text] of Object.entries(HELP)) assert.ok(text.length <= 600 || id === "compile", `${id} ${text.length}`);
 });
 check("the help does not repeat the prompt", () => {
@@ -55,7 +60,7 @@ check("the help names every input of its declaration", () => {
 		for (const field of Object.keys(d.input.properties).filter(f => f !== "characterId")) assert.ok(help.includes(field), `${d.id} ${field}`);
 	}
 	for (const topic of DESCRIBE_TOPICS) assert.ok(HELP.describe.includes(topic), topic);
-	for (const field of ["specId", "delta", "repair", "loose bone names", "spec.checks need exact", "probes", "timeline", "goals", "severity", "patch", "more"]) assert.ok(HELP.compile.includes(field), field);
+	for (const field of ["specId", "delta", "repair", "loose bone names", "spec.checks need exact", "probes", "timeline", "goals", "severity", "patch", "more", "/keys/@f=", "stuck"]) assert.ok(HELP.compile.includes(field), field);
 });
 // The motion reference rides the cached prompt prefix: describe() answers, byte-identical, after the rules.
 const reference = await motionReference(), again = await motionReference(), full = await studioSystemPrompt();

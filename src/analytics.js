@@ -116,7 +116,6 @@ const EVENT_PROPERTIES = Object.freeze({
 	"project:opened": ["age_bucket"],
 	"craft:first_action": ["action_kind"],
 	"craft:first_edit": ["edit_kind", "definition_version"],
-	"motion:backend_state": ["backend", "host_configured"],
 	"motion:generate_requested": ["surface", "input_mode", "request_id"],
 	"motion:preflight_blocked": ["reason", "surface", "request_id"],
 	"motion:preflight_passed": ["backend", "surface", "request_id"],
@@ -142,7 +141,7 @@ const EVENT_PROPERTIES = Object.freeze({
 const FEATURE_NAMES = new Set([
 	"pose_edit", "pose_save", "camera_fly", "orbit", "dolly_rail", "crane_graph", "timeline_scrub",
 	"prompt_block_add", "shot_add", "shot_cut", "export_pose", "export_frame", "export_video",
-	"export_depth_video", "export_keyframe_pack", "fal_motion_open",
+	"export_depth_video", "export_keyframe_pack",
 	"mcp_connected", "auto_color", "plan_view",
 ]);
 // `site` and `playground` arrive through `npx cozyclay --via <source>` from the
@@ -154,7 +153,6 @@ const MOTION_ERROR_CODES = new Set(["aborted", "unsupported_route", "generation_
 const MOTION_PROPERTY_VALUES = Object.freeze({
 	// `fal` is the Studio's AI video route (H3 Max Turbo through api.cozyclay.org).
 	backend: new Set(["none", "local_kimodo", "hosted", "fal"]),
-	host_configured: new Set([true, false]),
 	surface: new Set(["timeline", "line_edit", "trail", "mcp", "fal_card", "agent"]),
 	input_mode: new Set(["prompt", "pose", "edit", "a_to_b", "still"]),
 	// `locked`: the AI video route is not enabled for this account yet.
@@ -230,7 +228,7 @@ let deviceProfileStarted = false;
 // move action_count_bucket.
 const PASSIVE_EVENTS = new Set([
 	"app:session_started", "app:session_ended", "install:first_launch",
-	"motion:backend_state", "app:error", "device:profile",
+	"app:error", "device:profile",
 ]);
 
 function storage() {
@@ -357,136 +355,6 @@ export function sanitizeProps(event, props) {
 		if (isSafePropertyValue(props[key])) sanitized[key] = props[key];
 	}
 	return sanitized;
-}
-
-/**
- * Convert the bridge health payload into the analytics contract. The bridge
- * only exposes a safe location label; the configured host itself never leaves
- * the local process. A missing/unhealthy bridge is the useful `none` bucket.
- */
-export function motionBackendState(health) {
-	if (!health || health.ok !== true) return { backend: "none", host_configured: false };
-	if (typeof health.backend === "string" && ["none", "local_kimodo", "hosted"].includes(health.backend)) {
-		return {
-			backend: health.backend,
-			host_configured: health.host_configured === true
-				|| (typeof health.host === "string" && health.host.trim().length > 0),
-		};
-	}
-	const host = typeof health.host === "string" ? health.host.trim() : "";
-	return {
-		// The current /ardy bridge is the local Kimodo integration even when it
-		// dispatches to a configured GPU box over SSH. A future hosted API can
-		// opt into the explicit `backend: "hosted"` field above.
-		backend: "local_kimodo",
-		host_configured: Boolean(host),
-	};
-}
-
-/** Read only structured readiness; raw health/error prose never classifies intent. */
-export function motionPreflightReason(health, { body = {}, lineEditSupported = false } = {}) {
-	if (!health || health.backend === "none" || (health.ok !== true && (health.host_configured === false || health.reason === "unconfigured"))) return "unconfigured";
-	if (health.ok !== true) return "unreachable";
-	if ((body.lineEdit || body.replay?.length) && !lineEditSupported) return "unsupported_route";
-	// The #267 local MLX/cpp route supports a single unconstrained prompt.
-	// ProjFlow line edits have their own capability/runner, even on a local bridge.
-	if (!body.lineEdit && health.host === "local" && health.device === "local" && (
-		body.segments?.length > 1 || body.posePin || body.waypoints?.length || body.motionEdit || body.preserve
-	)) return "unsupported_route";
-	return null;
-}
-
-export function motionFailureCode(error, fallbackCode) {
-	try {
-		if (error?.name === "AbortError") return "aborted";
-		if (MOTION_ERROR_CODES.has(fallbackCode)) return fallbackCode;
-		if (error instanceof Error) return "generation_failed";
-	} catch {
-		// Cross-realm error objects may have throwing getters.
-	}
-	return "unknown";
-}
-
-/** One explicit request, not an authoring draft. All methods are telemetry-only:
- * no return value may decide whether generation runs. Duplicate/out-of-order
- * callbacks cannot advance the funnel, and application is separate from success.
- */
-export function startMotionRequest(metadata, dependencies = {}) {
-	let phase = "requested";
-	let props = null;
-	let startedAt = NaN;
-	let now = () => performance.now();
-	let capture = track;
-	const clock = () => { try { return now(); } catch { return NaN; } };
-	const emit = (event, extra = {}) => {
-		if (!props) return;
-		try {
-			Promise.resolve(capture(event, sanitizeProps(event, { ...props, ...extra }))).catch(() => {
-				// A rejected transport must not change generation.
-			});
-		} catch {
-			// Telemetry is best effort, including capture/payload failures.
-		}
-	};
-	try {
-		now = dependencies.now ?? now;
-		capture = dependencies.capture ?? capture;
-		const bytes = globalThis.crypto.getRandomValues(new Uint8Array(16));
-		const request_id = [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-		props = { ...sanitizeProps("motion:generate_requested", metadata), request_id };
-		emit("motion:generate_requested");
-	} catch {
-		// Omit telemetry without secure randomness; never derive an ID from content.
-		props = null;
-	}
-	return {
-		preflight(health, options) {
-			if (phase !== "requested") return;
-			try {
-				const reason = motionPreflightReason(health, options);
-				phase = reason ? "blocked" : "passed";
-				if (props) props.backend = motionBackendState(health).backend;
-				emit(reason ? "motion:preflight_blocked" : "motion:preflight_passed", reason ? { reason } : {});
-			} catch {
-				// A malformed telemetry input cannot stop the real request.
-			}
-		},
-		/** A route that decides readiness without the /ardy health payload (the
-		 * Fal card): refuse with one closed reason, such as `locked`. */
-		block(reason) {
-			if (phase !== "requested") return;
-			phase = "blocked";
-			emit("motion:preflight_blocked", { reason });
-		},
-		/** The same route's acceptance, naming the backend that will run it. */
-		pass(backend) {
-			if (phase !== "requested") return;
-			phase = "passed";
-			if (props) props.backend = backend;
-			emit("motion:preflight_passed");
-		},
-		start() {
-			if (phase !== "passed") return;
-			phase = "started";
-			startedAt = clock();
-			emit("motion:job_started");
-		},
-		succeed() {
-			if (phase !== "started") return;
-			phase = "succeeded";
-			emit("motion:job_succeeded", { duration_bucket: bucketMs(clock() - startedAt) });
-		},
-		fail(error, fallbackCode) {
-			if (phase !== "started") return;
-			phase = "failed";
-			emit("motion:job_failed", { duration_bucket: bucketMs(clock() - startedAt), error_code: motionFailureCode(error, fallbackCode) });
-		},
-		apply() {
-			if (phase !== "succeeded") return;
-			phase = "applied";
-			emit("motion:result_applied");
-		},
-	};
 }
 
 export const FEATURE_USAGE_NAMES = Object.freeze([...FEATURE_NAMES]);

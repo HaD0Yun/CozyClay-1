@@ -16,6 +16,7 @@
  */
 
 import { normalizeObjectColor } from "./object-colors.js";
+import { objectMaterialFields, objectMaterialPatch } from "./material-presets.js";
 
 export const LIGHT_KIND = "light";
 
@@ -94,8 +95,8 @@ export function normalizeObjectGlow(value) {
 }
 
 /** The light/glow fields a normalized record carries. A light renderer always
- * has a light; any record keeps a glow only when it has one, so records written
- * before glow existed come back byte-for-byte unchanged. */
+ * has a light; any record keeps a glow (and a primitive its surface preset)
+ * only when it has one, so records written before come back unchanged. */
 export function objectLookFields(record, entry) {
 	const out = {};
 	if ((entry.renderer ?? entry.kind) === LIGHT_KIND) out.light = normalizeObjectLight(record.light, record.light?.type ?? entry.light?.type);
@@ -103,12 +104,14 @@ export function objectLookFields(record, entry) {
 	if (glow) out.glow = glow;
 	// A kit part a take switches on (a muzzle flash and its light) stays hidden without one (object-travel.js trackShown).
 	if (record.showOnlyInTake === true) out.showOnlyInTake = true;
-	return out;
+	// A primitive's surface preset (material-presets.js).
+	return Object.assign(out, objectMaterialFields(record, entry.renderer ?? entry.kind));
 }
 
 /** The light/glow part of an object.update patch: each field merges over the
  * record's own and is repaired; `glow: null` removes the glow. Only changes are
- * returned. A light on a record that is not a light is ignored. */
+ * returned. A light on a record that is not a light is ignored. A primitive's
+ * material and finish ride along (material-presets.js). */
 export function objectLookPatch(object, patch) {
 	const update = {};
 	if (patch?.light && typeof patch.light === "object" && object.renderer === LIGHT_KIND) {
@@ -119,7 +122,7 @@ export function objectLookPatch(object, patch) {
 		const next = patch.glow === null ? null : normalizeObjectGlow({ ...(object.glow ?? {}), ...patch.glow });
 		if (JSON.stringify(next) !== JSON.stringify(object.glow ?? null)) update.glow = next;
 	}
-	return update;
+	return Object.assign(update, objectMaterialPatch(object, patch));
 }
 
 /** 32-bit FNV-1a of the record id: the flicker's seed. */
@@ -196,3 +199,4 @@ export function withShadowCapWarnings(result, objects) {
 }
 // A record's grasp sockets ride the same normalize and patch paths (object-grasp.js).
 export { objectGraspFields, objectGraspPatch } from "./object-grasp.js";
+export { objectMaterialKeys } from "./material-presets.js";

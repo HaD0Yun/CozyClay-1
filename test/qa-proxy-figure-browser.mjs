@@ -176,7 +176,7 @@ try {
 	assert.equal(rangedShot?.startFrame, 0, JSON.stringify(rangedShot));
 	assert.equal(rangedShot?.endFrame, 23, JSON.stringify(rangedShot));
 	const stillVideo = await b.evaluate(`window.__proxyBus.bus.run('export.shotVideo', { shotId: ${JSON.stringify(shotId)} })`);
-	assert.match(stillVideo.message ?? "", /Download requested: .* · 24 frames/, JSON.stringify(stillVideo));
+	assert.match(stillVideo.message ?? "", /exported · 24 frames/, JSON.stringify(stillVideo));
 	const noPathBytes = await b.evaluate("window.__proxyVideoSizes.at(-1)");
 	assert.ok(Number.isInteger(noPathBytes) && noPathBytes > 0, `no-path sizes=${JSON.stringify(await b.evaluate("window.__proxyVideoSizes"))}`);
 	for (const [frame, position] of [[8, { x: 1, z: 0 }], [16, { x: 1, z: 1 }]]) {
@@ -196,7 +196,7 @@ try {
 	assert.ok(Math.abs(midpoint.puck[2] - 0.5) < 1e-6, JSON.stringify(midpoint));
 	console.log(`PASS root-path midpoint mesh and puck follow ${JSON.stringify(midpoint)}`);
 	const movingVideo = await b.evaluate(`window.__proxyBus.bus.run('export.shotVideo', { shotId: ${JSON.stringify(shotId)} })`);
-	assert.match(movingVideo.message ?? "", /Download requested: .* · 24 frames/, JSON.stringify(movingVideo));
+	assert.match(movingVideo.message ?? "", /exported · 24 frames/, JSON.stringify(movingVideo));
 	const pathBytes = await b.evaluate("window.__proxyVideoSizes.at(-1)");
 	assert.ok(Number.isInteger(pathBytes) && pathBytes > 0, `path sizes=${JSON.stringify(await b.evaluate("window.__proxyVideoSizes"))}`);
 	assert.notEqual(noPathBytes, pathBytes, `moving mp4 byte size matches no-path export: ${noPathBytes}`);

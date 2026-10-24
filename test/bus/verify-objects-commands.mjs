@@ -9,7 +9,7 @@ const patches = {
   renderer: 'sphere', position: { x: 2, y: 3, z: 4 }, rotation: { x: 10, y: 20, z: 30 }, scale: { x: 2, y: 3, z: 4 },
   name: 'Renamed', color: '#123456', opacity: 0.3, parent: 'sphere', path: { points: [{ x: 0, y: 0, z: 0 }, { x: 2, y: 0, z: 1 }], speed: 2 }, remove: true,
   glow: { color: '#ff5a1f', intensity: 6, halo: 2 }, light: { intensity: 0.45, flicker: 0.6 }, effect: { preset: 'fire', rate: 40 }, text: { value: 'CozyClay', depth: 0.05 },
-  grasp: { grip: { at: [0, 0.5, 0], axis: [0, 1, 0], from: [0, 0, 1] } },
+  grasp: { grip: { at: [0, 0.5, 0], axis: [0, 1, 0], from: [0, 0, 1] } }, material: 'wood', finish: 'gloss',
 };
 // A light, an effect or a text is set on its own kind of record (a cube has none); every other path on the cube.
 const targetFor = (f, path) => ['light', 'effect', 'text'].includes(path) ? changed(f.run('object.add', { kind: path === 'light' ? 'point-light' : path }, 'agent')).affectedIds[0] : 'cube';

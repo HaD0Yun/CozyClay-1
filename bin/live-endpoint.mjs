@@ -13,6 +13,8 @@ import { join } from "node:path";
 
 const liveDirectory = () => join(process.env.XDG_CONFIG_HOME || join(homedir(), ".config"), "cozyclay", "live");
 
+// The live hub port this launch uses; the served Studio is told the same port (#862).
+export const liveHubPort = (env = process.env) => Number(env.COZYCLAY_LIVE_PORT ?? 5184);
 export const liveEndpointPath = (port) => join(liveDirectory(), `${port}.json`);
 
 /** Ports this process published, so exit cleans up exactly its own files. */

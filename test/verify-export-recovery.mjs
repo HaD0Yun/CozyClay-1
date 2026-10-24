@@ -20,7 +20,7 @@ const source = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
 const parsed = parseSync("App.jsx", source, { lang: "jsx" });
 assert.deepEqual(parsed.errors, []);
 const app = parsed.program.body.find((node) => node.type === "ExportDefaultDeclaration").declaration;
-const names = ["saveDownload", "dataUrlToBytes", "captureShotFramePng", "shotFramingAtFrame", "packMetaForShot", "buildShotKeyframePack", "shotIndexForPack", "exportKeyframePacks", "download"];
+const names = ["dataUrlToBytes", "captureShotFramePng", "shotFramingAtFrame", "packMetaForShot", "buildShotKeyframePack", "shotIndexForPack", "exportKeyframePacks", "download"];
 const functions = names.map((name) => {
 	const node = app.body.body.find((node) => node.type === "FunctionDeclaration" && node.id.name === name);
 	assert.ok(node, `production function ${name} exists`);
@@ -117,6 +117,13 @@ function fixture() {
 		// #466: the optional use-case question after a finished export.
 		playgroundMode: false, shouldAskUseCase: () => false, setUseCaseAskOpen() {},
 		moveSequence: { slate: "original-shot" },
+		// The workspace helper owns the browser handoff now. This seam records the
+		// same names the old anchor did, and throws where an injected handoff fails.
+		saveExport: async (_source, name) => {
+			if (deps.downloadFailure?.(name)) throw new Error("injected handoff failure");
+			downloads.push(name);
+			return { method: "download", name };
+		},
 		URL: { createObjectURL: () => "blob:fixture", revokeObjectURL() {} },
 		// Only schedule production URL revocation; tests never await a timer.
 		setTimeout: (callback) => { queueMicrotask(callback); },

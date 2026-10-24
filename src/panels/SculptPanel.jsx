@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import Foldout from "./Foldout.jsx";
 import { ko, isKo } from "../locale.js";
-import { effortOptions } from "../workflow/agent-client.js";
+import { effortOptions } from "../workflow/agent-client.js"; import { saveExport } from "../export-workspace.js";
 import "./sculpt.css";
 
 // Sculpt mode side panel (#739). Pure view: the run controller owns the run state and the
@@ -241,7 +241,7 @@ function BlueprintSection({ blueprint, disabled }) {
 					</a>
 					<figcaption>
 						<span>{sheet.width}×{sheet.height}{Number.isFinite(sheet.ms) ? ` · ${Math.round(sheet.ms / 1000)}s` : ""}</span>
-						<a href={sheet.dataUrl} download="sculpt-blueprint.png" data-testid="sculpt-blueprint-download">{ko("Download", "내려받기")}</a>
+						<a href={sheet.dataUrl} download="sculpt-blueprint.png" data-testid="sculpt-blueprint-download" onClick={(event) => { event.preventDefault(); void saveExport(sheet.dataUrl, "sculpt-blueprint.png"); }}>{ko("Download", "내려받기")}</a>
 					</figcaption>
 				</figure>
 			)}

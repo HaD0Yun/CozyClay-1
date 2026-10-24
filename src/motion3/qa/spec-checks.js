@@ -36,7 +36,7 @@ function graspPart(out, ref) {
 	return out.ctx.sockets?.get(name)?.owner ?? a.object;
 }
 
-const active = (out, f, when) => (Array.isArray(when) ? f + (out.f0 ?? 0) >= when[0] && f + (out.f0 ?? 0) <= when[1] : when ? (out.frames[f].c[when] ?? 0) > 0.99 : true);
+export const active = (out, f, when) => (Array.isArray(when) ? f + (out.f0 ?? 0) >= when[0] && f + (out.f0 ?? 0) <= when[1] : when ? (out.frames[f].c[when] ?? 0) > 0.99 : true);
 
 function alongDir(out, f, along) {
 	if (along === "up") return [0, 1, 0];
@@ -44,19 +44,25 @@ function alongDir(out, f, along) {
 	return norm(along);
 }
 
+/** How far a checks.contacts entry k's point is from its target at frame f (indexes out.frames), m; null when a point is unknown there. */
+export function contactGap(out, f, k) {
+	const a = pointOf(out, f, k.point), b = pointOf(out, f, k.target);
+	if (!a || !b) return null;
+	// on a grasp's anchor the fingers close on the held part wherever the grasp turned them round it: they are on it
+	// when they are on its surface (as goals' near on an object), not on one point of it (session 7f15b4ae: 0.4 cm
+	// on the cup, read as 5.3 cm from the anchor)
+	// and a hand that holds a thing resting in its palm (seat.js) has its fingers on that thing's surface
+	const held = graspPart(out, k.target) ?? seatedIn(out, k.point, f + (out.f0 ?? 0));
+	return held ? refDistance(out, f, k.point, `object:${held}`) ?? len(sub(a, b)) : len(sub(a, b));
+}
+
 export function specChecks(out, checks = {}) {
 	const issues = [], n = out.frames.length, sk = out.ctx.sk, I = sk.index;
 	const push = (kind, msg, f, value, limit) => issues.push({ kind, msg, frame: f, value: +value.toFixed(4), limit });
 	for (let f = 0; f < n; f++) {
 		for (const k of checks.contacts ?? []) if (active(out, f, k.when)) {
-			const a = pointOf(out, f, k.point), b = pointOf(out, f, k.target);
-			if (!a || !b) continue;
-			// on a grasp's anchor the fingers close on the held part wherever the grasp turned them round it: they are on it
-			// when they are on its surface (as goals' near on an object), not on one point of it (session 7f15b4ae: 0.4 cm
-			// on the cup, read as 5.3 cm from the anchor)
-			// and a hand that holds a thing resting in its palm (seat.js) has its fingers on that thing's surface
-			const held = graspPart(out, k.target) ?? seatedIn(out, k.point, f + (out.f0 ?? 0)), e = held ? refDistance(out, f, k.point, `object:${held}`) ?? len(sub(a, b)) : len(sub(a, b));
-			if (e > (k.tol ?? 0.01)) push("CONTACT", `${k.name}: ${(e * 100).toFixed(1)} cm apart`, f, e, k.tol ?? 0.01);
+			const e = contactGap(out, f, k);
+			if (e !== null && e > (k.tol ?? 0.01)) push("CONTACT", `${k.name}: ${(e * 100).toFixed(1)} cm apart`, f, e, k.tol ?? 0.01);
 		}
 		for (const k of checks.orient ?? []) if (active(out, f, k.when)) {
 			const a = pointOf(out, f, k.from), b = pointOf(out, f, k.to);

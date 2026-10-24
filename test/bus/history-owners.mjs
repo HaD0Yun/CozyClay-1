@@ -5,6 +5,7 @@ import { parseSync } from 'rolldown/experimental';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createServer } from 'vite';
+import { fileURLToPath } from 'node:url';
 import { freeReferences } from './verify-domain-modules.mjs';
 
 const source = readFileSync(new URL('../../src/app-stage.jsx', import.meta.url), 'utf8')
@@ -28,7 +29,7 @@ for (const name of ['objects', 'cast', 'motion']) {
   for (const node of parseSync(`${name}.js`, domain).program.body) if (node.type === 'ImportDeclaration' && node.source.value.endsWith('/app-stage.jsx')) for (const spec of node.specifiers) include(spec.imported.name);
 }
 const subset = ast.body.filter(node => selected.has(node)).map(node => source.slice(node.start, node.end)).join('\n');
-const server = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false }, optimizeDeps: { noDiscovery: true, include: [] }, appType: 'custom',
+const server = await createServer({ configFile: false, root: fileURLToPath(new URL('../../', import.meta.url)), server: { middlewareMode: true, hmr: false }, optimizeDeps: { noDiscovery: true, include: [] }, appType: 'custom',
   plugins: [{ name: 'history-without-renderer', enforce: 'pre', load(id) {
     if (id.endsWith('/src/app-stage.jsx')) return subset;
     

@@ -15,8 +15,12 @@
  * Contract: docs/sculpt-from-image.md.
  */
 
+import { RecipeError, readHexColor, readVector, tidy } from "./sculpt-recipe-read.js";
+import { SCULPT_SHAPES, SCULPT_SHAPE_KEYS, SCULPT_SHAPE_SPECS } from "./sculpt-shapes.js";
+import { SCULPT_PART_FIELDS } from "./sculpt-part-fields.js";
+import { checkSculptCutters } from "./sculpt-cutters.js";
+
 const SCULPT_RECIPE_VERSION = 1;
-const SCULPT_SHAPES = Object.freeze(["blob", "box", "cylinder", "torus", "frame"]);
 export const SCULPT_LIMITS = Object.freeze({
 	/** after mirrors are expanded */
 	maxParts: 48,
@@ -24,6 +28,8 @@ export const SCULPT_LIMITS = Object.freeze({
 	maxExtent: 20,
 	maxOffset: 20,
 	maxDepth: 8,
+	/** scatter items across the whole recipe, after mirrors */
+	maxScatterItems: 12000,
 });
 const SCULPT_DEFAULT_COLOR = "#c2c6c8";
 /** The suffix a mirrored copy's id gets. `.` is outside the id alphabet, so a
@@ -32,61 +38,13 @@ export const SCULPT_MIRROR_SUFFIX = ".mirror";
 const MIN_HEIGHT = 0.05;
 
 const ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,39}$/;
-const HEX_SHORT = /^#?([0-9a-f]{3})$/i;
-const HEX_LONG = /^#?([0-9a-f]{6})$/i;
-const PART_KEYS = new Set(["id", "shape", "size", "position", "rotation", "color", "parent", "mirror", "roundness", "taper", "border"]);
-const SHAPE_KEYS = {
-	blob: new Set(["roundness", "taper"]),
-	box: new Set(["roundness"]),
-	cylinder: new Set(["taper"]),
-	torus: new Set(),
-	frame: new Set(["border"]),
-};
-const DEFAULT_ROUNDNESS = { blob: 0.5, box: 0.1 };
-
-const tidy = (value) => {
-	const rounded = Math.round(value * 1e4) / 1e4;
-	return rounded === 0 ? 0 : rounded;
-};
-const isFiniteNumber = (value) => typeof value === "number" && Number.isFinite(value);
+const PART_KEYS = new Set(["id", "shape", "size", "position", "rotation", "color", "parent", "mirror", ...SCULPT_SHAPE_KEYS, ...SCULPT_PART_FIELDS.map((field) => field.key)]);
 const wrapDegrees = (deg) => {
 	const wrapped = ((((deg + 180) % 360) + 360) % 360) - 180;
 	return wrapped === -180 ? 180 : wrapped;
 };
 
-class RecipeError extends Error {
-	constructor(path, message) {
-		super(`${path}: ${message}`);
-		this.path = path;
-	}
-}
-
-function readColor(value, path) {
-	if (value === undefined) return SCULPT_DEFAULT_COLOR;
-	const text = typeof value === "string" ? value.trim() : "";
-	const short = HEX_SHORT.exec(text);
-	if (short) return `#${short[1].toLowerCase().replace(/./g, (digit) => digit + digit)}`;
-	const long = HEX_LONG.exec(text);
-	if (long) return `#${long[1].toLowerCase()}`;
-	throw new RecipeError(path, `colour must be #rgb or #rrggbb, got ${JSON.stringify(value)}`);
-}
-
-function readVector(value, path, fallback, check) {
-	if (value === undefined && fallback) return [...fallback];
-	if (!Array.isArray(value) || value.length !== 3 || !value.every(isFiniteNumber)) {
-		throw new RecipeError(path, `must be three numbers [x, y, z], got ${JSON.stringify(value)}`);
-	}
-	value.forEach((component, axis) => check(component, `${path}[${axis}]`));
-	return value.map(tidy);
-}
-
-function readUnit(value, path, fallback, min, max) {
-	if (value === undefined) return fallback;
-	if (!isFiniteNumber(value) || value < min || value > max) {
-		throw new RecipeError(path, `must be a number from ${min} to ${max}, got ${JSON.stringify(value)}`);
-	}
-	return tidy(value);
-}
+const readColor = (value, path) => (value === undefined ? SCULPT_DEFAULT_COLOR : readHexColor(value, path));
 
 function normalizePart(raw, index) {
 	const at = `parts[${index}]`;
@@ -101,8 +59,9 @@ function normalizePart(raw, index) {
 	if (!SCULPT_SHAPES.includes(raw.shape)) {
 		throw new RecipeError(`${where}.shape`, `must be one of ${SCULPT_SHAPES.join(", ")}; got ${JSON.stringify(raw.shape)}`);
 	}
-	for (const key of ["roundness", "taper", "border"]) {
-		if (raw[key] !== undefined && !SHAPE_KEYS[raw.shape].has(key)) {
+	const spec = SCULPT_SHAPE_SPECS[raw.shape];
+	for (const key of SCULPT_SHAPE_KEYS) {
+		if (raw[key] !== undefined && !spec.keys.includes(key)) {
 			throw new RecipeError(`${where}.${key}`, `does not apply to a ${raw.shape}`);
 		}
 	}
@@ -129,20 +88,8 @@ function normalizePart(raw, index) {
 	};
 	if (raw.parent !== undefined) part.parent = raw.parent;
 	if (raw.mirror === true) part.mirror = true;
-	if (SHAPE_KEYS[raw.shape].has("roundness")) part.roundness = readUnit(raw.roundness, `${where}.roundness`, DEFAULT_ROUNDNESS[raw.shape], 0, 1);
-	if (SHAPE_KEYS[raw.shape].has("taper")) part.taper = readUnit(raw.taper, `${where}.taper`, 0, -1, 1);
-	if (raw.shape === "frame") {
-		const limit = Math.min(size[0], size[1]) / 2;
-		const fallback = tidy(Math.min(size[0], size[1]) * 0.15);
-		const border = raw.border === undefined ? fallback : raw.border;
-		if (!isFiniteNumber(border) || border <= 0 || border >= limit) {
-			throw new RecipeError(`${where}.border`, `must be above 0 and below half the frame's smaller side (${tidy(limit)} m), got ${JSON.stringify(raw.border)}`);
-		}
-		part.border = tidy(border);
-	}
-	if (raw.shape === "torus" && size[2] >= Math.min(size[0], size[1])) {
-		throw new RecipeError(`${where}.size`, "a torus's tube (size[2]) must be thinner than its outer diameter");
-	}
+	spec.read(raw, part, where);
+	for (const field of SCULPT_PART_FIELDS) if (raw[field.key] !== undefined) field.read(raw, part, where);
 	return part;
 }
 
@@ -196,10 +143,16 @@ export function normalizeSculptRecipe(input) {
 			seen.add(part.id);
 		}
 		partDepths(parts);
+		checkSculptCutters(parts);
 		const recipe = { version: SCULPT_RECIPE_VERSION, parts };
-		const count = expandSculptParts(recipe).length;
-		if (count > SCULPT_LIMITS.maxParts) {
-			throw new RecipeError("recipe.parts", `expands to ${count} parts with mirrors; the limit is ${SCULPT_LIMITS.maxParts}`);
+		const drawn = expandSculptParts(recipe);
+		if (drawn.length > SCULPT_LIMITS.maxParts) {
+			throw new RecipeError("recipe.parts", `expands to ${drawn.length} parts with mirrors; the limit is ${SCULPT_LIMITS.maxParts}`);
+		}
+		// A scatter is one part but many drawn items; the frame rate pays per item.
+		const items = drawn.reduce((sum, part) => sum + (part.shape === "scatter" ? part.count : 0), 0);
+		if (items > SCULPT_LIMITS.maxScatterItems) {
+			throw new RecipeError("recipe.parts", `scatter parts draw ${items} items with mirrors; the limit is ${SCULPT_LIMITS.maxScatterItems}`);
 		}
 		return { ok: true, recipe };
 	} catch (error) {
@@ -210,8 +163,9 @@ export function normalizeSculptRecipe(input) {
 
 /**
  * A recipe edited part by part instead of rewritten. `edits` are applied in
- * order: `{ set: id, ...fields }` merges fields into one part (`parent: null`
- * and `mirror: false` clear), `{ add: part }` appends, `{ remove: id }` drops a
+ * order: `{ set: id, ...fields }` merges fields into one part (`parent: null`,
+ * `mirror: false` and null for an optional field such as `detail` clear),
+ * `{ add: part }` appends, `{ remove: id }` drops a
  * part and every part below it. The result is normalized as a whole, so an edit
  * that leaves the recipe undrawable is refused with the usual path.
  * Returns `{ ok: true, recipe, changed: [ids] }` or `{ ok: false, error, path }`.
@@ -249,8 +203,9 @@ export function patchSculptRecipe(recipe, edits) {
 		const next = { ...parts[found], ...fields };
 		if (fields.parent === null) delete next.parent;
 		if (fields.mirror === false) delete next.mirror;
+		for (const field of SCULPT_PART_FIELDS) if (fields[field.key] === null) delete next[field.key];
 		// Shape-specific defaults belong to the old shape, not the new one.
-		if ("shape" in fields) for (const key of ["roundness", "taper", "border"]) if (!(key in fields)) delete next[key];
+		if ("shape" in fields) for (const key of SCULPT_SHAPE_KEYS) if (!(key in fields)) delete next[key];
 		parts[found] = next;
 		changed.add(id);
 	}
@@ -298,7 +253,8 @@ function applyMatrix(m, [x, y, z]) {
 
 /** A reflection across x = 0 of the parent frame keeps the part's shape and
  * negates the lateral axis only: position.x flips, and the yaw and roll turn
- * the other way. All five shapes are symmetric about their own x, so no
+ * the other way. Shapes symmetric about their own x need nothing more; the
+ * others reflect their own data (SCULPT_SHAPE_SPECS[shape].mirror), so no
  * negative scale (and no winding flip) is needed. */
 function mirroredPart(part, parentId) {
 	const copy = {
@@ -308,6 +264,7 @@ function mirroredPart(part, parentId) {
 		rotation: [part.rotation[0], tidy(-part.rotation[1]), tidy(-part.rotation[2])],
 	};
 	delete copy.mirror;
+	SCULPT_SHAPE_SPECS[copy.shape].mirror?.(copy);
 	if (parentId !== undefined) copy.parent = parentId;
 	return copy;
 }
@@ -352,10 +309,11 @@ function localCorners(part) {
 	return corners;
 }
 
+/** A cutter (op) is not drawn and only takes from its parent, so it never widens the box. */
 export function sculptBounds(recipe) {
 	const min = [Infinity, Infinity, Infinity];
 	const max = [-Infinity, -Infinity, -Infinity];
-	for (const part of expandSculptParts(recipe)) {
+	for (const part of expandSculptParts(recipe).filter((drawn) => !drawn.op)) {
 		for (const corner of localCorners(part)) {
 			const point = applyMatrix(part.matrix, corner);
 			for (let axis = 0; axis < 3; axis += 1) {

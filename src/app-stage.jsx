@@ -62,7 +62,7 @@ export {
 
 export * from "./stage-attach-frames.js";
 
-export { Character } from "./stage-characters.jsx";
+export { Character, PlaybackCharacter } from "./stage-characters.jsx";
 
 export {
 	ShotRig,

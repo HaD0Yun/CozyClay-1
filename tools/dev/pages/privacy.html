@@ -86,12 +86,11 @@ cclay telemetry on</code></pre>
             <thead><tr><th>Event</th><th>Purpose</th></tr></thead>
             <tbody>
               <tr><td>install:first_launch, app:session_started, app:session_ended</td><td>Counting installs and sessions; duration and action counts are bucketed. install:first_launch may carry heard_from (x, hn, reddit, github, friend, other, site or playground), from the first-launch prompt or a copied <code>npx cozyclay --via</code> command. app:session_ended also carries per-session edit gesture counts in five groups, pose_edit_bucket, camera_edit_bucket, object_edit_bucket, shot_edit_bucket and prompt_edit_bucket, each bucketed (0, 1-3, 4-10 or gte11); never what was edited</td></tr>
-              <tr><td>feature:used</td><td>One signal per feature per session: a fixed feature name such as pose_edit (a real bone or pose change), pose_save (saving a pose to the library), fal_motion_open (opening the AI video A/B card), camera_fly or export_video</td></tr>
+              <tr><td>feature:used</td><td>One signal per feature per session: a fixed feature name such as pose_edit (a real bone or pose change), pose_save (saving a pose to the library), camera_fly or export_video</td></tr>
               <tr><td>$pageview, scene:created, scene:loaded, craft:first_action, activation:completed</td><td>Funnel and drop-off analysis</td></tr>
               <tr><td>craft:first_edit</td><td>First successful Studio authoring change per editor mount; only a fixed edit-kind label and definition version 1 (not camera navigation, playback, loading, restore, or undo/redo)</td></tr>
               <tr><td>playground:first_edit</td><td>The same versioned first-edit definition for Playground, counted separately from Studio; no prompts or scene contents</td></tr>
               <tr><td>project:saved, project:opened</td><td>Whether people keep their work (object counts and ages are bucketed; never names or paths)</td></tr>
-              <tr><td>motion:backend_state</td><td>Session capability baseline: backend (none, local_kimodo or hosted) and boolean host_configured, never a host address</td></tr>
               <tr><td>motion:generate_requested</td><td>Explicit generation intent, not prompt-block editing: initiating surface (timeline, line_edit, trail, mcp, fal_card or agent), input_mode (prompt, pose, edit, a_to_b or still) and an ephemeral random request_id</td></tr>
               <tr><td>motion:preflight_blocked</td><td>Request readiness refusal: request_id, surface and normalized reason (unconfigured, unreachable, unsupported_route, locked or missing_input). locked means the AI video route is not enabled for the account yet; missing_input means the A/B captures were incomplete</td></tr>
               <tr><td>motion:preflight_passed</td><td>Request readiness accepted, before job start: request_id, surface and backend (none, local_kimodo, hosted or fal)</td></tr>
@@ -128,7 +127,8 @@ cclay telemetry on</code></pre>
       <section>
         <h2>The hosted demo (Google sign-in)</h2>
         <p>
-          The hosted motion demo asks you to sign in with Google so that the daily generation cap can be
+          The hosted demo is not open to the public right now. This section describes what it handled while it
+          was running. The hosted motion demo asks you to sign in with Google so that the daily generation cap can be
           enforced per account. It receives your Google account's email address and basic profile only, stores
           a session cookie signed by our server, and keeps your prompt and the generated result for up to 30
           days so the ticket link keeps working. Results are stored on Cloudflare R2 and deleted after that

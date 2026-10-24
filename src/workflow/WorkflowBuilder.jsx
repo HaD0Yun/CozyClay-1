@@ -13,7 +13,7 @@ import { FiActivity, FiBox, FiCode, FiFileText, FiFilm, FiImage, FiLink, FiMusic
 import { Toaster, toast } from "react-hot-toast";
 import { loadWorkflowGraph, normalizeWorkflowGraph, storeWorkflowGraph, WORKFLOW_STORAGE_KEY } from "../project.js";
 import AgentPanel from "./AgentPanel.jsx";
-import CozySceneNode from "./CozySceneNode.jsx";
+import CozySceneNode from "./CozySceneNode.jsx"; import { saveExport } from "../export-workspace.js";
 import { applyCozyScenePatch, normalizeCozySceneData, sceneConnectionAllowed } from "./cozy-scene-node.js";
 import { activeSceneCharacters, characterHandleId, characterIdFromHandle, normalizeMotionInputData, motionInputOutput, parseMotionSpec } from "./motion-input.js";
 import { DEFAULT_NODE_SCHEMAS, defaultFormValues, schemaCategoryForType, schemaModelEntries, schemaProperties } from "./node-schema.js";
@@ -652,7 +652,7 @@ export default function WorkflowBuilder() {
 		},
 	})), [changeModel, nodeSchemas, nodes, runScene, runWorkflow, sceneCharacters, sceneContext, sendSceneToVideo, updateNode, updateScene, uploadFile, useVersionAsReference]);
 
-	const exportGraph = useCallback(() => { const blob = new Blob([JSON.stringify(graph, null, 2)], { type: "application/json" }); const url = URL.createObjectURL(blob); const anchor = document.createElement("a"); anchor.href = url; anchor.download = "cozyclay-workflow.json"; anchor.click(); URL.revokeObjectURL(url); toast.success("Workflow exported"); }, [graph]);
+	const exportGraph = useCallback(async () => { const blob = new Blob([JSON.stringify(graph, null, 2)], { type: "application/json" }); await saveExport(blob, "cozyclay-workflow.json"); toast.success("Workflow exported"); }, [graph]);
 	const onConnect = useCallback((params) => {
 		const target = nodes.find((node) => node.id === params.target);
 		const source = nodes.find((node) => node.id === params.source);

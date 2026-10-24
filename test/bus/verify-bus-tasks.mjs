@@ -7,7 +7,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { objectsFixture } from './objects-fixture.mjs';
-import { commandKeys } from '../../src/bus-task-scopes.js';
+import { motionFixture } from './motion-fixture.mjs';
+import { commandKeys, scopeConflict, isScopeKey } from '../../src/bus-task-scopes.js';
+import { createBusTasks } from '../../src/bus-tasks.js';
+import { skeletonFor } from '../../src/motion3/rigs/index.js';
 
 const ok = receipt => { assert.equal(receipt.ok, true, JSON.stringify(receipt)); return receipt; };
 const refused = (receipt, code) => { assert.equal(receipt.ok, false, JSON.stringify(receipt)); assert.equal(receipt.code, code, receipt.message); return receipt; };
@@ -127,7 +130,7 @@ test('what a command writes, known before it runs', () => {
   const state = { objects: [{ id: 'g' }, { id: 'p', parent: 'g' }], selectedShotId: 's1' };
   assert.deepEqual(commandKeys('object.set', { id: 'g' }, state), ['object:g', 'object:p'], 'a group carries its subtree');
   assert.deepEqual(commandKeys('object.add', {}, state), [], 'a creation needs no key');
-  assert.deepEqual(commandKeys('motion.compile', { characterId: 'a' }, state, { kind: 'job' }), ['character:a']);
+  assert.deepEqual(commandKeys('motion.compile', { characterId: 'a' }, state, { kind: 'job' }), ['character:a:take', 'character:a:ik']);
   assert.deepEqual(commandKeys('motion.qa', { characterId: 'a' }, state, { kind: 'job', readOnly: true }), [], 'a read needs no key');
   assert.deepEqual(commandKeys('shot.placeCamera', {}, state), ['shot:s1']);
   assert.deepEqual(commandKeys('shot.setRange', { shotId: 's1' }, state), ['timeline']);
@@ -166,5 +169,90 @@ test('undo task, newest first: once the later task is undone, the earlier one un
     assert.equal(x(ids.cube), 1);
     ok(ui('task.undo', { taskId: 'task-a' }));
     assert.equal(x(ids.cube), before);
+  } finally { f.dispose(); }
+});
+
+test('a character is four layers: each command names the ones it writes', () => {
+  const state = { objects: [{ id: 'cup' }] }, keys = (id, args) => commandKeys(id, args, state);
+  const of = (id, ...names) => names.map(name => `character:${id}:${name}`);
+  assert.deepEqual(keys('character.move', { characterId: 'a', x: 1, z: 0, rot: 0 }), of('a', 'placement'));
+  assert.deepEqual(keys('character.update', { characterId: 'a', patch: { tint: '#ff0000', hidden: true } }), of('a', 'placement'));
+  assert.deepEqual(keys('character.update', { characterId: 'a', patch: { ikEdits: null } }), of('a', 'ik'));
+  assert.deepEqual(keys('character.update', { characterId: 'a', patch: { model: 'x-bot-tpose' } }), of('a', 'placement', 'take', 'ik', 'props'), 'a model swap is a new body');
+  assert.deepEqual(keys('character.set', { ops: [{ id: 'a', set: { position: { x: 1 } } }, { id: 'b', set: { rot: 3 } }] }), [...of('a', 'placement'), ...of('b', 'placement')]);
+  assert.deepEqual(keys('characters.arrange', { ops: [{ op: 'create' }, { op: 'update', characterId: 'b' }] }), of('b', 'placement'));
+  assert.deepEqual(keys('character.remove', { characterId: 'a' }), of('a', 'placement', 'take', 'ik', 'props'));
+  assert.deepEqual(keys('character.setPose', { characterId: 'a', pose: 'sit' }), of('a', 'placement'));
+  assert.deepEqual(keys('character.setPose', { characterId: 'a', pose: 'sit', clearMotion: true }), of('a', 'placement', 'take', 'ik'));
+  assert.deepEqual(keys('character.addWaypoint', { characterId: 'a', position: { x: 0, z: 0 } }), of('a', 'take'));
+  assert.deepEqual(keys('motion.set', { id: 'a', set: { take: { prompt: 'x' } } }), of('a', 'take'));
+  assert.deepEqual(keys('motion.trim', { characterId: 'a', start: 0, end: 9 }), of('a', 'take', 'ik'), 'a timing edit moves the IK keys too');
+  assert.deepEqual(keys('motion.clear', { characterId: 'a' }), of('a', 'take', 'ik'));
+  assert.deepEqual(keys('ik.setKey', { characterId: 'a', frame: 0, tracks: {} }), of('a', 'ik'));
+  assert.deepEqual(keys('motion.rangePin.apply', { characterId: 'a', pin: {} }), of('a', 'ik'));
+  assert.deepEqual(keys('object.attach', { characterId: 'a', objectId: 'cup' }), [...of('a', 'props'), 'object:cup']);
+  assert.deepEqual(keys('motion.keyObject', { characterId: 'a', objectId: 'cup', frame: 3 }), [...of('a', 'take', 'ik', 'props'), 'object:cup']);
+  assert.deepEqual(keys('motion.someNewEdit', { characterId: 'a' }), of('a', 'placement', 'take', 'ik', 'props'), 'an unnamed character command writes all four');
+});
+
+test('a plain character:<id> is all four layers; layers of one character are separate keys', () => {
+  const tasks = held => new Map(Object.entries(held).map(([taskId, keys]) => [taskId, { taskId, keys: new Set(keys) }]));
+  for (const key of ['character:a', 'character:a:placement', 'character:a:take', 'character:a:ik', 'character:a:props']) assert.ok(isScopeKey(key), key);
+  assert.match(scopeConflict('t2', ['character:a'], tasks({ t1: ['character:a:take'] })), /character:a is held by task t1/);
+  assert.match(scopeConflict('t2', ['character:a:ik'], tasks({ t1: ['character:a'] })), /character:a:ik is held by task t1/);
+  assert.equal(scopeConflict('t2', ['character:a:placement'], tasks({ t1: ['character:a:take', 'character:a:ik'] })), null);
+  assert.equal(scopeConflict('t2', ['character:a'], tasks({ t1: ['character:b'] })), null);
+  assert.equal(scopeConflict('t2', ['character:ab'], tasks({ t1: ['character:a:take'] })), null, 'another id that starts the same is another character');
+});
+
+test("a task's job fences on its own layers, not on another task's layer of the same character", () => {
+  const tokens = { 'character:a:placement': 'p0', 'character:a:take': 't0', 'character:a:ik': 'i0' };
+  const host = { workspaceId: 'workspace', documentEpoch: 'document', sceneId: 'scene', sceneEpoch: 'epoch' };
+  const ports = { read: () => ({ revision: 1, host }), readLayer: key => tokens[key], snapshotTarget: () => [] };
+  const tasks = createBusTasks({ ports });
+  const request = taskId => ({ origin: 'agent', taskId, commandId: crypto.randomUUID() });
+  for (const [taskId, scope] of [['tp', ['character:a:placement']], ['tt', ['character:a:take', 'character:a:ik']]]) tasks.control('task.begin', { taskId, scope }, request(taskId), ports.read(), null);
+  const point = tasks.admit(tasks.of(request('tt'), 'motion.compile'), { id: 'motion.compile', kind: 'job' }, { characterId: 'a' }, request('tt'), ports.read());
+  tokens['character:a:placement'] = 'p1';
+  assert.deepEqual(tasks.moved(point), [], 'placing her does not stop the compile');
+  tokens['character:a:ik'] = 'i1';
+  assert.deepEqual(tasks.moved(point), ['character:a:ik']);
+  tasks.rebase(point);
+  assert.deepEqual(tasks.moved(point), []);
+});
+
+// A short standing take for the fixture's Y Bot (motion-fixture seedMotion's spec).
+function standSpec(model, frames = 24) {
+  const sk = skeletonFor(model), I = sk.index, P = sk.restWorldPos, ank = P[I.LeftFoot][1];
+  return { schema: 'cozyclay.motion-spec.v1', fps: 24, frames,
+    keys: [{ f: 0, set: { root: [0, P[I.Hips][1] - 0.01, 0], yaw: 0, foot_l: [0.09, ank, -0.03], foot_r: [-0.09, ank, 0.03], head_yaw: 0 } }, { f: frames - 1, set: { head_yaw: 30 } }] };
+}
+
+test("two tasks place one character and make her take at once; each layer is its own; cancel keeps the other's", () => {
+  const f = motionFixture();
+  try {
+    const task = taskId => (action, args = {}) => f.run(action, args, 'agent', { taskId, expectedRevision: 0 });
+    const p = task('task-p'), t = task('task-t'), x = () => f.cast.read().find(row => row.id === 'actor-a').x;
+    const x0 = x(), model = f.cast.read().find(row => row.id === 'actor-a').model;
+    ok(p('task.begin', { taskId: 'task-p', scope: ['character:actor-a:placement'], title: 'place her' }));
+    ok(t('task.begin', { taskId: 'task-t', scope: ['character:actor-a:take', 'character:actor-a:ik'], title: 'her take' }));
+    refused(task('task-x')('task.begin', { taskId: 'task-x', scope: ['character:actor-a'] }), 'SCOPE_BUSY');
+    ok(p('character.move', { characterId: 'actor-a', x: 1.5, z: 0, rot: 0 }));
+    ok(t('motion.compile', { characterId: 'actor-a', spec: standSpec(model) }));
+    assert.equal(f.motion.motionFor('actor-a')?.schema, 'cozyclay.take.v3', 'the take is installed');
+    ok(p('character.move', { characterId: 'actor-a', x: 2, z: 0, rot: 0 }));
+    assert.equal(x(), 2, "the take task's install did not make the placement stale");
+    refused(p('motion.clear', { characterId: 'actor-a' }), 'SCOPE_DENIED');
+    refused(t('character.move', { characterId: 'actor-a', x: 3, z: 0, rot: 0 }), 'SCOPE_DENIED');
+    refused(p('character.update', { characterId: 'actor-a', patch: { model: 'x-bot-tpose' } }), 'SCOPE_DENIED');
+    ok(p('task.cancel', { taskId: 'task-p' }));
+    assert.equal(x(), x0, 'her placement is back');
+    assert.equal(f.motion.motionFor('actor-a')?.schema, 'cozyclay.take.v3', "the other task's take stays");
+    ok(t('task.finish', { taskId: 'task-t' }));
+    ok(task('task-x')('task.begin', { taskId: 'task-x', scope: ['character:actor-a'] }));
+    ok(task('task-x')('character.move', { characterId: 'actor-a', x: 1, z: 0, rot: 0 }));
+    ok(task('task-x')('motion.clear', { characterId: 'actor-a' }));
+    ok(task('task-x')('task.cancel', { taskId: 'task-x' }));
+    assert.equal(x(), x0); assert.equal(f.motion.motionFor('actor-a')?.schema, 'cozyclay.take.v3', 'a plain key restores all four');
   } finally { f.dispose(); }
 });

@@ -3,20 +3,11 @@ import { isEffectivelyHidden, objectFootprintBounds } from "../scene-objects.js"
 /**
  * Ground height under a point, from the scene's objects (issue #250).
  *
- * AutoPhysics review measures every contact against ONE flat floor
- * (`floorY`). When a character stands on a box or a step its feet get pulled
- * down to the floor plane. This module answers "what is the ground here?" so
- * contact detection, span anchors, and toe minimum heights can use the
- * surface actually under the foot.
- *
- * DRAFT - the sampler exists and is tested; physics-review.js does not call
- * it yet. Wiring plan:
- *   1. supportIntervals(): compare the sole to groundAt(toe.x, toe.z), not
- *      floorY, in the "low enough to be a contact" test.
- *   2. Span anchors carry y = groundAt(anchor.x, anchor.z); footLockTrack
- *      anchors and relaxToePath's toeMinHeight take that value per frame.
- *   3. Penetration / float metrics and the root lift measure against the
- *      local ground under each support site.
+ * Against ONE flat floor (`floorY`), a character standing on a box or a step
+ * would read as sunk into it. This module answers "what is the ground here?":
+ * studio-agent-motion.js samples it per support site, and physics-review.js
+ * takes it as `groundAt` for contact spans, foot anchors and the floor/float
+ * metrics, so they measure against the surface actually under the foot.
  *
  * Surface model: each scene object is an axis-aligned box from
  * objectFootprintBounds (yaw-exact XZ footprint, flat top at topY). The

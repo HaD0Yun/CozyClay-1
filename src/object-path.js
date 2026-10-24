@@ -464,4 +464,4 @@ export function strokeToPathPoints(stroke, simplify, { maxPoints = STROKE_MAX_PO
 	return points.map((point) => ({ x: point.x, y: 0, z: point.z }));
 }
 
-export { MAX_PATH_POINTS, MAX_PATH_MARKS, MARK_GAP, MAX_LEAN as MAX_PATH_LEAN, MAX_HEIGHT as MAX_PATH_HEIGHT, STROKE_MAX_POINTS };
+export { MAX_PATH_POINTS, MAX_PATH_MARKS, MARK_GAP, MAX_LEAN as MAX_PATH_LEAN, STROKE_MAX_POINTS };

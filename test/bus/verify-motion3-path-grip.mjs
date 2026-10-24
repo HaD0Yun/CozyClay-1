@@ -13,11 +13,12 @@ const box = (id, renderer, [x, y, z], [sx, sy, sz], parent = null) => ({ id, nam
 const counter = [box('counter', 'empty', [0, 0, 0.4], [1, 1, 1]), box('counter-top', 'cube', [0, 0.91, 0.4], [0.9, 0.04, 0.5], 'counter'),
 	...[[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([a, b], i) => box(`leg-${i}`, 'cylinder', [a * 0.4, 0, 0.4 + b * 0.2], [0.04, 0.91, 0.04], 'counter'))];
 const rest = [-0.16, 0.95, 0.3], mouth = [-0.03, 1.48, 0.22], near = [-0.05, 1.44, 0.25], up = [-0.14, 1.25, 0.25];
+// lean 0 holds the keys at the lips exactly (they otherwise lean, face-lean.js): the grip is what is measured here
 const spec = (cupArgs = {}, gripArgs = {}) => ({
 	schema: 'cozyclay.motion-spec.v1', fps: 24, frames: 170,
 	use: [{ skill: 'standIdle', f0: 0, args: { at: [0, 0], heading: 0 } }, { skill: 'reachGrip', f0: 12, args: { anchor: 'obj', side: 'r', reach: 22, hold: 104, release: 16, define: { kind: 'object', object: 'obj', local: [0, 0.055, 0] }, ...gripArgs } }],
-	objects: { obj: { prop: 'objGrip', grab: 34, release: 138, keys: [{ f: 34, pos: rest, aim: [0, 1, 0] }, { f: 48, pos: up, aim: [0, 1, 0] }, { f: 66, pos: near, aim: [0, 0.97, -0.25] },
-		{ f: 78, pos: mouth, aim: [0, 0.8, -0.6] }, { f: 96, pos: mouth, aim: [0, 0.75, -0.66] }, { f: 108, pos: near, aim: [0, 0.97, -0.25] }, { f: 124, pos: up, aim: [0, 1, 0] }, { f: 138, pos: rest, aim: [0, 1, 0] }], ...cupArgs } },
+	objects: { obj: { prop: 'objGrip', grab: 34, release: 138, keys: [{ f: 34, pos: rest, aim: [0, 1, 0] }, { f: 48, pos: up, aim: [0, 1, 0] }, { f: 66, pos: near, aim: [0, 0.97, -0.25], lean: 0 },
+		{ f: 78, pos: mouth, aim: [0, 0.8, -0.6], lean: 0 }, { f: 96, pos: mouth, aim: [0, 0.75, -0.66], lean: 0 }, { f: 108, pos: near, aim: [0, 0.97, -0.25], lean: 0 }, { f: 124, pos: up, aim: [0, 1, 0] }, { f: 138, pos: rest, aim: [0, 1, 0] }], ...cupArgs } },
 });
 const cup = (shape = [0.08, 0.1, 0.08]) => [...counter, box('obj', 'cylinder', rest, shape)];
 const compile = (s, objects = cup()) => compileSpec(s, { sk, scene: motionScene(objects) });

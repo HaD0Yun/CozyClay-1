@@ -436,10 +436,12 @@ export class LiveHub {
 				void this.serveController(socket, frame);
 				return;
 			}
-			if (frame?.type === "event" && typeof frame.name === "string" && frame.payload && typeof frame.payload === "object") {
-				const workspaceHandle = [...this.editors.entries()].find(([, editor]) => editor === socket)?.[0];
+			// Meta and event frames both act for this socket's workspace. A meta frame
+			// relabels the tab after it opens another project; the handle stays.
+			const workspaceHandle = [...this.editors.entries()].find(([, editor]) => editor === socket)?.[0];
+			if (frame?.type === "meta" && workspaceHandle && frame.meta && typeof frame.meta === "object") this.workspaceMeta.set(workspaceHandle, frame.meta);
+			else if (frame?.type === "event" && typeof frame.name === "string" && frame.payload && typeof frame.payload === "object") {
 				if (workspaceHandle) this.onEvent?.({ workspaceHandle, workspaceId: this.workspaceId(workspaceHandle), name: frame.name, payload: frame.payload });
-				return;
 			}
 			if (frame?.type !== "result" || typeof frame.id !== "string") return;
 			const pending = this.pending.get(frame.id);

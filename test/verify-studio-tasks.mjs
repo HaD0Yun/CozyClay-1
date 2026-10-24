@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // Parallel Studio tasks, P2 (the server). The plan's cases that live in the server, by number:
-//   (a) the board (bin/agent/studio-tasks.mjs) with a scripted run: 11 at most three run and the rest wait in order,
-//       1 a held scope waits, 8 dependsOn waits and hears the summary (a failed dependency fails it), 12 the second
+//   (a) the board (bin/agent/studio-tasks.mjs) with a scripted run: 11 at most three run and the rest wait, the
+//       longest chain first with aging,
+//       1 a held scope waits, 8 dependsOn waits and hears the summary (a failed dependency fails it), and a plan queues a
+//       whole graph at once (refs, cycles refused all or nothing), 12 the second
 //       start waits for the first model answer or STAGGER, 13 cost per task, 14 a lost Studio pauses and resumes on the
 //       same scene (another scene fails it), 16 summaries are capped, 19 the same work is not started twice, 20 a task
 //       past its tool or time limit is stopped and reported; cancel of a queued and of a running task;
@@ -23,6 +25,7 @@ import { randomUUID } from "node:crypto";
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { getCurrentSystemPrompt } from "@earendil-works/pi-ai";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
 import { createTaskBoard, taskHeader, TASK_LIMITS } from "../bin/agent/studio-tasks.mjs";
 import { doneClaimCorrection, mainContextText } from "../bin/agent/main-agent.mjs";
@@ -62,6 +65,30 @@ const dispatch = (board, title, scope, extra = {}) => board.dispatch({ title, in
 	console.log("PASS cases 11 and 13: three run at once, the fourth waits in order and starts when one ends; usage and cost per task");
 }
 {
+	// case 11, the order among ready tasks: the longest chain still to come first, equal chains in the order they came,
+	// and a task that waited AGING ms per level is not starved by later chains.
+	const { board, runs } = boardFixture({ cap: 1, agingMs: 60_000 });
+	const next = async () => { runs.at(-1).resolve({ status: "done" }); await tick(); await tick(); return runs.at(-1).task.title; };
+	dispatch(board, "busy", ["object:busy"]); await tick();
+	dispatch(board, "lone", ["object:lone"]);
+	const head = dispatch(board, "head", ["object:h"]), mid = dispatch(board, "mid", ["object:m"], { dependsOn: [head.taskId] });
+	dispatch(board, "tail", ["object:t"], { dependsOn: [mid.taskId] });
+	dispatch(board, "pair", ["object:p"]); dispatch(board, "pair end", ["object:pe"], { dependsOn: [board.board().at(-1).taskId] });
+	assert.equal(await next(), "head", "the chain of three starts first, though lone came before it");
+	assert.equal(await next(), "mid", "mid now heads a chain of two, as does pair: mid came first");
+	assert.equal(await next(), "pair", "pair (chain two) before lone (one) and tail (one)");
+	assert.equal(await next(), "lone", "equal chains in the order they came");
+	assert.deepEqual([await next(), await next()], ["tail", "pair end"]);
+	const aged = boardFixture({ cap: 1, agingMs: 60_000 });
+	dispatch(aged.board, "busy", ["object:busy"]); await tick();
+	dispatch(aged.board, "old", ["object:old"]);
+	aged.advance(2 * 60_000);
+	const a = dispatch(aged.board, "chain a", ["object:a"]); dispatch(aged.board, "chain b", ["object:b"], { dependsOn: [a.taskId] });
+	aged.runs[0].resolve({ status: "done" }); await tick(); await tick();
+	assert.equal(aged.runs.at(-1).task.title, "old", "two minutes of waiting outweigh a chain of two");
+	console.log("PASS case 11 order: critical path first among ready tasks, then arrival order; aging keeps an independent task from starving");
+}
+{
 	const { board, runs, status } = boardFixture();
 	dispatch(board, "first", ["object:cube"]); dispatch(board, "second", ["object:cube", "object:sphere"]); dispatch(board, "time", ["timeline"]);
 	await tick();
@@ -82,7 +109,7 @@ const dispatch = (board, title, scope, extra = {}) => board.dispatch({ title, in
 	assert.equal(runs.length, 1); assert.match(board.board().find(task => task.title === "grab cup").reason, /waits for task/);
 	runs[0].resolve({ status: "done", reply: "Cup made: cylinder-3." }); await tick(); await tick();
 	assert.equal(runs.length, 2);
-	assert.deepEqual(runs[1].options.deps, [{ taskId: a.taskId, title: "make cup", summary: { reply: "Cup made: cylinder-3.", receipts: [] } }], "case 8: it hears the earlier summary");
+	assert.deepEqual(runs[1].options.deps, [{ taskId: a.taskId, title: "make cup", summary: { reply: "Cup made: cylinder-3.", receipts: [] }, changed: [] }], "case 8: it hears the earlier summary");
 	assert.match(taskHeader(runs[1].task, { deps: runs[1].options.deps }), /Earlier task .* is done: Cup made: cylinder-3\./);
 	const c = dispatch(board, "x", ["object:x"]), d = dispatch(board, "y", ["object:y"], { dependsOn: [c.taskId] });
 	await tick();
@@ -90,6 +117,118 @@ const dispatch = (board, title, scope, extra = {}) => board.dispatch({ title, in
 	assert.equal(status().y, "failed"); assert.match(board.board().find(task => task.taskId === d.taskId).reason, /depends on task .* which failed/);
 	assert.equal(b.status, "waiting", "dispatch answers the task as the board sees it");
 	console.log("PASS case 8: a dependent task waits, hears the summary of what it depends on, and fails when that failed");
+}
+{
+	// case 8, the handoff as data: what a done task changed, from every receipt (not only the capped ones), deduped and
+	// capped; an id its scope names reads as that key, an id it made as itself.
+	const { board, runs } = boardFixture({ changed: 4 });
+	const a = dispatch(board, "set table", ["object:table", "character:alex"]);
+	dispatch(board, "frame it", ["shot:s1"], { dependsOn: [a.taskId] });
+	await tick();
+	const receipts = [{ receiptId: "r1", affectedIds: ["table", "cup-9"] }, ...Array.from({ length: 10 }, (_, i) => ({ receiptId: `n${i}`, affectedIds: [] })), { receiptId: "r2", affectedIds: ["table", "alex", "plate-2", "fork-1"] }];
+	runs[0].resolve({ status: "done", reply: "Table set.", receipts }); await tick(); await tick();
+	const done = board.board().find(task => task.title === "set table");
+	assert.deepEqual(done.changed, ["object:table", "cup-9", "character:alex", "plate-2"], "deduped, keyed where the scope names it, capped");
+	assert.equal(done.summary.receipts.length, TASK_LIMITS.receipts, "the summary keeps its own cap");
+	assert.deepEqual(runs[1].options.deps.map(dep => Object.keys(dep)), [["taskId", "title", "summary", "changed"]]);
+	assert.deepEqual(runs[1].options.deps[0].changed, done.changed);
+	assert.match(taskHeader(runs[1].task, { deps: runs[1].options.deps }), /is done: Table set\. It changed: object:table, cup-9, character:alex, plate-2\./);
+	const failed = dispatch(board, "bad", ["object:q"]); await tick();
+	runs[2].resolve({ status: "failed", receipts: [{ receiptId: "r3", affectedIds: ["q"] }], error: { message: "x" } }); await tick(); await tick();
+	assert.equal(board.board().find(task => task.taskId === failed.taskId).changed, undefined, "only a done task hands off what it changed");
+	console.log("PASS case 8 handoff: a done task records what it changed as data and its dependents receive it with the summary");
+}
+{
+	// case 8 with a checkpoint: verify ends the run in review; it frees its scope, its dependents wait for accept or
+	// fail on reject; without verify nothing changes.
+	const { board, runs, events, status } = boardFixture();
+	const a = dispatch(board, "make cup", ["object:cup"], { verify: true });
+	dispatch(board, "grab cup", ["character:alex"], { dependsOn: [a.taskId] });
+	dispatch(board, "paint cup", ["object:cup"]);
+	await tick();
+	assert.equal(status()["paint cup"], "waiting", "the cup is held while the run runs");
+	runs[0].resolve({ status: "done", reply: "Cup made.", receipts: [{ receiptId: "r1", affectedIds: ["cup"] }] }); await tick(); await tick();
+	assert.equal(status()["make cup"], "review"); assert.ok(events.some(event => event.type === "task.review" && event.taskId === a.taskId && event.verify), "task.review is told");
+	assert.equal(status()["paint cup"], "starting", "a task in review holds no scope");
+	assert.equal(status()["grab cup"], "waiting"); assert.match(board.board().find(task => task.title === "grab cup").reason, /to be accepted/, "but counts as not done for dependsOn");
+	assert.equal(board.cancel(a.taskId), null, "review is not cancelled: it is accepted or rejected");
+	assert.equal(dispatch(board, "make cup", ["object:cup"]).duplicateOf, a.taskId, "nor dispatched again");
+	assert.equal(board.accept(a.taskId).status, "done"); await tick();
+	assert.equal(status()["grab cup"], "starting", "accept releases its dependents");
+	assert.deepEqual(runs.at(-1).options.deps[0].changed, ["object:cup"]);
+	assert.equal(board.accept(a.taskId), null, "only a task in review is accepted");
+	const b = dispatch(board, "pose", ["character:sam"], { verify: true }), c = dispatch(board, "walk", ["character:sam"], { dependsOn: [b.taskId] });
+	await tick();
+	runs.find(run => run.task.taskId === b.taskId).resolve({ status: "done", reply: "Posed." }); await tick(); await tick();
+	assert.equal(board.reject(b.taskId, "the arm goes through the wall").status, "failed"); await tick();
+	assert.match(board.get(b.taskId).reason, /rejected by the coordinator: the arm goes through the wall/);
+	assert.equal(board.get(c.taskId).status, "failed", "reject fails the dependents as any failure does");
+	const plain = dispatch(board, "plain", ["object:p"]); await tick();
+	runs.find(run => run.task.taskId === plain.taskId).resolve({ status: "done" }); await tick(); await tick();
+	assert.equal(board.get(plain.taskId).status, "done", "without verify a task ends done");
+	const p = board.dispatchPlan({ tasks: [{ ref: "x", title: "x", instructions: "do x", scope: ["object:x"], verify: true }] });
+	assert.equal(p.tasks[0].verify, true, "a plan step takes verify");
+	console.log("PASS case 8 with a checkpoint: a verify task ends in review, frees its scope, and its dependents start on accept or fail on reject");
+}
+{
+	// case 8 as a plan: one call queues a graph, refs resolve to the new taskIds, and a bad plan queues nothing.
+	const { board, runs, events, status } = boardFixture();
+	const before = dispatch(board, "base", ["object:base"]);
+	const step = (ref, scope, dependsOn) => ({ ref, title: ref, instructions: `do ${ref}`, scope: [scope], ...(dependsOn ? { dependsOn } : {}) });
+	const refused = [
+		[{ tasks: [step("a", "object:a", ["b"]), step("b", "object:b", ["a"])] }, /cycle: a -> b -> a/],
+		[{ tasks: [step("a", "object:a", ["a"])] }, /cycle/],
+		[{ tasks: [step("a", "object:a", ["ghost"])] }, /no ref or task ghost/],
+		[{ tasks: [step("a", "object:a"), step("a", "object:b")] }, /used twice/],
+		[{ tasks: [step("a", "object:a"), { ref: "b", title: "b", instructions: "x", scope: ["cylinder"] }] }, /scope/],
+		[{ tasks: [] }, /one or more/],
+	];
+	const queued = events.length;
+	for (const [plan, message] of refused) assert.throws(() => board.dispatchPlan(plan), error => error.code === "INVALID_ARGUMENT" && message.test(error.message));
+	assert.equal(events.length, queued, "a refused plan queues nothing (all or nothing)");
+	// Listed out of order: grab names cup by ref, frame names grab by ref and the earlier task by its taskId.
+	const plan = board.dispatchPlan({ tasks: [step("frame", "shot:s1", ["grab", before.taskId]), step("grab", "character:alex", ["cup"]), step("cup", "object:cup")] });
+	const by = Object.fromEntries(plan.tasks.map(task => [task.ref, task]));
+	assert.deepEqual(plan.tasks.map(task => task.ref), ["frame", "grab", "cup"], "answered in the plan's order");
+	assert.deepEqual(board.get(by.grab.taskId).dependsOn, [by.cup.taskId], "a ref resolves to the taskId it was given");
+	assert.deepEqual(board.get(by.frame.taskId).dependsOn, [by.grab.taskId, before.taskId], "an earlier taskId passes through");
+	assert.equal(by.cup.status, "starting", "the answer is the board after scheduling"); assert.equal(by.grab.status, "waiting");
+	await tick();
+	assert.deepEqual(runs.map(run => run.task.title), ["base", "cup"]);
+	runs[1].resolve({ status: "done", reply: "Cup made." }); await tick(); await tick();
+	assert.equal(status().grab, "starting");
+	const again = board.dispatchPlan({ tasks: [{ ...step("cup2", "object:cup"), instructions: "do grab", scope: ["character:alex"] }, step("after", "object:z", ["cup2"])] });
+	assert.equal(again.tasks[0].duplicateOf, by.grab.taskId, "a duplicate step answers the equal task");
+	assert.deepEqual(board.get(again.tasks[1].taskId).dependsOn, [by.grab.taskId], "and refs to it resolve to that task");
+	console.log("PASS case 8 as a plan: one dispatch_plan queues a graph, refs resolve to taskIds, a cycle or unknown ref refuses all of it");
+}
+{
+	// Timing per task: when it was queued, started and ended, and how long it waited on a held scope, its dependencies
+	// and the cap; live in the board view, final in the ended event, and kept out of the main agent's context.
+	const { board, runs, events, advance } = boardFixture({ cap: 2 });
+	const a = dispatch(board, "a", ["object:a"]); dispatch(board, "b", ["object:b"]);
+	const c = dispatch(board, "c", ["object:c"]), d = dispatch(board, "d", ["object:d"], { dependsOn: [a.taskId] }), e = dispatch(board, "e", ["object:a"]);
+	await tick();
+	advance(1000);
+	assert.deepEqual(board.board().find(task => task.taskId === c.taskId).timing, { queuedAt: 1000, waitScopeMs: 0, waitDepsMs: 0, waitCapMs: 1000 }, "an open wait counts up to now");
+	runs[1].resolve({ status: "done" }); await tick(); await tick();
+	advance(500);
+	runs[0].resolve({ status: "done" }); await tick(); await tick();
+	const timing = id => board.board().find(task => task.taskId === id).timing;
+	assert.deepEqual(timing(a.taskId), { queuedAt: 1000, startedAt: 1000, endedAt: 2500, waitScopeMs: 0, waitDepsMs: 0, waitCapMs: 0 });
+	assert.equal(timing(c.taskId).waitCapMs, 1000, "c waited on the cap until b ended"); assert.equal(timing(c.taskId).startedAt, 2000);
+	assert.equal(timing(d.taskId).waitDepsMs, 1500, "d waited on a"); assert.equal(timing(e.taskId).waitScopeMs, 1500, "e waited on a's object");
+	// A begin the bus refused (scopeBusy) waits on scope; here d holds the cap's other slot, so it waits on the cap next.
+	assert.equal(runs[2].task.taskId, c.taskId);
+	runs[2].resolve({ status: "scopeBusy", error: { message: "object:c is held by task x" } }); await tick(); await tick();
+	assert.equal(board.get(c.taskId).status, "starting", "retried at once: nothing on the board holds object:c");
+	advance(250);
+	runs.findLast(run => run.task.taskId === c.taskId).resolve({ status: "done" }); await tick(); await tick();
+	const ended = events.findLast(event => event.type === "task.done" && event.taskId === c.taskId);
+	assert.deepEqual(ended.timing, { queuedAt: 1000, startedAt: 2000, endedAt: 2750, waitScopeMs: 0, waitDepsMs: 0, waitCapMs: 1000 }, "the ended event carries the final timing");
+	assert.equal(timing(e.taskId).waitCapMs, 250, "e waited on a's object, then on the cap");
+	assert.ok(!mainContextText(board, events).includes("waitCapMs"), "timing stays out of the main agent's context");
+	console.log("PASS timing: each task records queued, started and ended at and its scope, dependency and cap waits; in the view and the ended event");
 }
 {
 	const { board, runs, advance } = boardFixture({ staggerMs: 1500 });
@@ -173,7 +312,8 @@ const dispatch = (board, title, scope, extra = {}) => board.dispatch({ title, in
 
 // --- (b) the main agent's words ----------------------------------------------------------------------------
 {
-	const tasks = [{ taskId: "t-1", title: "컵 잡기", status: "running" }, { taskId: "t-2", title: "Lighting", status: "done" }];
+	const tasks = [{ taskId: "t-1", title: "컵 잡기", status: "running" }, { taskId: "t-2", title: "Lighting", status: "done" }, { taskId: "t-3", title: "Make the cup", status: "review" }];
+	assert.match(doneClaimCorrection("Make the cup 작업을 완료했습니다.", tasks, "컵 만들어"), /"Make the cup" 작업은 아직 끝나지 않았습니다. 지금 검토 대기입니다/, "a task in review is not done yet");
 	assert.match(doneClaimCorrection("컵 잡기 작업을 완료했습니다.", tasks, "컵 잡게 해"), /정정: "컵 잡기" 작업은 아직 끝나지 않았습니다. 지금 진행 중입니다/, "case 15 + 17: corrected in Korean");
 	assert.match(doneClaimCorrection("The 컵 잡기 task is done.", tasks, "have her grab the cup"), /Correction: task "컵 잡기" has not finished; it is running/);
 	assert.equal(doneClaimCorrection("Lighting is done. 컵 잡기 is still running.", tasks, "x"), null, "a true claim, and a running task called running, pass");
@@ -202,11 +342,12 @@ const { MAIN_SYSTEM_PROMPT } = await import("../bin/agent/main-prompt.mjs");
 		workspaceId: () => f.host().workspaceId, resolveWorkspace: () => "handle-1", connected: true, workspaceHandles: ["handle-1"],
 	};
 	const fakeModel = createFakeModel();
-	const said = (context, text) => JSON.stringify(context.messages).includes(text);
+	// the conversation only: the system message (prompt and tool declarations) is not something anyone said
+	const said = (context, text) => JSON.stringify(context.messages.filter(message => message.role !== "system")).includes(text);
 	const toolResults = context => context.messages.filter(message => message.role === "toolResult").length;
 	let mainTurns = 0;
 	const step = async context => {
-		if (context.systemPrompt === MAIN_SYSTEM_PROMPT) {
+		if (getCurrentSystemPrompt(context.messages) === MAIN_SYSTEM_PROMPT) {
 			const last = context.messages.at(-1);
 			if (last.role === "user" && said({ messages: [last] }, "Task events arrived")) { mainTurns++; return fauxAssistantMessage([fauxText("두 작업이 모두 끝났어요.")]); }
 			if (last.role === "user") return fauxAssistantMessage([
@@ -288,7 +429,7 @@ async function reloadScenario({ lostWith, reloadKeeps }) {
 	const notes = [], fakeModel = createFakeModel();
 	const lastUser = context => JSON.stringify([...context.messages].reverse().find(message => message.role === "user") ?? {});
 	const step = async context => {
-		if (context.systemPrompt === MAIN_SYSTEM_PROMPT) {
+		if (getCurrentSystemPrompt(context.messages) === MAIN_SYSTEM_PROMPT) {
 			const last = context.messages.at(-1);
 			if (last.role === "user" && lastUser(context).includes("Move the cube")) return fauxAssistantMessage([fauxToolCall("dispatch_task", { title: "cube", instructions: `Move ${cube} to x 1, then to x 2.`, scope: [`object:${cube}`] }, { id: `m-${randomUUID()}` })]);
 			return fauxAssistantMessage([fauxText("알겠어요.")]);

@@ -524,6 +524,22 @@ try {
 	ok(await run(["describe", "--workspace", "Alpha"]));
 	assert.equal(alpha.received.at(-1).name, "describe", "--workspace also accepts a project name");
 
+	// #864: opening a named project relabels the tab under the same handle, so
+	// status and --workspace <project> see the opened name, not the stale one.
+	const relabeled = withTimeout(new Promise((resolve) => {
+		beta.socket.addEventListener("message", (event) => { if (JSON.parse(event.data).type === "pong") resolve(); });
+	}), "beta relabel pong");
+	beta.socket.send(JSON.stringify({ type: "meta", meta: { project: "Example project", scene: "Opened", cast: 2, commands: EDITOR_COMMANDS } }));
+	beta.socket.send(JSON.stringify({ type: "ping" }));
+	await relabeled;
+	const relabeledStatus = ok(await run(["status"])).editors.find((editor) => editor.handle === "beta-tab");
+	assert.equal(relabeledStatus.project, "Example project", "status reports the opened project's name");
+	assert.equal(relabeledStatus.scene, "Opened");
+	ok(await run(["describe", "--workspace", "Example project"]));
+	assert.equal(beta.received.at(-1).name, "describe", "the opened project's name selects its workspace");
+	assert.equal(only(await run(["describe", "--workspace", "Beta"])).error.code, "STALE_HANDLE", "the old label no longer matches");
+	evidence.relabeled = relabeledStatus;
+
 	const unknownWorkspace = await run(["describe", "--workspace", "no-such-tab"]);
 	assert.equal(unknownWorkspace.code, 4);
 	assert.equal(only(unknownWorkspace).error.code, "STALE_HANDLE");

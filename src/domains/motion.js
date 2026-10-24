@@ -29,8 +29,8 @@ import {
 } from "../motion/ik.js";
 import * as THREE from "three";
 import { StudioProtocolError } from "../studio-agent-protocol.js";
-
 import { applyTakeFrame } from "../motion3/playback.js";
+import { advancePlayback, installPlaybackApplier } from "./playback.js";
 import { isKo, ko } from "../locale.js";
 import { isProxyFigure } from "../scenes.js";
 import { refuseRigOnly } from "../character-kind.js";
@@ -625,15 +625,7 @@ export function useMotion(appContext) {
 
 
 	function advanceFrame(steps = 1) {
-		const count = Math.max(1, Math.floor(steps));
-		const previewEnd = appContext.shared.cameraPreviewEndRef.current;
-		if (previewEnd != null && appContext.shared.tlFrameRef.current + count >= previewEnd) {
-			appContext.shared.cameraPreviewEndRef.current = null;
-			appContext.shared.setTlFrame(previewEnd);
-			appContext.shared.setTlPlaying(false);
-			return;
-		}
-		appContext.shared.setTlFrame((f) => (f + count) % appContext.shared.frameCountRef.current);
+		advancePlayback(appContext.shared, steps);
 	}
 
 	function stepFrame(delta) {
@@ -677,6 +669,7 @@ export function useMotion(appContext) {
 			appContext.shared.poseMemberAtFrame(appContext.shared.rigs[entry.id], entry.sessionMotion, appContext.shared.ikStatesRef.current.get(entry.id), frame, IK_CORRECTION_BLEND_FRAMES);
 		}
 	};
+	installPlaybackApplier(appContext, motion, poseOtherCastMembers, ikEvaluate, IK_CORRECTION_BLEND_FRAMES);
 
 	function toggleIkMode() {
 		const next = !ikMode;

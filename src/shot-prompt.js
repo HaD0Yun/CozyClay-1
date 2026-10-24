@@ -1,18 +1,38 @@
 // Builds the labelled text prompt sent alongside a reference clip when a shot
-// goes to an image or video model. Pure string building: no DOM, no imports.
+// goes to an image or video model. Pure string building: no DOM; the only
+// import is the editor's own lens math, so the prompt and the viewport share
+// one focal <-> fov calibration.
+import { fovToFocalMm, shotAspectRatio } from "./shot.js";
 
 const CAMERA_FOLLOWS_REFERENCE = "follow the reference clip's framing and camera motion exactly";
 const NEUTRAL_LOOK = "clay previs, neutral look";
 const MOTION_LINE = "motion and blocking come from the reference; keep timing";
 
-// FOV degrees -> 35mm-equivalent focal length -> shot-size word.
-// A wide field of view reads as a wide shot; a narrow one as a long shot.
-export function shotSizeFromFov(fovDeg) {
-	if (!Number.isFinite(fovDeg) || fovDeg <= 0) return "normal";
-	const equivalentFocalMm = 18 / Math.tan((fovDeg * Math.PI) / 360);
-	if (equivalentFocalMm <= 20) return "wide";
-	if (equivalentFocalMm <= 40) return "normal";
+// Focal length (on the editor's filmback) -> lens word, in crew terms:
+// under 35 mm reads wide, 35-50 mm normal, longer than 50 mm long.
+export function lensWordFromFocalMm(focalMm) {
+	if (!Number.isFinite(focalMm) || focalMm <= 0) return "normal";
+	if (focalMm < 35) return "wide";
+	if (focalMm <= 50) return "normal";
 	return "long";
+}
+
+// FOV degrees -> focal length through the editor's own calibration
+// (shot.js fovToFocalMm on the given filmback) -> lens word. No second,
+// independently calibrated conversion: the word matches the lens the editor
+// reports for that field of view.
+export function shotSizeFromFov(fovDeg, filmback = {}) {
+	if (!Number.isFinite(fovDeg) || fovDeg <= 0) return "normal";
+	const focalMm = fovToFocalMm((fovDeg * Math.PI) / 180, filmback.sensorId, filmback.aspectRatio);
+	// Round to 0.1 mm so a lens that round-trips through fov keeps its word.
+	return lensWordFromFocalMm(Math.round(focalMm * 10) / 10);
+}
+
+// The editor already reports the focal length it framed with; only a meta
+// without one falls back to converting its fov on the meta's filmback.
+function lensWord(meta) {
+	if (Number.isFinite(meta.focalMm) && meta.focalMm > 0) return lensWordFromFocalMm(meta.focalMm);
+	return shotSizeFromFov(meta.fovDeg, { sensorId: meta.sensorId, aspectRatio: shotAspectRatio(meta.aspect) });
 }
 
 function secondsText(seconds) {
@@ -68,7 +88,7 @@ export function buildShotPrompt(meta, options = {}) {
 
 	const lines = [
 		`SHOT: ${meta.shotTitle || "untitled shot"}, ${secondsText(seconds)}, ${meta.aspect || ""}`.trimEnd(),
-		`LENS: ${meta.focalMm}mm, ${shotSizeFromFov(meta.fovDeg)} shot`,
+		`LENS: ${meta.focalMm}mm, ${lensWord(meta)} shot`,
 		referenceOwnsCamera ? `CAMERA: ${CAMERA_FOLLOWS_REFERENCE}` : `CAMERA: ${cameraWords(meta.cameraMove)}`,
 		`LIGHT: ${lightWords(meta.keyLight)}`,
 		`CAST: ${(meta.cast || []).map((member) => member.name).join(", ") || "none"}`,

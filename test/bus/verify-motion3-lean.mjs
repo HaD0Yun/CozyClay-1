@@ -15,9 +15,9 @@ const box = (id, renderer, [x, y, z], [sx, sy, sz], parent = null) => ({ id, nam
 const counter = [box('counter', 'empty', [0, 0, 0.4], [1, 1, 1]), box('counter-top', 'cube', [0, 0.91, 0.4], [0.9, 0.04, 0.5], 'counter'),
 	...[[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([a, b], i) => box(`leg-${i}`, 'cylinder', [a * 0.4, 0, 0.4 + b * 0.2], [0.04, 0.91, 0.04], 'counter'))];
 const rest = [-0.16, 0.95, 0.3], mouth = [-0.03, 1.48, 0.22], near = [-0.05, 1.44, 0.25], up = [-0.14, 1.25, 0.25];
-// the keys at the mouth tip the cup toward the face; lean (when given) goes on those keys only
+// the keys at the mouth tip the cup toward the face; lean goes on those keys only (0 holds the aim exactly: a key at the lips otherwise leans, face-lean.js)
 const spec = (lean = 0) => {
-	const tipped = aim => ({ aim, ...(lean ? { lean } : {}) });
+	const tipped = aim => ({ aim, lean });
 	return {
 		schema: 'cozyclay.motion-spec.v1', fps: 24, frames: 170,
 		use: [{ skill: 'standIdle', f0: 0, args: { at: [0, 0], heading: 0 } }, { skill: 'reachGrip', f0: 12, args: { anchor: 'obj', side: 'r', reach: 22, hold: 104, release: 16, define: { kind: 'object', object: 'obj', local: [0, 0.055, 0] } } }],

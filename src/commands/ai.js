@@ -26,6 +26,6 @@ export function register(registry, ports) {
 			const shot = result.shot && { id: result.shot.id, name: result.shot.name, range: { startFrame: result.shot.startFrame, endFrameExclusive: result.shot.endFrame + 1 } };
 			const referenceFrames = (result.frame ? 1 : 0) + (result.frameB ? 1 : 0);
 			return { affectedIds: [], output: { prompt: result.prompt, mode: result.mode, modelLabel: result.modelLabel ?? null, shot, aspectRatio: result.aspectRatio, cameraMode: result.camera?.mode ?? null, referenceFrames },
-				summary: `Prepared the ${result.mode} prompt${result.modelLabel ? ` for ${result.modelLabel}` : ""} for ${shot ? `${shot.name} [${shot.range.startFrame}, ${shot.range.endFrameExclusive})` : "the current camera"}; the Studio's result panel shows it with ${referenceFrames} reference frame${referenceFrames === 1 ? "" : "s"} for the user to copy and download.` };
+				summary: `Prepared the ${result.mode} prompt${result.modelLabel ? ` for ${result.modelLabel}` : ""} for ${shot ? `${shot.name} [${shot.range.startFrame}, ${shot.range.endFrameExclusive})` : "the current camera"}; the Studio's result panel shows it with ${referenceFrames} reference frame${referenceFrames === 1 ? "" : "s"} for the user to copy and export.` };
 		} });
 }

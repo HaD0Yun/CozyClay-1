@@ -26,6 +26,7 @@ import { openBrowser } from "./open-browser.mjs";
 import { checkForUpdate, readUpdateStatus, runUpdate } from "./update-check.mjs";
 import { handleOAuthRequest } from "./codex-auth.mjs";
 import { createAgentHandler } from "./agent/agent-routes.mjs";
+import { liveHubPort } from "./live-endpoint.mjs";
 import { verifyPackageMarker } from "./package-signature.mjs";
 import {
 	markTelemetryNoticeShown,
@@ -455,8 +456,9 @@ server = createServer((req, res) => {
 		// __COZYCLAY_LIVE__ opts the production build into the loopback live
 		// socket (src/App.jsx gates on DEV || this flag); without it an
 		// npx-served studio can never attach to the MCP server's live hub.
-		const script = `<script>window.__COZYCLAY_RUNTIME__ = ${JSON.stringify(runtime).replaceAll("<", "\\u003c")}; window.__COZYCLAY_LIVE__ = true;</script>`;
-		const html = readFileSync(target, "utf8").replace("</head>", `${script}\n</head>`);
+		// __COZYCLAY_LIVE_PORT__ tells the prebuilt bundle which hub port this
+		// launch chose (COZYCLAY_LIVE_PORT), since the build baked its own (#862).
+		const html = readFileSync(target, "utf8").replace("</head>", `<script>window.__COZYCLAY_RUNTIME__ = ${JSON.stringify(runtime).replaceAll("<", "\\u003c")}; window.__COZYCLAY_LIVE__ = true; window.__COZYCLAY_LIVE_PORT__ = ${JSON.stringify(liveHubPort())};</script>\n</head>`);
 		res.writeHead(200, {
 			"content-type": "text/html; charset=utf-8",
 			"content-length": Buffer.byteLength(html),

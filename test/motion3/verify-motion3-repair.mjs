@@ -19,6 +19,8 @@ import { RUN3_SPEC, RUN3_MANUAL } from "./fixtures/cup-run3-spec.mjs";
 import { F275_FULL, F275_REPAIR8, F275_PATCH9, F275_REPAIR9, C8F2_FULL } from "./fixtures/cup-goal-stuck.mjs";
 import { press } from "./fixtures/reach-press.mjs";
 import { budgetMs } from "./fixtures/time-budget.mjs";
+import { compareQa } from "../../src/motion3/qa/verdict.js";
+import { runCompileJob } from "../../src/motion3/compile-job.js";
 
 let failures = 0;
 function expect(name, condition, detail = "") {
@@ -72,7 +74,10 @@ expect("exit car (clean): one compile, no rounds, under 10 s", r.result.qa.ok &&
 const wing = structuredClone(EXITCAR_SPEC);
 for (const k of wing.keys) if (json(k.set.elbow_r) === "[0.4,-1,0.6]") k.set.elbow_r = [0.4, 1, 0.6];
 r = repair(wing, car, 1);
-expect("rounds: 1 stops after one round (at most 3 tries)", r.repair.rounds === 1 && r.repair.compiles <= 4 && r.repair.applied.length >= 1, json(r.repair));
+// the chicken-wing pole patch lowers the summed severity (1243 -> 1145) but trades it for more problems (20 -> 27, the
+// hand into the head twice as deep): qa/verdict.js keeps nothing that brings new or worse failures
+expect("rounds: 1 stops after one round (at most 3 tries); the pole patch that trades 20 problems for 27 is not kept", r.repair.rounds === 1 && r.repair.compiles <= 4
+	&& !r.repair.applied.some(a => a.kind === "BELOW") && r.result.qa.groups.length <= compileSpec(wing, { sk, scene: car }).qa.groups.length, json(r.repair));
 
 // 6. motion.compile { repair, install: true } installs the improved spec and names it.
 const takes = new Map();
@@ -180,15 +185,59 @@ expect("tune: when the agent's root keys hold the body, they move together (x th
 	&& rootTune[2].every(o => o.value[2] === 0.43), json(rootTune.slice(0, 3)));
 expect("tune: no body placement for a goal more than 10 cm short", !tuneCandidates({ ...stuckGoal, worst: 0.11, excess: 0.11 }, f275).length);
 
-// 10. The arm at full reach: the body comes closer, by what placed it (fixtures/reach-press.mjs).
+// 10. The arm at full reach (fixtures/reach-press.mjs). A lean, a hip shift and lower hips reach it: the compiler does
+// that itself (fix.reach, fix/reach-body.js) and says what moved; the feet keep their targets. Farther, the body has to
+// step: repair moves what placed it, and says the body moved for an arm's failure.
 const pressCompile = s => compileSpec(s, { sk: ybot, scene: empty });
-for (const [how, z, path] of [["stand", 0.7, /^\/use\/0\/args\/at$/], ["walk", 1.05, /^\/use\/1\/args\/firstStep$/], ["root", 1.05, /^\/keys\/[34]\/set\/root$/]]) {
-	const spec = press(how, z), t0 = performance.now(), rr = repairSpec(spec, { rounds: 4 }, pressCompile), ms = performance.now() - t0;
-	const kinds = rr.result.qa.groups.map(g => g.kind);
-	console.log(`  ${how}: ${Math.round(ms)} ms, ${json(rr.repair.applied.map(a => `${a.kind} ${json(a.patch)}`))}; left ${json(kinds)}`);
-	expect(`press (${how}): repair meets the goal by moving the body (${path.source}), qa.ok`, rr.result.qa.goals.every(g => g.ok)
-		&& rr.result.qa.ok && rr.repair.applied.filter(a => a.kind !== "POP").every(a => a.patch.every(o => path.test(o.path))) && ms < 10000, json(rr.repair));
+for (const [how, z] of [["stand", 0.7], ["walk", 1.05], ["root", 1.05]]) {
+	const spec = press(how, z), c = pressCompile(spec), off = pressCompile({ ...spec, fix: { reach: false } }), run = c.fixed.reachBody?.runs?.[0];
+	const feet = [10, 40, 59].every(f => ["foot_l", "foot_r"].every(ch => json(c.out.baked[ch]?.[f]) === json(off.out.baked[ch]?.[f])));
+	console.log(`  ${how}: reachBody ${json(c.fixed.reachBody?.runs)}; left ${json(c.qa.groups.map(g => `${g.kind} ${g.subject} ${g.severity}`))}`);
+	expect(`press (${how}): the compiler meets the goal by leaning and shifting the body (reported), the feet where they were keyed`, c.qa.goals.every(g => g.ok) && !off.qa.goals.every(g => g.ok)
+		&& run?.side === "l" && run.lean > 0 && run.lean <= 25 && Math.hypot(...run.shift) <= 0.0801 && run.miss[1] < run.miss[0] && feet && !c.qa.groups.some(g => g.kind === "REACH" && g.severity > 100), json({ fixed: c.fixed.reachBody, groups: c.qa.groups.map(g => g.subject) }));
+	const rr = repairSpec(spec, { rounds: 2 }, pressCompile);
+	expect(`press (${how}): repair keeps the goal and is never worse than its input`, rr.result.qa.goals.every(g => g.ok) && rr.result.qa.groups.length <= c.qa.groups.length, json(rr.repair));
 }
+const far = press("stand", 0.9), farC = pressCompile(far), farR = repairSpec(far, { rounds: 4 }, pressCompile);
+console.log(`  far: ${json(farR.repair.applied.map(a => `${a.kind} ${json(a.patch)} ${a.movedBody ?? ""}`))}; left ${json(farR.result.qa.groups.map(g => g.kind))}`);
+expect("press 0.9 m: past the lean the compiler leaves REACH; repair meets the goal by moving the stance", !farC.qa.goals[0].ok && farR.result.qa.goals.every(g => g.ok)
+	&& farR.repair.applied.some(a => a.patch.some(o => o.path === "/use/0/args/at")), json(farR.repair));
+
+// 11. qa/verdict.js: better = lower sum, no goal lost, no more problems, what got worse at most half of what got better
+const q = (groups, goals = []) => ({ goals, groups: groups.map(([kind, subject, severity]) => ({ kind, subject, severity })) });
+const was = q([["REACH", "arm_miss_l", 10], ["BODY", "hand_l into thigh_l", 2]]);
+expect("verdict: a group gone, nothing worse: better", compareQa(q([["BODY", "hand_l into thigh_l", 2]]), was).better);
+expect("verdict: more problems is not better, though the sum drops", compareQa(q([["REACH", "arm_miss_l", 3], ["BODY", "hand_l into thigh_l", 2], ["FACE", "hand_l into head", 1]]), was).why === "problems 2 -> 3");
+expect("verdict: a trade that breaks more than half of what it fixed is not better", /^BODY hand_l into thigh_l got worse \(2 -> 7\)$/.test(compareQa(q([["REACH", "arm_miss_l", 2], ["BODY", "hand_l into thigh_l", 7]]), was).why));
+expect("verdict: a goal that held and fails is not better", /^goal "a"/.test(compareQa(q([], [{ name: "a", ok: false }]), q([["REACH", "arm_miss_l", 1]], [{ name: "a", ok: true }])).why));
+
+// 12. An arm's failure is fixed without moving the body when something else does: the root patch waits
+const armFake = s => {
+	const hand = s.keys[0].set.hand_l[2] > 0.3, moved = s.use[0].args.at[1] > 0;
+	const groups = [];
+	if (!hand && !moved) groups.push({ kind: "REACH", subject: "arm_miss_l", count: 4, worst: 0.05, limit: 0.01, severity: 8, patch: [{ op: "replace", path: "/use/0/args/at", value: [0, 0.1] }] },
+		{ kind: "COLLIDE", subject: "hand_l x box", count: 2, worst: 0.01, limit: 0.005, severity: 4, patch: [{ op: "replace", path: "/keys/0/set/hand_l", value: [0.2, 1, 0.35] }] });
+	return { qa: { goals: [], groups } };
+};
+const armSpec = { use: [{ skill: "standIdle", f0: 0, args: { at: [0, 0] } }], keys: [{ f: 0, set: { hand_l: [0.2, 1, 0.3] } }] };
+r = repairSpec(armSpec, { rounds: 2 }, armFake);
+expect("arm-local: the hand patch is kept first, the stance patch is never tried", r.repair.applied.length === 1 && r.repair.applied[0].patch[0].path === "/keys/0/set/hand_l" && !r.repair.applied[0].movedBody && r.repair.compiles === 2, json(r.repair));
+const rootOnly = s => ({ qa: { goals: [], groups: s.use[0].args.at[1] > 0 ? [] : [{ kind: "REACH", subject: "arm_miss_l", count: 4, worst: 0.05, limit: 0.01, severity: 8, patch: [{ op: "replace", path: "/use/0/args/at", value: [0, 0.1] }] }] } });
+r = repairSpec(armSpec, { rounds: 2 }, rootOnly);
+expect("arm-local: when moving the body is the only fix it is kept and says so (movedBody)", r.repair.applied.length === 1 && /^the body moved/.test(r.repair.applied[0].movedBody ?? ""), json(r.repair));
+
+// 13. motion.compile offers a hint patch only when its compile helped (hint-check.js), only from a compile that repairs
+// (a plain compile keeps the hint's words: it paid two more compiles for patches the agent seldom applied), and fix.retime
+// only when QA is no worse
+const job = (s, repair) => runCompileJob({ model: "x-bot-tpose", scene: car, spec: s, ...(repair ? { repair } : {}) });
+const plainWing = job(wing);
+expect("a plain compile offers no hint patch: the words stay", plainWing.qa.groups.every(g => !g.patch && !g.patchTried) && plainWing.qa.groups.some(g => g.hint), json(plainWing.qa.groups.map(g => [g.kind, Boolean(g.patch), Boolean(g.hint)])));
+const winged = job(wing, { rounds: 1 }), below = winged.qa.groups.find(g => g.kind === "BELOW");
+expect("hint check: the pole patch that trades 20 problems for 27 is not offered, and says what it did", below && !below.patch && /^replace \/keys\/\d+\/set\/elbow_r: compiled, did not help \(problems 20 -> 27\)$/.test(below.patchTried ?? ""), json(below));
+expect("hint check: every patch left was compiled and helped", winged.qa.groups.filter(g => g.patch).every(g => g.patchChecked && g.patchChecked.severity[1] < g.patchChecked.severity[0]), json(winged.qa.groups.filter(g => g.patch)));
+const timed = compileSpec({ ...wing, fix: { ...wing.fix, retime: true } }, { sk, scene: car });
+expect("retime: kept only when QA is no worse; here it is not, so the take compiles without it and says so", timed.fixed.retime?.kept === false && /not kept: QA was worse with it/.test(timed.fixed.retime.how)
+	&& json(timed.qa.groups.map(g => g.subject)) === json(compileSpec(wing, { sk, scene: car }).qa.groups.map(g => g.subject)), json(timed.fixed.retime));
 
 if (failures) { console.error(`${failures} motion3 repair check(s) failed`); process.exit(1); }
 console.log("motion3 repair: all checks passed");

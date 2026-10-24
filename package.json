@@ -1,6 +1,6 @@
 {
   "name": "cozyclay",
-  "version": "3.0.3",
+  "version": "3.1.2",
   "description": "Open source previs software in the browser: block a scene, pose characters, author camera moves and cuts, then take the same shots to an AI video model.",
   "scripts": {
     "dev": "node tools/dev-full.mjs --host 127.0.0.1 --port 5180",
@@ -32,7 +32,6 @@
     "test:appearance": "node test/verify-appearance.mjs",
     "test:auto-color": "node test/verify-auto-color.mjs",
     "test:shot-guides": "node test/verify-shot-guides.mjs",
-    "test:burn-in": "node test/verify-burn-in.mjs",
     "test:layout": "node test/verify-layout.mjs",
     "test:timeline-camera": "node test/verify-timeline-camera.mjs",
     "test:timeline-shots": "node test/verify-timeline-shots.mjs",
@@ -62,9 +61,11 @@
   "license": "AGPL-3.0-or-later",
   "type": "module",
   "dependencies": {
-    "@earendil-works/pi-agent-core": "0.85.1",
-    "@earendil-works/pi-ai": "0.85.1",
-    "@earendil-works/pi-codemode": "1.1.0"
+    "@anthropic-ai/claude-agent-sdk": "^0.3.306",
+    "@earendil-works/pi-agent-core": "1.4.0",
+    "@earendil-works/pi-ai": "1.4.0",
+    "@earendil-works/pi-codemode": "1.4.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -83,6 +84,8 @@
     "react-icons": "^5.7.0",
     "reactflow": "^11.11.4",
     "three": "^0.185.1",
+    "three-bvh-csg": "^0.0.18",
+    "three-mesh-bvh": "^0.9.16",
     "vite": "^8.2.0"
   },
   "bin": {

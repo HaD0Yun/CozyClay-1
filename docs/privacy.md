@@ -13,7 +13,7 @@ This is the full disclosure behind the short version on [cozyclay.org/privacy](h
 | `install:first_launch` | First run of the official npm package |
 | `app:session_started` | Start of an official npm package session |
 | `app:session_ended` | Session duration, action count, scenes touched, and per-group edit gesture counts (`pose`, `camera`, `object`, `shot`, `prompt`), all bucketed |
-| `feature:used` | One signal per feature per session (`pose_edit` is a real pose change; `pose_save` is saving a pose to the library; `fal_motion_open` is opening the AI video A/B card) |
+| `feature:used` | One signal per feature per session (`pose_edit` is a real pose change; `pose_save` is saving a pose to the library) |
 | `$pageview` | Funnel and drop-off analysis |
 | `scene:created` | Funnel and drop-off analysis; carries `previs_mode` (`storyboard` or `animation`) when the project has a mode |
 | `storyboard:panel_created` | A storyboard panel was added; `source` is `agent` or `manual`. No caption, name or id |
@@ -26,7 +26,6 @@ This is the full disclosure behind the short version on [cozyclay.org/privacy](h
 | `craft:first_action` | Funnel and drop-off analysis |
 | `craft:first_edit` | First meaningful Studio edit (`edit_kind`, `definition_version: 1`) |
 | `playground:first_edit` | First meaningful Playground edit, separate from the Studio funnel |
-| `motion:backend_state` | Motion capability at session start (`none`, `local_kimodo`, or `hosted`) |
 | `app:error` | Uncaught errors and unhandled rejections: type label, source, and for the app's own bundle only file name + line/column. Never messages, stacks, URLs, or paths |
 | `device:profile` | Once per session: GPU vendor/class, WebGL version, CPU/memory buckets, and a frame-rate bucket. Never the raw renderer string |
 | `survey:use_case` | Optional one-time question after a successful export: `use_case` and `team`, closed choices only |

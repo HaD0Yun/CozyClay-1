@@ -109,5 +109,7 @@ export function withIdle(c, layer, f) {
 	if (!d) return c;
 	const out = { ...c };
 	for (const [ch, v] of Object.entries(d)) out[ch] = Array.isArray(v) ? (Array.isArray(c[ch]) ? c[ch].map((x, i) => x + v[i]) : c[ch]) : (Number(c[ch]) || 0) + v;
+	// the top spine bone's own share (chest_*, channels.js overlap) breathes and sways with the rest of the spine
+	for (const ch of ["chest_pitch", "chest_roll"]) if (c[ch] !== undefined && d[ch.replace("chest", "spine")] !== undefined) out[ch] = c[ch] + d[ch.replace("chest", "spine")];
 	return out;
 }

@@ -47,10 +47,16 @@ export function passFileName(kind) {
 // it spreads the value over four channels and reads as colour noise). This
 // shader is the plain depth-to-grey the deliverable wants, and the range it
 // normalises over is the stage's, not the projection's.
+// An InstancedMesh (a sculpt's scatter) draws every instance through its
+// instanceMatrix; without it all of them would land on the mesh's origin.
 const DEPTH_VERTEX = /* glsl */ `
 varying float vViewDepth;
 void main() {
-	vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
+	vec4 local = vec4(position, 1.0);
+#ifdef USE_INSTANCING
+	local = instanceMatrix * local;
+#endif
+	vec4 viewPosition = modelViewMatrix * local;
 	vViewDepth = -viewPosition.z;
 	gl_Position = projectionMatrix * viewPosition;
 }

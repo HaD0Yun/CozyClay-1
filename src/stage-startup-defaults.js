@@ -32,16 +32,10 @@ export const SHOT_ASPECT_PRESETS = Object.freeze({
 	"12:7": Object.freeze({ label: "12:7", aspect: SHOT_ASPECT_RATIOS["12:7"], width: 1536, height: 896, title: "12:7 video-inbetweener ratio" }),
 	"fal 480P": Object.freeze({ label: "fal 480P", aspect: SHOT_ASPECT_RATIOS["fal 480P"], width: 1664, height: 960, title: "Fal H3 480P canvas (832x480)" }),
 });
-// Pre-generated clip shipped with the build so a bridge-less session (a hosted
-// static demo, or `npm run dev:ui`) still shows real generated motion.
-// Root-absolute on purpose: the studio is served from "/app/" while these
-// public files stay at the site root, so a page-relative path would resolve
-// to "/app/models/..." and 404. Vite's base is "/" (own apex domain), so a
-// leading slash is now the correct — and only — form that works from both
-// the dev server and the built site.
 // Per-character rig model: the stage entry's `model` is the FBX file stem in
-// public/models AND the wire rig name sent to ARDY, so mesh and export can
-// never drift apart.
+// public/models. Root-absolute on purpose: the studio is served from "/app/"
+// while public files stay at the site root, so a page-relative path would
+// resolve to "/app/models/..." and 404.
 export const characterModelUrl = (model) => `/models/${model}.fbx`;
 
 /** Shipped rig names as the operator says them, not as the files spell them. */

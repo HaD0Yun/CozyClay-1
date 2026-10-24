@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createServer } from 'vite';
+import { fileURLToPath } from 'node:url';
 import { createStudioAppActions } from '../../src/commands/index.js';
 import { createSceneStage, SCENES_VERSION } from '../../src/scenes.js';
 import { PROJECT_SESSION_KEY } from '../../src/project.js';
@@ -12,7 +13,7 @@ const ardyContract = readFileSync(new URL('../../src/timeline-defaults.js', impo
 const startupDefaults = readFileSync(new URL('../../src/stage-startup-defaults.js', import.meta.url), 'utf8');
 const constants = ['TIMELINE_FPS', 'DEFAULT_DURATION_S', 'DEFAULT_WORKSPACE_LAYOUT'].map(name =>
   (source + ardyContract + startupDefaults).match(new RegExp(`export const ${name} = [\\s\\S]*?;`))[0]).join('\n');
-const server = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false }, appType: 'custom', plugins: [{
+const server = await createServer({ configFile: false, root: fileURLToPath(new URL('../../', import.meta.url)), server: { middlewareMode: true, hmr: false }, appType: 'custom', plugins: [{
   name: 'project-without-renderer', enforce: 'pre', load(id) {
     if (id.endsWith('/src/app-stage.jsx')) return constants;
     if (id.endsWith('/src/scene-assets.js')) return `export * from './scene-assets.js?real';

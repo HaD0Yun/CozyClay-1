@@ -3,6 +3,7 @@
 // tool, and for run_action the action and its subject as soon as the streamed arguments name them). A long
 // motion spec or script takes the model many seconds to write; without these the panel could only say
 // "Thinking…". Frames only: nothing here reaches the model or the scene.
+import { createSculptSketch } from "./sculpt-sketch.mjs";
 
 const FLUSH_MS = 400;
 const MIN_BATCH = 16;
@@ -33,6 +34,8 @@ function composedCall(name, raw) {
 export function createReasoningFrames(push, clock = () => Date.now()) {
 	let thinking = "", flushedAt = clock();
 	const calls = new Map();
+	// The parts a call that builds sculpts has written so far, as sculpt.sketch frames (sculpt-sketch.mjs).
+	const sketch = createSculptSketch(push, clock);
 	const flush = () => {
 		if (!thinking) return;
 		push({ type: "thinking.delta", text: thinking });
@@ -42,6 +45,7 @@ export function createReasoningFrames(push, clock = () => Date.now()) {
 	return {
 		flush,
 		onMessageEvent(event) {
+			sketch.onMessageEvent(event);
 			if (event?.type === "thinking_delta") {
 				thinking += event.delta ?? "";
 				// a batch says something: not a lone word at the start of a paragraph

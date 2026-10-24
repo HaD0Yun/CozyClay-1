@@ -4,6 +4,7 @@ import { add, apply, ry } from "../compiler/math.js";
 import { walk } from "../compiler/walk.js";
 import { keyBook, skillError } from "./book.js";
 import { walkEnd } from "./info.js";
+import { fitTo, walkEndAt, r2, xzText, REACH_TOL } from "./walk-fit.js";
 import { GRASP_FINGERS, GRASP_POINTS } from "../compiler/vocab.js";
 import { clearStance, reachStance } from "./stance.js";
 import { CLOSE, GAZE, gazeAt, headKeyed, earlyTransport, holdsOpen, transportKeys } from "./reach-human.js";
@@ -40,30 +41,36 @@ export function standIdle(ctx) {
 /**
  * walkTo({ to: [x, z] } | { heading: h | [h0, h1] }, steps, step = 0.5, turnDistance, ...): the
  * walk generator from the pose at f0. With `to` the heading turns toward the point and the step
- * count covers the distance. Ends 16 + steps * period + 18 frames after f0, feet together; a
- * take that ends after the last step holds that pose to its end. The steps keep a natural rhythm
- * (compiler/gait-rhythm.js); vary: 0 makes every step the same.
+ * count covers the distance; with steps as well the stride is fitted so they end there (fitTo). Ends
+ * 16 + steps * period + 18 frames after f0, feet together; a take that ends after the last step holds
+ * that pose to its end. A walk with `to` that ends more than 0.1 m from it says where in `placed`. The
+ * steps keep a natural rhythm (compiler/gait-rhythm.js); vary: 0 makes every step the same.
  */
 export function walkTo(ctx) {
 	const { args, state } = ctx;
 	if (!state.foot_l || !state.foot_r || !state.root) skillError(ctx.tag, "needs a standing pose keyed before f0 (use standIdle or another skill first)");
-	const gen = { type: "walk", f0: ctx.f0, ...args };
+	let gen = { type: "walk", f0: ctx.f0, ...args }, adjust, c0, h1;
 	delete gen.to; delete gen.arrive;
 	const h0 = state.yaw ?? 0, step = args.step ?? 0.5, first = args.firstStep ?? 0.4;
 	if (args.to) {
-		const c0 = [(state.foot_l[0] + state.foot_r[0]) / 2, (state.foot_l[2] + state.foot_r[2]) / 2];
+		c0 = [(state.foot_l[0] + state.foot_r[0]) / 2, (state.foot_l[2] + state.foot_r[2]) / 2];
 		const dx = args.to[0] - c0[0], dz = args.to[args.to.length - 1] - c0[1], d = Math.hypot(dx, dz);
-		let h1 = Math.atan2(dx, dz) * 180 / Math.PI;
+		h1 = Math.atan2(dx, dz) * 180 / Math.PI;
 		while (h1 - h0 > 180) h1 -= 360;
 		while (h1 - h0 < -180) h1 += 360;
 		gen.heading = args.heading ?? [h0, h1];
 		gen.steps = args.steps ?? Math.max(2, 2 + Math.round((d - first) / step));
+		if (typeof gen.heading === "number") gen.heading = [h0, gen.heading];
+		if (ctx.fit && d > REACH_TOL) ({ gen, adjust } = fitTo(ctx, gen, c0, d, h1));
 	}
 	if (typeof gen.heading === "number") gen.heading = [h0, gen.heading];
 	const keys = walk(gen, ctx.keys, ctx.sk, ctx.tag), end = walkEnd(gen), last = ctx.frames - 1;
+	const at = args.to && walkEndAt(keys), miss = at ? Math.hypot(at[0] - args.to[0], at[1] - args.to[args.to.length - 1]) : 0;
+	const placed = miss > REACH_TOL ? { placed: { at: at.map(r2), heading: Math.round(gen.heading?.[1] ?? h0), why: `ends ${r2(miss)} m from to ${xzText(args.to)}` } } : {};
+	const more = { ...placed, ...(adjust ? { adjust } : {}) };
 	// the settle after the last step only holds the pose: a take that ends in it ends the walk there
-	if (end > last && Math.max(...keys.filter(k => k.f < end).map(k => k.f)) <= last) return { keys: keys.filter(k => k.f <= last), end: last, cut: `settle cut at f${last} (hold to the end)` };
-	return { keys, end };
+	if (end > last && Math.max(...keys.filter(k => k.f < end).map(k => k.f)) <= last) return { keys: keys.filter(k => k.f <= last), end: last, cut: `settle cut at f${last} (hold to the end)`, ...more };
+	return { keys, end, ...more };
 }
 
 /** base when `props` has no other prop of that name (the same one again is fine), else base_<side>, base_<side>2, ... */

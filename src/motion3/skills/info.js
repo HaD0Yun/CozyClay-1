@@ -25,7 +25,7 @@ export const SKILL_INFO = {
 		place: { at: 0.03 },
 	},
 	walkTo: {
-		args: { to: xz("[x, z] world m: the heading turns toward it and the steps cover the distance"), ...walkArgs,
+		args: { to: xz("[x, z] world m: the heading turns toward it and the steps cover the distance (given steps, the stride or the step count and cadence is fitted to it in a natural gait, or the walk is refused)"), ...walkArgs,
 			heading: { oneOf: [num(), WALK_TYPES.heading], description: "degrees: h1, or [h0, h1]" },
 			arrive: int("with to and no steps/period/step/swing: the frame to end by (feet together); the engine picks the cadence (observations.planned)") },
 		needs: "a standing pose keyed before f0", frames: "16 + steps * period + 18",

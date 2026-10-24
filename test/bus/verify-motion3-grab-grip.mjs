@@ -26,8 +26,10 @@ test('a two-hand box carry: the carrying hand grips at the grab and its wrist st
 	assert.ok(turn(on, off) > 0.05, 'the grab frame takes the grip');
 });
 
+// lean 0 on the aim keys holds them exactly: a key at the lips otherwise leans (face-lean.js), and the grip needs no choosing
+const exactly = spec => ({ ...spec, objects: Object.fromEntries(Object.entries(spec.objects).map(([id, o]) => [id, { ...o, keys: o.keys.map(k => (k.aim ? { lean: 0, ...k } : k)) }])) });
 test('a thin carry (a cup to the mouth) keeps the grip chosen over its keyed path (grip-choice.js), not the neutral grab offset', () => {
-	const fx = load('cup-to-mouth'), on = compile(fx), off = compile({ ...fx, spec: withoutGrip(fx.spec) });
+	const cup = load('cup-to-mouth'), fx = { ...cup, spec: exactly(cup.spec) }, on = compile(fx), off = compile({ ...fx, spec: withoutGrip(fx.spec) });
 	const w = r => r.observations.wrist?.hand_r ?? { past: 0, limit: 0 };
 	assert.ok(w(on).past < w(off).past, `past-comfort frames ${w(off).past} -> ${w(on).past}`);
 	assert.ok(on.qa.total <= off.qa.total, `QA ${off.qa.total} -> ${on.qa.total}`);

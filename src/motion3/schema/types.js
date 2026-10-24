@@ -148,6 +148,6 @@ export const FIX_TYPES = {
 
 export const REF_DOCS = {
 	joint: "joint:<Bone>", bone: "bone:<Bone> (= joint:)", prop: "prop:<prop>.<point> (origin exists)",
-	anchor: "anchor:<name>", landmark: "landmark:mouth", object: "object:<id>[.center|.top|.base], a body or group; bare = its surface (distance)",
+	anchor: "anchor:<name>", landmark: "landmark:mouth", object: "object:<id>[.center|.top|.base|.rim], a body or group; bare = its surface (distance)",
 	person: "person:<id>.<Bone>",
 };

@@ -25,6 +25,9 @@ jobs:
           - verify-object-gizmo
           - qa-shell-start-browser
           - verify-project-menu-browser
+          - motion3/qa-motion3-follow-browser
+          - motion3/qa-motion3-kits-browser
+          - motion3/qa-motion3-revision-browser
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -45,6 +48,7 @@ jobs:
       - name: Run ${{ matrix.suite }} (observation)
         run: |
           t="${{ matrix.suite }}"
+          mkdir -p "$(dirname "/tmp/$t.log")"
           {
             echo "## $t (observation)"
             echo ""

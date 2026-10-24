@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { usePlaybackEffects } from "./motion/playback-frame-store.js";
 
 export const RENDER_ACTIVITY_KEYS = new Set([
 	"KeyW",
@@ -31,7 +32,8 @@ export function shouldRefreshIkExposure({ cameraGesture, cameraGestureEnded, exp
  * this hook covers direct ref mutations such as IK drags, camera look/dolly,
  * plan puck drags, scrubbing, and held WASD/QE movement.
  */
-export function useRenderActivity(alwaysActive) {
+export function useRenderActivity(alwaysActive, playback = {}) {
+	usePlaybackEffects(playback);
 	const [interactive, setInteractive] = useState(false);
 
 	useEffect(() => {

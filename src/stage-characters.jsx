@@ -8,10 +8,36 @@ import { isProxyFigure } from "./scenes.js";
 import { applyPartColours } from "./part-colours.js";
 import { applyHipsOffset, applyPose, primeBindPose } from "./poses.js";
 import { REST_BONES } from "./stage-startup-defaults.js";
+import { playbackFrame, usePlaybackSnapshot } from "./motion/playback-frame-store.js";
+import { placementAt } from "./root-path.js";
+import { shotAtFrame } from "./cuts.js";
+import { sampleAt } from "./sample-at.js";
 
 // Memoized: unchanged cast members skip re-rendering on every playhead tick.
 export const Character = memo(function Character(props) {
 	return isProxyFigure(props) ? <ProxyFigure {...props} /> : <RiggedCharacter {...props} />;
+});
+
+export const PlaybackCharacter = memo(function PlaybackCharacter({
+	entry,
+	clip,
+	shots,
+	...props
+}) {
+	const frame = usePlaybackSnapshot(playbackFrame);
+	const placement = placementAt(entry, frame, {
+		shotAt: (at) => shotAtFrame(shots, at),
+		takeRoot: clip ? sampleAt({ frameCount: clip.frames, motion: clip }, null, frame).subject : null,
+	});
+	return (
+		<Character
+			{...props}
+			position={[placement.x, entry.y ?? 0, placement.z]}
+			rot={placement.rot}
+			pose={clip ? null : (placement.pose ?? props.pose)}
+			posture={placement.posture}
+		/>
+	);
 });
 
 const RiggedCharacter = memo(function RiggedCharacter({ url, position, rot, tint, pose, scale = 1, onRig, pickId, partColoursEnabled = false, partColoursMode = "shaded" }) {

@@ -11,8 +11,11 @@ const MOTION_TELEMETRY_EVENTS = new Set([
 const LIVE_TELEMETRY_EVENTS = new Set([...MOTION_TELEMETRY_EVENTS, ...EXECUTION_TELEMETRY_EVENTS.filter((event) => event.startsWith("mcp:"))]);
 
 const LIVE_CONTROL_PORT = import.meta.env?.VITE_COZYCLAY_LIVE_PORT ?? "5184";
-export const liveControlUrl = (port = LIVE_CONTROL_PORT) => `ws://127.0.0.1:${port}/live`;
-const LIVE_CONTROL_URL = liveControlUrl();
+// The npm launcher serves a prebuilt bundle, so the build-time port above is
+// fixed; it injects the hub port it actually started as __COZYCLAY_LIVE_PORT__
+// (#862). A valid runtime value wins over the build-time default.
+export const resolveLiveControlPort = (runtime = globalThis.__COZYCLAY_LIVE_PORT__) => (/^[1-9]\d{0,4}$/.test(String(runtime)) && Number(runtime) < 65536 ? String(runtime) : LIVE_CONTROL_PORT);
+export const liveControlUrl = (port = resolveLiveControlPort()) => `ws://127.0.0.1:${port}/live`;
 // Reconnect schedule: 1 s doubling to a 15 s cap with +-25 % jitter, so a hub
 // that comes back does not take every editor's retry in the same millisecond.
 const LIVE_RECONNECT_BASE_MS = 1_000;
@@ -147,10 +150,8 @@ export async function dispatchLiveFrame(data, handlers = {}) {
 	}
 }
 
-/**
- * Open the editor's one-way client connection. Failures are intentionally
- * silent: a studio remains a fully local editor when the MCP server is absent.
- */
+// Open the editor's one-way client connection. Failures are intentionally
+// silent: a studio remains a fully local editor when the MCP server is absent.
 export function createLiveControl({
 	handlers = {},
 	onWorkspace = () => {},
@@ -164,7 +165,7 @@ export function createLiveControl({
 	// Optional identity for the hub's live_status listing (scene/project names).
 	meta = null,
 	WebSocketImpl = globalThis.WebSocket,
-	url = LIVE_CONTROL_URL,
+	url = liveControlUrl(),
 	timers = defaultTimers,
 	random = Math.random,
 	// Aliased on purpose: an unqualified call to a binding named `listen` reads
@@ -376,6 +377,12 @@ export function createLiveControl({
 	return {
 		setHandlers(nextHandlers) {
 			currentHandlers = nextHandlers && typeof nextHandlers === "object" ? nextHandlers : {};
+		},
+		// Opening another project renames the tab; the next hello carries the new
+		// label and an open socket tells the hub now, so status stays truthful.
+		setMeta(nextMeta) {
+			meta = nextMeta && typeof nextMeta === "object" ? nextMeta : null;
+			if (meta) send({ type: "meta", meta });
 		},
 		close() {
 			stopped = true;

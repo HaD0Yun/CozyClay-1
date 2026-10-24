@@ -4,6 +4,7 @@ import Foldout from "./Foldout.jsx";
 import { ko, isKo } from "../locale.js";
 import { readReferenceImage } from "./ReferenceImageField.jsx";
 import { createHttpTransport } from "../workflow/agent-client.js";
+import { saveExport } from "../export-workspace.js";
 import "./pose-image.css";
 
 // The sidecar accepts at most 6 references per request, shared with the scene's identity and
@@ -145,7 +146,7 @@ export default function PoseImagePanel({ hidden, capturePoseImage }) {
 							<img src={result.dataUrl} alt={result.prompt} />
 						</button>
 						<div className="pose-image-result-actions">
-							<a className="btn ghost small" href={result.dataUrl} download={`cozyclay-pose-${result.at}.png`}>{ko("Download", "다운로드")}</a>
+							<a className="btn ghost small" href={result.dataUrl} download={`cozyclay-pose-${result.at}.png`} onClick={(event) => { event.preventDefault(); void saveExport(result.dataUrl, `cozyclay-pose-${result.at}.png`); }}>{ko("Download", "다운로드")}</a>
 							<button type="button" className="btn ghost small" disabled={refs.length >= USER_REFERENCES_MAX}
 								onClick={() => setPoseImageState({ refs: [...store.refs, result.dataUrl].slice(0, USER_REFERENCES_MAX) })}>
 								{ko("Use as reference", "참조로 쓰기")}
@@ -194,7 +195,7 @@ function PoseImageViewer({ results, selected, onSelect, onClose }) {
 				<figcaption>
 					<span className="pose-image-viewer-prompt">{entry.prompt}</span>
 					{results.length > 1 && <span className="pose-image-viewer-count">{results.length - selected}/{results.length}</span>}
-					<a className="btn ghost small" href={entry.dataUrl} download={`cozyclay-pose-${entry.at}.png`}>{ko("Download", "다운로드")}</a>
+					<a className="btn ghost small" href={entry.dataUrl} download={`cozyclay-pose-${entry.at}.png`} onClick={(event) => { event.preventDefault(); void saveExport(entry.dataUrl, `cozyclay-pose-${entry.at}.png`); }}>{ko("Download", "다운로드")}</a>
 					<button type="button" className="btn ghost small" data-testid="pose-image-viewer-close" onClick={onClose}>{ko("Close", "닫기")}</button>
 				</figcaption>
 			</figure>

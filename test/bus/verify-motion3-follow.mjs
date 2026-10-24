@@ -54,7 +54,7 @@ expect("a follow on a box-less record and on a body validates (refs, a direction
 	bad({ puff: { follow: "landmark:mouth" } }));
 const unknownBone = bad({ puff: { follow: "joint:Haed" } }), bare = bad({ puff: { follow: "mouth" } });
 expect("an unknown bone and a bare name are refused by the ref grammar", unknownBone.includes('objects.puff.follow "joint:Haed": unknown bone; did you mean "Head"?')
-	&& bare.includes('objects.puff.follow "mouth" must be joint:<Bone>, bone:<Bone>, prop:<prop>.<point>, anchor:<name>, landmark:mouth, object:<id>[.center|.top|.base], person:<id>.<Bone>; did you mean "landmark:mouth"?'), `${unknownBone}\n${bare}`);
+	&& bare.includes('objects.puff.follow "mouth" must be joint:<Bone>, bone:<Bone>, prop:<prop>.<point>, anchor:<name>, landmark:mouth, object:<id>[.center|.top|.base|.rim], person:<id>.<Bone>; did you mean "landmark:mouth"?'), `${unknownBone}\n${bare}`);
 expect("a bad offset and a bad aim are refused by name", bad({ puff: { follow: "landmark:mouth", offset: [0, 1] } }).includes("objects.puff.offset must be [x, y, z], metres along the record's own axes after aim (+Y along aim), got [0,1]")
 	&& bad({ puff: { follow: "landmark:mouth", aim: "forward" } }).includes('objects.puff.aim must be "face", "up", a world direction [x, y, z] or a point ref (toward it), where the record\'s +Y points; got "forward"')
 	&& bad({ puff: { follow: "landmark:mouth", aim: [0, 0, 0] } }).includes("objects.puff.aim must be a non-zero world direction [x, y, z], got [0,0,0]"), bad({ puff: { follow: "landmark:mouth", aim: "forward" } }));

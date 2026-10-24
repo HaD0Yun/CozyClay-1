@@ -26,6 +26,7 @@ import { pose, SIDES } from "./pose.js";
 import { graspAnchor } from "./socket-grip.js";
 import { gripHand } from "./grip.js";
 import { bakeChannels, channelsAt, flowOptions } from "./channels.js";
+import { handBusy } from "./overlap.js";
 import { idleLayer, withIdle, busyHands } from "./idle.js";
 import { resolveAnchor, measureProps, armReach } from "./anchors.js";
 import { expandGenerators } from "./walk.js";
@@ -208,7 +209,7 @@ export function compileMotion(spec, { sk, scene }, opts = {}) {
 	const engine = {
 		rebake(keys) {
 			out.keys = keys;
-			out.baked = bakeChannels(keys, frameCount, flowOptions(spec.flow));
+			out.baked = bakeChannels(keys, frameCount, flowOptions(spec.flow, spec.label ?? "", handBusy(spec)));
 			ctx.socketTurns = new Map();
 			ctx.graspPlans = new Map();
 			steadyHead(out.baked, keys, frameCount);

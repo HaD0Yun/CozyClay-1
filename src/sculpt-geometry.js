@@ -12,11 +12,14 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { expandSculptParts } from "./sculpt-recipe.js";
-
-const CLAY_ROUGHNESS = 0.82;
-/** How far a full taper narrows a blob's end. A blob at 1.0 would come to a
- * point, which reads as a cone; 0.6 keeps a pear a pear. */
-const BLOB_TAPER = 0.6;
+import { BLOB_TAPER } from "./sculpt-shapes.js";
+import { cutSculptGeometry } from "./sculpt-csg.js";
+import { LOFT_CONVEX_BUILDERS } from "./sculpt-geometry-loft-convex.js";
+import { extrudeGeometry, latheGeometry, tubeGeometry } from "./sculpt-geometry-shapes.js";
+import { applySculptDetail } from "./sculpt-detail.js";
+import { applySculptColours } from "./sculpt-colours.js";
+import { scatterMesh } from "./sculpt-scatter.js";
+import { lookMaterial } from "./material-look.js";
 
 /** roundness 0..1 → superellipse exponent 2..8 */
 const blobExponent = (roundness) => 2 + 6 * roundness;
@@ -97,32 +100,44 @@ function frameGeometry(part) {
 	return geometry;
 }
 
-const BUILDERS = { blob: blobGeometry, box: boxGeometry, cylinder: cylinderGeometry, torus: torusGeometry, frame: frameGeometry };
+const BUILDERS = { blob: blobGeometry, box: boxGeometry, cylinder: cylinderGeometry, torus: torusGeometry, frame: frameGeometry, lathe: latheGeometry, tube: tubeGeometry, extrude: extrudeGeometry, ...LOFT_CONVEX_BUILDERS };
+/** Shapes that draw their own mesh (many instances) instead of one geometry. */
+const MESH_BUILDERS = { scatter: scatterMesh };
 
+/** The part's geometry, with its surface `detail` applied. */
 export function sculptPartGeometry(part) {
 	const build = BUILDERS[part.shape];
 	if (!build) throw new Error(`unknown sculpt shape "${part.shape}"`);
-	return build(part);
+	return applySculptDetail(build(part), part);
 }
 
 /**
  * The drawable object for a normalized recipe. `materialFor(part)` lets the
- * caller decide the look (clay, auto-colour, depth rank); the default is the
- * matte clay every primitive wears. Meshes carry their part id as the name and
- * as `userData.sculptPart`, so a capture or a raycast can say which part it hit.
+ * caller decide the look (auto-colour, depth rank); the default is the part's
+ * own preset (material-look.js), clay when it names none, with the part's
+ * gradient and a scatter's per-item tint. Meshes (a scatter's InstancedMesh
+ * too) carry their part id as the name and as `userData.sculptPart`, so a
+ * capture or a raycast can say which part it hit. Glass casts no shadow: light
+ * passes through it.
  */
 export function buildSculptGroup(recipe, { materialFor } = {}) {
 	const group = new THREE.Group();
 	group.userData.sculpt = true;
 	const matrix = new THREE.Matrix4();
-	for (const part of expandSculptParts(recipe)) {
-		const material = materialFor ? materialFor(part) : new THREE.MeshStandardMaterial({ color: part.color, roughness: CLAY_ROUGHNESS, metalness: 0 });
-		const mesh = new THREE.Mesh(sculptPartGeometry(part), material);
+	const parts = expandSculptParts(recipe);
+	for (const part of parts) {
+		// A cutter (op) is never drawn: it cuts its parent's geometry instead.
+		if (part.op) continue;
+		const material = materialFor ? materialFor(part) : lookMaterial(part);
+		// A scatter draws its own InstancedMesh and is never cut; every other part is cut by its cutters.
+		const mesh = MESH_BUILDERS[part.shape]?.(part, material) ?? new THREE.Mesh(cutSculptGeometry(sculptPartGeometry(part), part, parts, sculptPartGeometry), material);
+		// Gradients and scatter tints belong to the shaded look; a flat display mode (materialFor) ignores them.
+		if (!materialFor) applySculptColours(mesh, part);
 		mesh.name = part.id;
 		mesh.userData.sculptPart = part.id;
 		matrix.fromArray(part.matrix);
 		matrix.decompose(mesh.position, mesh.quaternion, mesh.scale);
-		mesh.castShadow = true;
+		mesh.castShadow = !(material.transmission > 0);
 		mesh.receiveShadow = true;
 		group.add(mesh);
 	}
@@ -130,11 +145,14 @@ export function buildSculptGroup(recipe, { materialFor } = {}) {
 }
 
 /** Frees what buildSculptGroup allocated. Materials are disposed too, because
- * buildSculptGroup (or the caller's materialFor) minted one per part. */
+ * buildSculptGroup (or the caller's materialFor) minted one per part; a
+ * scatter's instance buffers go with its InstancedMesh. The preset pattern
+ * textures they sample are shared and stay. */
 export function disposeSculptGroup(group) {
 	group?.traverse((node) => {
 		if (!node.isMesh) return;
 		node.geometry.dispose();
+		if (node.isInstancedMesh) node.dispose();
 		const materials = Array.isArray(node.material) ? node.material : [node.material];
 		for (const material of materials) material.dispose();
 	});

@@ -3,11 +3,43 @@
 // outside positive, metres) and, for the limbs, the skin radius along the bone. A limb collides as
 // spheres on its bone axis (limbProbes); bodyDistance is the nearest skin of every other bone but
 // the limb's own neighbours (SKIP), so an arm reads the torso, the head, the legs and the other arm.
-import yBody from "./rigs/y-bot-tpose-body.json" with { type: "json" };
-import xBody from "./rigs/x-bot-tpose-body.json" with { type: "json" };
 import { add, sub, scale, apply, T, len, dot, clamp } from "./compiler/math.js";
 
-const BODIES = { "y-bot-tpose": yBody, "x-bot-tpose": xBody };
+// The fits are ~0.5 MB of base64 grids, most of the editor's first-load JavaScript were they imported: each
+// is an asset file instead, read the first time a compile needs it. Node reads it from disk; a worker (or the
+// editor, should a compile run before preloadBodies has it) reads it synchronously over HTTP, so bodyFor
+// stays synchronous everywhere. The editor fetches both in the background after its first paint (main.jsx).
+const BODIES = {
+	"y-bot-tpose": new URL("./rigs/y-bot-tpose-body.json", import.meta.url),
+	"x-bot-tpose": new URL("./rigs/x-bot-tpose-body.json", import.meta.url),
+};
+const fits = new Map();
+
+function readFit(url) {
+	const fs = url.protocol === "file:" ? globalThis.process?.getBuiltinModule?.("node:fs") : null;
+	if (fs) return JSON.parse(fs.readFileSync(url, "utf8"));
+	const xhr = new XMLHttpRequest();
+	xhr.open("GET", url.href, false);
+	xhr.send();
+	if (xhr.status !== 200) throw new Error(`motion body fit ${url.pathname}: HTTP ${xhr.status}`);
+	return JSON.parse(xhr.responseText);
+}
+
+function fitOf(model) {
+	if (!fits.has(model)) fits.set(model, readFit(BODIES[model]));
+	return fits.get(model);
+}
+
+/** Fetches every rig's fit in the background, so a compile on this thread never waits on one. */
+export function preloadBodies() {
+	return Promise.all(Object.entries(BODIES).map(async ([model, url]) => {
+		if (fits.has(model)) return;
+		const response = await fetch(url);
+		if (!response.ok) throw new Error(`motion body fit ${url.pathname}: HTTP ${response.status}`);
+		const fit = await response.json();
+		if (!fits.has(model)) fits.set(model, fit);
+	}));
+}
 /** Distance read outside a grid: far enough that no probe counts it as touching. */
 const FAR = 0.1;
 const cache = new Map();
@@ -28,9 +60,9 @@ function skipOf(sk, b) {
 
 /** The fitted body of skeleton sk, or null for a rig without one. */
 export function bodyFor(sk) {
-	const fit = BODIES[sk.model];
-	if (!fit) return null;
+	if (!BODIES[sk.model]) return null;
 	if (cache.has(sk.model)) return cache.get(sk.model);
+	const fit = fitOf(sk.model);
 	const grids = Object.entries(fit.grids).map(([name, g]) => {
 		const half = g.dims.map(d => ((d - 1) * fit.step) / 2), centre = g.min.map((m, k) => m + half[k]);
 		return { b: sk.index[name], min: g.min, dims: g.dims, data: decode(g.data), centre, reach: len(half) };

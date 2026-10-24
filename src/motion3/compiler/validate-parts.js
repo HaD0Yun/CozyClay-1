@@ -56,7 +56,11 @@ function validateProps(spec, err, { sk, unknown = err }) {
 		if (!SIDE.has(fit?.side)) err(`${at}.side must be "l" or "r", got ${fmt(fit?.side)}`);
 		if (!spec.anchors?.[fit?.anchor]) err(`${at}.anchor "${fit?.anchor}" is not in spec.anchors${didYouMean(String(fit?.anchor), Object.keys(spec.anchors ?? {}))}`);
 		const e = fit?.effector;
-		if (e?.prop !== undefined) { if (!spec.props?.[e.prop]?.points?.[e.point]) err(`${at}.effector ${e.prop}.${e.point} is not a point of spec.props`); }
+		if (e?.prop !== undefined) {
+			const p = spec.props?.[e.prop];
+			if (!p) err(`${at}.effector.prop "${e.prop}" is not in spec.props${didYouMean(String(e.prop), Object.keys(spec.props ?? {}))}`);
+			else if (e.point !== "origin" && !p.points?.[e.point]) err(`${at}.effector ${e.prop}.${e.point} is not a point of spec.props.${e.prop} (points: ${[...Object.keys(p.points ?? {}), "origin"].join(", ")})`);
+		}
 		else if (Array.isArray(e?.joints)) e.joints.forEach(j => boneOk(err, sk, `${at}.effector`, j));
 		else err(`${at}.effector must be { prop, point } or { joints: [bone, ...] }`);
 		if (fit?.offset !== undefined && !isVec3(fit.offset)) err(`${at}.offset must be [x, y, z]`);

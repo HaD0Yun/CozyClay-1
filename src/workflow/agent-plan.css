@@ -1,0 +1,93 @@
+/* A turn's step checklist (AgentPlanCard.jsx); colours, sizes and motion come from agent-panel.css. */
+.agent-plan-row[data-plan-live="true"] {
+	position: sticky;
+	top: calc(-1 * var(--agent-space-5));
+	z-index: 1;
+	/* the transcript's own colour above the card, so steps scrolling under it never show through the gap */
+	padding-top: var(--agent-space-2);
+	margin-top: calc(-1 * var(--agent-space-2));
+	background: var(--agent-bg);
+}
+
+.agent-plan {
+	--agent-plan-mark: 11px;
+	display: flex;
+	flex-direction: column;
+}
+
+.agent-plan-row[data-plan-live="true"] .agent-plan { box-shadow: 0 6px 14px -8px #000c; }
+
+.agent-plan-head {
+	display: flex;
+	align-items: center;
+	gap: var(--agent-space-3);
+	padding: var(--agent-space-2) var(--agent-space-4);
+	color: var(--agent-text-soft, var(--agent-text));
+	font-size: var(--agent-font-md);
+}
+
+.agent-plan-title { flex: none; font-weight: 600; }
+
+.agent-plan-bar {
+	flex: 1;
+	height: 3px;
+	overflow: hidden;
+	border-radius: var(--agent-radius-pill);
+	background: var(--agent-track);
+}
+
+.agent-plan-fill {
+	display: block;
+	height: 100%;
+	background: var(--agent-ok);
+	transform: scaleX(var(--agent-plan-done, 0));
+	transform-origin: left;
+	transition: transform var(--agent-motion);
+}
+
+.agent-plan-count { flex: none; color: var(--agent-text-dim); font: var(--agent-font-sm) ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+
+.agent-plan-steps {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	margin: 0;
+	padding: var(--agent-space-1) 0 var(--agent-space-2);
+	border-top: 1px solid var(--agent-border);
+	list-style: none;
+}
+
+.agent-plan-step {
+	display: flex;
+	align-items: center;
+	gap: var(--agent-space-3);
+	min-width: 0;
+	padding: 2px var(--agent-space-4);
+	color: var(--agent-text-muted);
+	font-size: var(--agent-font-md);
+	line-height: 1.4;
+}
+
+.agent-plan-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-plan-step.done { color: var(--agent-text-dim); }
+.agent-plan-step.active { background: color-mix(in srgb, var(--agent-accent) 12%, transparent); color: var(--agent-text); }
+.agent-plan-step.unfinished { color: var(--agent-text-dim); }
+.agent-plan-step.unfinished .agent-plan-text { font-style: italic; }
+
+.agent-plan-mark { flex: none; width: var(--agent-plan-mark); height: var(--agent-plan-mark); }
+.agent-plan-mark.done { color: var(--agent-ok); }
+.agent-plan-mark.unfinished { color: var(--agent-warn); }
+.agent-plan-mark.pending { border: 1.5px solid var(--agent-border-strong); border-radius: var(--agent-radius-pill); }
+/* the step under way: an accent ring whose centre breathes while the turn runs */
+.agent-plan-mark.active { position: relative; border: 1.5px solid var(--agent-accent); border-radius: var(--agent-radius-pill); }
+.agent-plan-mark.active::after { content: ""; position: absolute; inset: 2px; border-radius: var(--agent-radius-pill); background: var(--agent-accent); }
+.agent-plan[data-plan-state="live"] .agent-plan-mark.active::after { animation: agent-pulse 1.4s ease-in-out infinite; }
+
+/* A finished turn's card is a record: it keeps its rows but no longer pulls the eye. */
+.agent-plan:not([data-plan-state="live"]) .agent-plan-fill { background: var(--agent-text-dim); }
+.agent-plan[data-plan-state="done"] .agent-plan-fill { background: var(--agent-ok); }
+
+@media (prefers-reduced-motion: reduce) {
+	.agent-plan[data-plan-state="live"] .agent-plan-mark.active::after { animation: none; }
+	.agent-plan-fill { transition: none; }
+}

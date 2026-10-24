@@ -7,6 +7,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { GIZMO_LAYER } from "./dualview.jsx";
 import { GhostSet } from "./ghost-set.js";
 import { isTakeV3 } from "./motion3/playback.js";
+import { playbackFrame, usePlaybackSnapshot } from "./motion/playback-frame-store.js";
 import { ghostFrames, takeKeyFrames, useGhostSettings } from "./view-ghosts.js";
 
 // Kit parts mount in the same commit as a take or record change, sometimes a frame later: the
@@ -17,14 +18,15 @@ const SOURCE_PASSES = 3;
  * rig: the active character's live rig; take: its installed motion; frame: the playhead;
  * objects: the authored records; propTake: { frameCount, fps, objectTracks } as SetProps gets it.
  */
-export function ViewGhosts({ rig, take, frame, objects, propTake }) {
+export function ViewGhosts({ rig, take, objects, propTake }) {
+	const liveFrame = usePlaybackSnapshot(playbackFrame);
 	const settings = useGhostSettings();
 	const scene = useThree((state) => state.scene), gl = useThree((state) => state.gl), invalidate = useThree((state) => state.invalidate);
 	const set = useMemo(() => new GhostSet({ layer: GIZMO_LAYER }), []);
 	const on = settings.mode !== "off" && !!rig && isTakeV3(take);
 	const keyFrames = useMemo(() => (on && settings.mode === "keys" ? takeKeyFrames(take, objects) : []), [on, settings.mode, take, objects]);
-	const entries = useMemo(() => (on ? ghostFrames({ frame, last: take.frameCount - 1, ...settings, keyFrames }) : []),
-		[on, frame, take, settings, keyFrames]);
+	const entries = useMemo(() => (on ? ghostFrames({ frame: liveFrame, last: take.frameCount - 1, ...settings, keyFrames }) : []),
+		[on, liveFrame, take, settings, keyFrames]);
 	useEffect(() => {
 		if (!on) return undefined;
 		scene.add(set.object);

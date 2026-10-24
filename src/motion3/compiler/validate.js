@@ -1,14 +1,29 @@
 // Strict motion spec validation with exact messages, run before every compile through the
 // pipeline (after skills expand, with open parameters at a trial value). Every problem found is
-// listed at once, one per line, so the agent fixes them in one edit.
+// listed at once, one per line (problems that differ only in their first index share a line), so the
+// agent fixes them in one edit.
 import { VEC_CHANNELS, POLE_CHANNELS, NUM_CHANNELS, MAP_CHANNELS, FINGER_PRESETS, rangeOf, CONVENTIONS, didYouMean, suggestField, isVec3, fmt } from "./vocab.js";
 import { validateParts } from "./validate-parts.js";
 import { SPEC_FIELDS, KEY_FIELDS } from "../schema/fields.js";
-const MAX_ERRORS = 12;
+const MAX_ERRORS = 12, MAX_FOUND = 60;
+
+/**
+ * Problems that differ only in their first index (and its key frame) said once: "objects.box.keys[0].rot must be
+ * ..." and keys[3] with the same words become "objects.box.keys[0,3].rot must be ...", so every problem fits one answer.
+ */
+function mergeProblems(lines) {
+	const groups = new Map();
+	for (const line of lines) {
+		const m = /\[(\d+)\]( \(f(\d+)\))?/.exec(line), key = m ? `${line.slice(0, m.index)}[#]${m[2] ? " (f#)" : ""}${line.slice(m.index + m[0].length)}` : line;
+		if (!groups.has(key)) groups.set(key, { line, idx: [], fs: [] });
+		if (m) { groups.get(key).idx.push(m[1]); if (m[3]) groups.get(key).fs.push(`f${m[3]}`); }
+	}
+	return [...groups.entries()].map(([key, g]) => (g.idx.length > 1 ? key.replace("[#]", `[${g.idx.join(",")}]`).replace(" (f#)", ` (${g.fs.join(", ")})`) : g.line));
+}
 
 
 /** Channels other than the body's own: hinge channels, visible and level channels (C15), channels a check names, *_vis switches, spec.channels. */
-function customChannels(spec) {
+export function customChannels(spec) {
 	const out = new Set(spec.channels ?? []);
 	for (const o of Object.values(spec.objects ?? {})) for (const ch of [o?.channel, o?.visible, o?.level]) if (typeof ch === "string" && ch) out.add(ch);
 	const c = spec.checks ?? {};
@@ -88,15 +103,18 @@ function validateKeys(spec, err, frames, unknown, past = "") {
 }
 
 /**
- * Throws MOTION_SPEC_INVALID listing every problem; scene objects are checked when given.
+ * Throws MOTION_SPEC_INVALID listing every problem (problems: ones found before, listed first); scene objects are
+ * checked when given.
  * lenient (a saved take compiled again, take-source.js) ignores unknown fields.
  */
-/** spec.flow: false, or { smooth?: boolean, lag?: false | 0..6 frames | { spine?, head?, arms? } } (channels.js). */
+/** spec.flow: false, or { smooth?: boolean, lag?: false | 0..6 frames | { spine?, head?, arms? }, overlap?: boolean | 0..2 } (channels.js, overlap.js). */
 function validateFlow(flow, err, unknown) {
 	if (flow === undefined || flow === false) return;
-	if (!flow || typeof flow !== "object" || Array.isArray(flow)) return err(`spec.flow must be false or { smooth?, lag? }, got ${fmt(flow)}`);
-	for (const k of Object.keys(flow)) if (k !== "smooth" && k !== "lag") unknown(`spec.flow has unknown field "${k}" (fields: smooth, lag)`);
+	if (!flow || typeof flow !== "object" || Array.isArray(flow)) return err(`spec.flow must be false or { smooth?, lag?, overlap? }, got ${fmt(flow)}`);
+	for (const k of Object.keys(flow)) if (!["smooth", "lag", "overlap"].includes(k)) unknown(`spec.flow has unknown field "${k}" (fields: smooth, lag, overlap)`);
 	if (flow.smooth !== undefined && typeof flow.smooth !== "boolean") err(`spec.flow.smooth must be true or false, got ${fmt(flow.smooth)}`);
+	const o = flow.overlap;
+	if (o !== undefined && typeof o !== "boolean" && !(Number.isFinite(o) && o >= 0 && o <= 2)) err(`spec.flow.overlap must be true, false or a scale 0..2, got ${fmt(o)}`);
 	const frames = v => Number.isFinite(v) && v >= 0 && v <= 6, lag = flow.lag, LAG = "false, 0..6 frames or { spine?, head?, arms? }";
 	if (lag === undefined || lag === false || frames(lag)) return;
 	if (!lag || typeof lag !== "object" || Array.isArray(lag)) return err(`spec.flow.lag must be ${LAG}, got ${fmt(lag)}`);
@@ -106,8 +124,8 @@ function validateFlow(flow, err, unknown) {
 	}
 }
 
-export function validateSpec(spec, { sk, scene, lenient = false } = {}) {
-	const errors = [], err = m => { if (errors.length < MAX_ERRORS) errors.push(m); }, unknown = lenient ? () => {} : err;
+export function validateSpec(spec, { sk, scene, lenient = false, problems = [] } = {}) {
+	const errors = [...problems], err = m => { if (errors.length < MAX_FOUND) errors.push(m); }, unknown = lenient ? () => {} : err;
 	if (!spec || typeof spec !== "object") throw new Error("MOTION_SPEC_INVALID: spec must be an object");
 	if (spec.schema !== "cozyclay.motion-spec.v1") err(`spec.schema must be "cozyclay.motion-spec.v1", got ${fmt(spec.schema)}`);
 	for (const k of Object.keys(spec)) if (!SPEC_FIELDS.includes(k)) unknown(`spec.${k} is not a spec field${didYouMean(k, SPEC_FIELDS)} (fields: ${SPEC_FIELDS.join(", ")})`);
@@ -118,5 +136,7 @@ export function validateSpec(spec, { sk, scene, lenient = false } = {}) {
 	const past = Number.isInteger(frames) ? pastEndAdvice(spec, frames) : "";
 	validateKeys(spec, err, Number.isInteger(frames) ? frames : 20000, unknown, past);
 	validateParts(spec, err, { sk, scene, frames: Number.isInteger(frames) ? frames : 20000, lenient, unknown, past });
-	if (errors.length) throw new Error(`MOTION_SPEC_INVALID: ${errors.join("\n")}${errors.length >= MAX_ERRORS ? "\n(more problems not listed)" : ""}`);
+	if (!errors.length) return;
+	const lines = mergeProblems(errors), more = lines.length > MAX_ERRORS || errors.length >= MAX_FOUND;
+	throw new Error(`MOTION_SPEC_INVALID: ${lines.slice(0, MAX_ERRORS).join("\n")}${more ? `\n(${lines.length > MAX_ERRORS ? `${lines.length - MAX_ERRORS}` : "more"}${errors.length >= MAX_FOUND ? "+" : ""} more problems not listed)` : ""}`);
 }

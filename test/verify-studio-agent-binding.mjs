@@ -31,8 +31,6 @@ import { sampleAt } from '../src/sample-at.js';
 import { createShot, shotAtFrame, addShotAtFrame } from '../src/cuts.js';
 import { placementAt } from '../src/root-path.js';
 import * as studioActions from '../src/studio-actions.js';
-// The real motion request contract (#466); inert here because analytics never initializes.
-import { startMotionRequest } from '../src/analytics.js';
 import { createCommandBus, withCommandHistory } from '../src/command-bus.js';
 import { createStudioAppBinding } from '../src/studio-app-binding.js';
 import { createAppContext } from '../src/app-context.js';
@@ -1087,6 +1085,9 @@ const implementations={
   assert.equal(afterFirst.id,beforeFirst.id);assert.equal(afterFirst.frame,beforeFirst.frame);
   assert.notDeepEqual(afterFirst.framing,beforeFirst.framing);
   assert.deepEqual(afterSecond,beforeSecond);
+  // #863: the retained key's receipt delta is its shot readback, never a removal marker.
+  const keyDelta=r.delta.find(row=>row.id===afterFirst.id);
+  assert(keyDelta,JSON.stringify(r.delta));assert.deepEqual(keyDelta.after,{shotId:first.id,frame:0});
   console.log(`STILL FRAME SHOT CAMERA KEY first=${JSON.stringify(afterFirst.framing.pos)} previous=${JSON.stringify(afterSecond.framing.pos)} keyIdPreserved=true untouched=true`);
  },
  async 'clip-frame-shot-camera-key'(f){
@@ -1100,6 +1101,11 @@ const implementations={
   assert.equal(keys.length,2);assert.deepEqual(keys.map(key=>key.frame),[0,12]);
   assert.equal(new Set(keys.map(key=>key.id)).size,2);
   assert.equal(keys.find(key=>key.frame===0).id,'camera-key-clip-0');
+  const added=keys.find(key=>key.frame===12);
+  assert.deepEqual(r.delta.find(row=>row.id===added.id)?.after,{shotId:first.id,frame:12},JSON.stringify(r.delta));
+  const gone=await f.call('run_action',f.request('run_action',{action:'shot.remove',args:{shotId:first.id}}));
+  // A genuine removal stays distinguishable from a retained key.
+  assert.equal(gone.ok,true,JSON.stringify(gone));assert.deepEqual(gone.delta.find(row=>row.id===first.id)?.after,{removed:true},JSON.stringify(gone.delta));
   console.log(`CLIP FRAME SHOT CAMERA KEYS frames=${JSON.stringify(keys.map(key=>key.frame))} distinctIds=true originalPreserved=true`);
  },
  async 'rail-camera-undo'(f){await railCameraUndo(f,false);},

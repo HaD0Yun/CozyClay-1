@@ -14,7 +14,9 @@ const sk = skeletonFor('y-bot-tpose');
 const fx = JSON.parse(readFileSync(new URL('../fixtures/wrist-limit/vending-can.json', import.meta.url), 'utf8'));
 // the take as the bench compiled it: the can held by its grab-frame offset (fix.grasp false; seated in the hand, #816,
 // it bends the wrist 74 deg), so these pins measure the wrist rule and its repair, not where the can rests
-const scene = motionScene(fx.objects), compile = spec => compileSpec({ fps: 24, ...spec, fix: { ...spec.fix, grasp: false } }, { sk, scene });
+// and its aim keys held exactly (lean 0: the key at the lips would lean, face-lean.js, and free the wrist)
+const exactly = spec => ({ ...spec, objects: Object.fromEntries(Object.entries(spec.objects ?? {}).map(([id, o]) => [id, o.keys ? { ...o, keys: o.keys.map(k => (k.aim && k.roll === undefined ? { lean: 0, ...k } : k)) } : o])) });
+const scene = motionScene(fx.objects), compile = spec => compileSpec({ fps: 24, ...exactly(spec), fix: { ...spec.fix, grasp: false } }, { sk, scene });
 const wristOf = r => r.qa.groups.filter(g => g.kind === 'WRIST');
 const before = compile(fx.spec);
 

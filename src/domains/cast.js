@@ -546,7 +546,7 @@ export function useCast(appContext) {
 		return current.length;
 	}
 
-	/** ARDY-demo style authoring: each empty-floor press in the Shot view drops
+	/** Click-to-place authoring: each empty-floor press in the Shot view drops
 	    the next waypoint where it was clicked; the frame gap comes from walking
 	    distance. The bird's-eye board selects and drags existing waypoints. */
 	function addFloorWaypoint(point) {

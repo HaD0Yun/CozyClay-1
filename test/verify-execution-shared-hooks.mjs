@@ -4,7 +4,7 @@ import { createAppContext } from "../src/app-context.js";
 import { createSceneObject } from "../src/scene-objects.js";
 import { createSceneHistoryStore } from "../src/document-store.js";
 import { dispatchLiveFrame } from "../src/live-control.js";
-import { startExportAttempt, startMotionRequest } from "../src/analytics.js";
+import { startExportAttempt } from "../src/analytics.js";
 import { readFileSync } from "node:fs";
 import { requestKeyframePack, KEYFRAME_PACK_RESULT } from "../src/workflow/keyframe-pack-request.js";
 
@@ -38,14 +38,6 @@ for (const first of ["user", "agent", "mcp"]) {
 	const prompts = createSemanticState([], () => {}, (domain, a, b) => observe("craft", domain, a, b), "promptClips");
 	prompts.edit([{ id: "private", text: "private", startFrame: 0, endFrame: 24 }]);
 	assert.equal(events.filter(({ event }) => event.startsWith("motion:")).length, 0);
-	const motion = startMotionRequest({ surface: first === "mcp" ? "mcp" : "timeline", input_mode: "prompt" }, { capture: track, now: () => 0 });
-	motion.preflight({ ok: true, backend: "local_kimodo" }); motion.start(); motion.succeed(); motion.apply();
-	// The same lifecycle's duplicate completion/application callbacks are echoes,
-	// whereas another explicit request correctly owns another fresh ID.
-	for (const channel of ["user", "agent", "mcp"]) { motion.succeed(); motion.apply(); }
-	assert.equal(events.filter(({ event }) => event === "motion:generate_requested").length, 1);
-	assert.equal(events.filter(({ event }) => event === "motion:job_succeeded").length, 1);
-	assert.equal(events.filter(({ event }) => event === "motion:result_applied").length, 1);
 }
 
 // Execute the actual embed export callback. Workflow owns the one top-level

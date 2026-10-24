@@ -104,7 +104,7 @@ const nine = stand({ keys: Array.from({ length: 9 }, (_, f) => ({ f, set: { yaw:
 const nineOut = run(cup, "motion.compile", { characterId: CHARACTER.id, spec: nine, install: false });
 const badPath = refusal(() => cup.run("motion.compile", { characterId: CHARACTER.id, base: nineOut.specId,
 	patch: [{ op: "replace", path: "/keys/4/f", value: 4 }, { op: "replace", path: "/keys/12/f", value: 112 }] }));
-expect("a bad patch path: the C7 message with its index and what is there", badPath.endsWith("patch[1] (replace /keys/12/f): /keys/12 does not exist (keys has 9 entries)") && !/MOTION_SPEC_INVALID/.test(badPath), badPath);
+expect("a bad patch path: the C7 message with its index, what is there and how to address it by frame", badPath.includes("patch[1] (replace /keys/12/f): /keys/12 does not exist (keys has 9 entries; by f: /keys/@f=<f>, f 0, 1, 2") && !/MOTION_SPEC_INVALID/.test(badPath), badPath);
 expect("spec and base together, and patch without base, are refused", /exactly one of spec or base/.test(refusal(() => cup.run("motion.compile", { characterId: CHARACTER.id, spec, base: first.specId })))
 	&& /patch applies to base/.test(refusal(() => cup.run("motion.compile", { characterId: CHARACTER.id, spec, patch: [{ op: "remove", path: "/label" }] }))));
 

@@ -14,7 +14,7 @@ import { inHandAt } from "../object-pose.js";
 import { refPoint } from "../refs.js";
 import { scale, norm, sub, len } from "../compiler/math.js";
 import { moveHint } from "./hints-contact.js";
-import { goalKinds, goalName, goalNeed, goalWindow, movedHome, movedRef } from "./goals.js";
+import { goalKinds, goalName, goalNeed, goalWindow, movedHome, movedRef, nearRefs } from "./goals.js";
 import { m3, vec } from "./fmt.js";
 
 const MARGIN = 0.003, LEAK = 0.02, BODY_MAX = 0.2;
@@ -79,7 +79,7 @@ function partOf(X, ref, f) {
 	const [, kind, rest] = /^([a-z]+):(.+)$/s.exec(ref) ?? [];
 	if (kind === "prop") return X.spec.props?.[rest.split(".")[0]]?.hand ? `hand_${X.spec.props[rest.split(".")[0]].hand}` : null;
 	if (kind === "object") {
-		const o = carrierOf(X, rest.replace(/\.(center|top|base)$/, ""), f), k = o && X.spec.props?.[o.prop]?.hand;
+		const o = carrierOf(X, rest.replace(/\.(center|top|base|rim)$/, ""), f), k = o && X.spec.props?.[o.prop]?.hand;
 		return k ? `hand_${k}` : null;
 	}
 	if (kind === "landmark") return "root";
@@ -107,7 +107,8 @@ function plan(X, goal, kind, f, amount, from) {
 		const away = p && home && len(sub(p, home)) > 1e-3 ? norm(sub(p, home)) : [0, 1, 0];
 		return part ? [part, scale(away, kind === "still" ? -amount : amount)] : null;
 	}
-	const [a, b] = goal[kind], pa = partOf(X, a, f), pb = partOf(X, b, f);
+	// a near goal measures what goals.js nearRefs reads (a cup's rim at the mouth)
+	const [a, b] = kind === "near" ? nearRefs(X.out.ctx.scene, goal) : goal[kind], pa = partOf(X, a, f), pb = partOf(X, b, f);
 	const rank = p => (p?.startsWith("hand_") ? 2 : p ? 1 : 0), moveA = rank(pa) >= rank(pb);
 	const part = moveA ? pa : pb, sign = moveA ? 1 : -1;
 	if (!part) return null;
@@ -136,13 +137,13 @@ export const goalHints = {
 		const move = plan(X, goal, kind, f, amount, w.a);
 		if (!move) {
 			if (kind === "still" && goal.still.startsWith("object:")) {
-				const id = goal.still.slice(7).replace(/\.(center|top|base)$/, "");
+				const id = goal.still.slice(7).replace(/\.(center|top|base|rim)$/, "");
 				return { cause: `objects.${id}`, hint: `${id} moves at f${f}, where it should stay: hold its hinge channel or keys until then, or start them later${why}` };
 			}
 			if (kind === "still") return { cause: `goal ${name}`, hint: `${goal.still} moves at f${f} and nothing that follows the body moves it; name a joint, prop point or held object${why}` };
 			if (kind === "moved" && !goal.moved.startsWith("object:")) return { cause: `goal ${name}`, hint: `${goal.moved} does not move with the body at f${f}; name a joint, prop point or held object` };
 			if (kind === "moved") {
-				const id = goal.moved.slice(7).replace(/\.(center|top|base)$/, "");
+				const id = goal.moved.slice(7).replace(/\.(center|top|base|rim)$/, "");
 				return { cause: `objects.${id}`, hint: `${id} is not in a hand at f${f}, so nothing moves it: carry it (objects.${id} = { prop, grab }) or hinge it` };
 			}
 			return { cause: `goal ${name}`, hint: `neither ${goal[kind][0]} nor ${goal[kind][1]} moves with the body at f${f}; name a joint, prop point or held object` };

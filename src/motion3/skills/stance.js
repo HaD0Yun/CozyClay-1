@@ -51,6 +51,12 @@ export function clearStance(sk, scene, c, h) {
 	return null;
 }
 
+
+/** The standing body at c ([x, z]) facing h: its least distance to the bodies (ids not in skip; m, negative inside). */
+export function standClearance(sk, scene, c, h, skip = new Set()) {
+	const boxes = obstacles({ objects: Object.fromEntries(Object.entries(scene?.objects ?? {}).filter(([id]) => !skip.has(id))) });
+	return boxes.length ? clearance(sk, boxes, c, h) : Infinity;
+}
 /**
  * The world point an anchor definition names on the still scene, as anchors.js resolves it: world p; an object's (or a
  * group's) `local` point, its base pivot without one; with `grasp` and no `local`, the centre of its parts (where a

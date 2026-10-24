@@ -14,7 +14,7 @@ if (!process.env.COZYCLAY_AGENT_SESSIONS_DIR) {
 }
 
 const NODE_FILES = [
-	"test/motion3/verify-motion3-core.mjs", "test/motion3/verify-motion3-idle.mjs", "test/motion3/verify-motion3-flip.mjs", "test/motion3/verify-motion3-timing.mjs", "test/motion3/verify-motion3-self.mjs", "test/motion3/verify-motion3-commands.mjs", "test/motion3/verify-motion3-exitcar.mjs", "test/motion3/verify-motion3-agentloop.mjs", "test/motion3/verify-motion3-search.mjs", "test/motion3/verify-motion3-skills.mjs", "test/motion3/verify-motion3-carried.mjs", "test/motion3/verify-motion3-people.mjs", "test/motion3/verify-motion3-hit.mjs", "test/motion3/verify-motion3-socket.mjs", "test/motion3/verify-motion3-shapes.mjs", "test/motion3/verify-motion3-grasp-fields.mjs", "test/motion3/verify-motion3-finger-contact.mjs", "test/motion3/verify-motion3-grasp-qa.mjs", "test/motion3/verify-motion3-load.mjs", "test/motion3/verify-motion3-throw.mjs", "test/motion3/verify-motion3-catch.mjs", "test/motion3/verify-motion3-grasp-hints.mjs", "test/motion3/verify-motion3-reach-human.mjs", "test/motion3/verify-motion3-stance-grasp.mjs", "test/motion3/verify-motion3-grasp-friction.mjs", "test/motion3/verify-motion3-grasp-measure.mjs", "test/motion3/verify-motion3-contracts.mjs", "test/motion3/verify-motion3-describe.mjs", "test/motion3/verify-motion3-timeline.mjs", "test/motion3/verify-motion3-probes.mjs", "test/motion3/verify-motion3-grab.mjs", "test/motion3/verify-motion3-grab-blend.mjs", "test/motion3/verify-motion3-patch.mjs", "test/motion3/verify-motion3-repair.mjs", "test/motion3/verify-motion3-specstore.mjs", "test/motion3/verify-motion3-visual.mjs", "test/motion3/verify-motion3-goals.mjs", "test/motion3/verify-motion3-prompt.mjs", "test/motion3/verify-motion3-cup.mjs", "test/verify-proxy-figure.mjs", "test/verify-text-object.mjs",
+	"test/motion3/verify-motion3-core.mjs", "test/motion3/verify-playback-frame-store.mjs", "test/verify-playback-render-isolation.mjs", "test/motion3/verify-motion3-idle.mjs", "test/motion3/verify-motion3-life.mjs", "test/motion3/verify-motion3-overlap.mjs", "test/motion3/verify-motion3-flip.mjs", "test/motion3/verify-motion3-timing.mjs", "test/motion3/verify-motion3-self.mjs", "test/motion3/verify-motion3-commands.mjs", "test/motion3/verify-motion3-exitcar.mjs", "test/motion3/verify-motion3-agentloop.mjs", "test/motion3/verify-motion3-search.mjs", "test/motion3/verify-motion3-skills.mjs", "test/motion3/verify-motion3-carried.mjs", "test/motion3/verify-motion3-people.mjs", "test/motion3/verify-motion3-hit.mjs", "test/motion3/verify-motion3-socket.mjs", "test/motion3/verify-motion3-shapes.mjs", "test/motion3/verify-motion3-grasp-fields.mjs", "test/motion3/verify-motion3-finger-contact.mjs", "test/motion3/verify-motion3-grasp-qa.mjs", "test/motion3/verify-motion3-load.mjs", "test/motion3/verify-motion3-throw.mjs", "test/motion3/verify-motion3-catch.mjs", "test/motion3/verify-motion3-grasp-hints.mjs", "test/motion3/verify-motion3-reach-human.mjs", "test/motion3/verify-motion3-stance-grasp.mjs", "test/motion3/verify-motion3-grasp-friction.mjs", "test/motion3/verify-motion3-grasp-measure.mjs", "test/motion3/verify-motion3-contracts.mjs", "test/motion3/verify-motion3-describe.mjs", "test/motion3/verify-motion3-timeline.mjs", "test/motion3/verify-motion3-probes.mjs", "test/motion3/verify-motion3-grab.mjs", "test/motion3/verify-motion3-grab-blend.mjs", "test/motion3/verify-motion3-patch.mjs", "test/motion3/verify-motion3-patch-keys.mjs", "test/motion3/verify-motion3-stuck.mjs", "test/motion3/verify-motion3-repair.mjs", "test/motion3/verify-motion3-specstore.mjs", "test/motion3/verify-motion3-visual.mjs", "test/motion3/verify-motion3-goals.mjs", "test/motion3/verify-motion3-prompt.mjs", "test/motion3/verify-motion3-cup.mjs", "test/motion3/verify-motion3-arm.mjs", "test/verify-proxy-figure.mjs", "test/verify-text-object.mjs",
 	"test/verify-proxy-figure-bounds.mjs",
 	"test/verify-character-capabilities.mjs",
 	"test/verify-root-path.mjs",
@@ -22,7 +22,6 @@ const NODE_FILES = [
 	"test/bus/verify-view-mode-pose.mjs",
 	"test/verify-studio-actions.mjs",
 	"test/ardy/verify-collision-blockers.mjs",
-	"test/verify-facing-marks.mjs",
 	"test/verify-pose-fade.mjs",
 	"test/verify-pose-gizmo.mjs",
 	"test/ardy/verify-key-runs.mjs",
@@ -50,7 +49,7 @@ const NODE_FILES = [
 	"test/process/verify-package-telemetry.mjs",
 	"test/process/verify-agent-deps.mjs",
 	"test/verify-agent-image-references.mjs",
-	"test/verify-agent-panel.mjs", "test/verify-agent-turn-view.mjs", "test/verify-agent-reply-text.mjs",
+	"test/verify-agent-panel.mjs", "test/verify-agent-turn-view.mjs", "test/verify-agent-plan.mjs", "test/verify-agent-reply-text.mjs", "test/verify-agent-sculpt-sketch.mjs",
 	"test/verify-agent-host.mjs",
 	"test/verify-agent-routes.mjs",
 	"test/verify-studio-owner-restart.mjs",
@@ -60,7 +59,7 @@ const NODE_FILES = [
 	"test/verify-agent-runner-errors.mjs",
 	"test/verify-agent-steer.mjs",
 	"test/verify-pi-tools.mjs",
-	"test/verify-agent-providers.mjs", "test/verify-agent-login.mjs",
+	"test/verify-agent-providers.mjs", "test/verify-agent-login.mjs", "test/verify-anthropic-subscription.mjs",
 	"test/verify-cliproxy-live-model.mjs",
 	"test/verify-schema-to-typebox.mjs",
 	"test/verify-agent-sse-golden.mjs",
@@ -82,20 +81,19 @@ const NODE_FILES = [
 	"test/verify-auto-color.mjs",
 	"test/verify-coplanar-depth.mjs",
 	"test/verify-empty-object.mjs",
-	"test/verify-sculpt-recipe.mjs",
+	"test/verify-sculpt-recipe.mjs", "test/verify-sculpt-shapes.mjs", "test/verify-sculpt-loft-convex.mjs", "test/verify-sculpt-detail.mjs",
 	"test/verify-sculpt-object.mjs",
 	"test/verify-sculpt-compare.mjs",
 	"test/verify-sculpt-run.mjs",
 	"test/verify-sculpt-compare-command.mjs",
 	"test/verify-sculpt-panel.mjs",
 	"test/verify-sculpt-blueprint.mjs",
-	"test/verify-sculpt-mode.mjs",
+	"test/verify-sculpt-mode.mjs", "test/verify-sculpt-csg.mjs", "test/verify-material-presets.mjs",
 	"test/verify-route-owner.mjs",
 	"test/verify-part-colours.mjs",
 	"test/verify-asset-shelf.mjs",
 	"test/verify-blocking-depth.mjs",
 	"test/verify-render-passes-video.mjs",
-	"test/verify-burn-in.mjs",
 	"test/verify-camera-block.mjs", "test/verify-camera-direction.mjs",
 	"test/verify-camera-follow.mjs",
 	"test/verify-camera-move.mjs",
@@ -126,7 +124,7 @@ const NODE_FILES = [
 	"test/verify-mcp-invariants.mjs",
 	"test/verify-offscreen-export.mjs",
 	"test/verify-export-capture.mjs",
-	"test/verify-export-recovery.mjs",
+	"test/verify-export-recovery.mjs", "test/verify-export-workspace.mjs",
 	"test/verify-record-mp4-source.mjs",
 	"test/verify-timeline-extent.mjs",
 	"test/verify-otio.mjs",
@@ -198,7 +196,7 @@ const NODE_FILES = [
 	"mcp/verify-protocol-version.mjs",
 	"mcp/verify-tool-annotations.mjs",
 	"mcp/verify-import-mesh.mjs",
-	"mcp/verify-sculpt-object.mjs",
+	"mcp/verify-sculpt-object.mjs", "mcp/verify-project-camera.mjs",
 	"test/verify-object-path.mjs",
 	"test/verify-object-travel.mjs",
 	"test/verify-object-travel-lean.mjs",
@@ -218,7 +216,7 @@ const BROWSER_FILES = [
 	"test/qa-storyboard-export-browser.mjs",
 	"test/qa-proxy-figure-browser.mjs",
 	"test/qa-rail-lean-browser.mjs",
-	"test/qa-export-recovery-browser.mjs",
+	"test/qa-export-recovery-browser.mjs", "test/qa-export-workspace-browser.mjs",
 	"test/verify-camera-mode-browser.mjs",
 	"test/verify-camera-rail-browser.mjs",
 	"test/verify-cutout-browser.mjs",
@@ -257,7 +255,7 @@ const BROWSER_FILES = [
 // The inventory sweep only picks up `verify*.mjs`; a browser suite named for
 // the QA runner it needs is listed here so it still shows up in the manifest
 // (as an EXCLUDE with its reason) instead of going unmentioned.
-const EXTRA_INVENTORY = ["test/ik/translation-step.mjs", "test/qa-scenes-v5-migration-browser.mjs", "test/qa-agent-scenarios-browser.mjs", "test/qa-execution-outcomes-browser.mjs", "test/qa-export-recovery-browser.mjs", "test/qa-agent-view-toggle-browser.mjs", "test/qa-camera-pointer-lock-browser.mjs", "test/qa-first-edit-browser.mjs", "test/qa-ia-tail-browser.mjs", "test/qa-keyframe-pack-browser.mjs", "test/qa-preview-browser.mjs", "test/qa-reference-slots-browser.mjs", "test/qa-scene-playback-browser.mjs", "test/qa-scene-switcher-browser.mjs", "test/qa-send-to-ai-browser.mjs", "test/qa-view-menu-browser.mjs", "test/qa-live-reconnect-browser.mjs", "test/qa-clipboard-paste-browser.mjs", "test/qa-rail-lean-browser.mjs", "test/qa-rail-reach-browser.mjs", "test/qa-rail-ring-browser.mjs", "test/qa-speed-graph-browser.mjs"];
+const EXTRA_INVENTORY = ["test/ik/translation-step.mjs", "test/qa-scenes-v5-migration-browser.mjs", "test/qa-agent-scenarios-browser.mjs", "test/qa-execution-outcomes-browser.mjs", "test/qa-export-recovery-browser.mjs", "test/qa-agent-view-toggle-browser.mjs", "test/qa-camera-pointer-lock-browser.mjs", "test/qa-first-edit-browser.mjs", "test/qa-ia-tail-browser.mjs", "test/qa-keyframe-pack-browser.mjs", "test/qa-preview-browser.mjs", "test/qa-reference-slots-browser.mjs", "test/qa-scene-playback-browser.mjs", "test/qa-scene-switcher-browser.mjs", "test/qa-send-to-ai-browser.mjs", "test/qa-view-menu-browser.mjs", "test/qa-live-reconnect-browser.mjs", "test/qa-clipboard-paste-browser.mjs", "test/qa-rail-lean-browser.mjs", "test/qa-rail-reach-browser.mjs", "test/qa-rail-ring-browser.mjs", "test/qa-speed-graph-browser.mjs", "test/qa-export-workspace-browser.mjs"];
 
 EXTRA_INVENTORY.push("test/qa-proxy-figure-browser.mjs");
 EXTRA_INVENTORY.push("test/qa-proxy-entry-browser.mjs");

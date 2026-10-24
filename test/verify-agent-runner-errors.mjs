@@ -15,7 +15,7 @@ import { fauxProvider, fauxAssistantMessage, fauxText } from "@earendil-works/pi
 import { fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
 import { createAgentRunner, classifyError } from "../bin/agent/agent-runner.mjs";
 import { createSessionStore, transcriptFromHistory } from "../bin/agent/session-store.mjs";
-import { createModels as createAgentModels } from "../bin/agent/providers.mjs";
+import { createModels as createAgentModels, loadProvider } from "../bin/agent/providers.mjs";
 
 process.env.COZYCLAY_AGENT_SESSIONS_DIR = mkdtempSync(join(tmpdir(), "cozyclay-agent-runner-errors-"));
 
@@ -59,6 +59,8 @@ function errorMessage(text) {
 
 // --- Wire efforts use the real runner, harness, auth and Codex API module.
 // Astra does not advertise off, but an explicit none must still omit reasoning.
+// gpt-5.5 supports off, and pi sends a model's off mapping, so its no-reasoning
+// reaches Codex as its own "none" instead of being omitted.
 {
 	const received = [];
 	const fixture = createServer(async (req, res) => {
@@ -77,6 +79,12 @@ function errorMessage(text) {
 	let runner;
 	try {
 		const models = await createAgentModels({ auth, keys: { readKeys: () => ({}) }, env: {}, codexBaseUrl });
+		// gpt-5.5 left pi's Codex catalogue in 1.4.0, and no model left there supports off without max. Keep its case
+		// with a Codex model shaped like it (off supported, max not), served by the same fixture.
+		const codex = models.getProvider("openai-codex");
+		const catalogue = codex.getModels.bind(codex);
+		codex.getModels = () => [...catalogue(), { ...catalogue().find((model) => model.id === "gpt-6-luna"), id: "gpt-5.5", name: "GPT-5.5", thinkingLevelMap: { xhigh: "xhigh", minimal: "low" } }];
+		models.setProvider(codex);
 		const metadata = structuredClone(models.getModels("openai-codex"));
 		assert.equal(models.getModel("openai-codex", "gpt-6-astra").thinkingLevelMap.off, null, "Astra must exercise the unsupported-off case");
 		runner = createAgentRunner({ models, codexBaseUrl });
@@ -95,13 +103,13 @@ function errorMessage(text) {
 		};
 		const freshCases = [
 			["gpt-6-astra", "none", undefined],
-			["gpt-5.4", "none", undefined],
+			["gpt-5.5", "none", "none"],
 			["gpt-6-astra", "high", "high"],
 			["gpt-6-astra", "ultra", "max"],
-			["gpt-5.4", "ultra", "xhigh"],
+			["gpt-5.5", "ultra", "xhigh"],
 			// With no initial effort the harness default is off, not medium.
 			["gpt-6-astra", undefined, undefined],
-			["gpt-5.4", undefined, undefined],
+			["gpt-5.5", undefined, "none"],
 		];
 		for (const [index, [model, effort, expected]] of freshCases.entries()) {
 			const session = await runner.openSession(`effort-fresh-${index}`);
@@ -112,8 +120,8 @@ function errorMessage(text) {
 			["gpt-6-astra", "high", "high"],
 			["gpt-6-astra", "none", undefined],
 			["gpt-6-astra", undefined, undefined],
-			["gpt-5.4", "ultra", "xhigh"],
-			["gpt-5.4", undefined, "xhigh"],
+			["gpt-5.5", "ultra", "xhigh"],
+			["gpt-5.5", undefined, "xhigh"],
 			["gpt-6-astra", "none", undefined],
 		]) await check(reused, model, effort, expected, `reused ${model} ${effort ?? "omitted"} preserves wire effort`);
 		assert.deepEqual(models.getModels("openai-codex"), metadata, "turn effort must not mutate advertised model metadata");
@@ -299,7 +307,8 @@ for (const token of ["AIza-secret-0123456789abcdefghijk", "sk-or-secret", "sk-an
 	console.log("post-tool-auth", JSON.stringify({ mutations, refreshes, contexts: calls.map((context) => context.messages.map((message) => message.role)), roles: history.map((message) => message.role), frames }));
 	assert.equal(mutations, 1, "auth recovery must not execute an already completed mutation again");
 	assert.equal(refreshes, 1);
-	assert.deepEqual(calls.map((context) => context.messages.map((message) => message.role)), [["user"], ["user", "assistant", "toolResult"], ["user", "assistant", "toolResult"]]);
+	// the conversation part of each request; pi's leading system message carries the prompt and tools
+	assert.deepEqual(calls.map((context) => context.messages.filter((message) => message.role !== "system").map((message) => message.role)), [["user"], ["user", "assistant", "toolResult"], ["user", "assistant", "toolResult"]]);
 	assert.deepEqual(calls[2].messages, calls[1].messages, "the pending model call retries with the exact completed transcript");
 	assert.deepEqual(history.map((message) => message.role), ["user", "assistant", "toolResult", "assistant"]);
 	assert.equal(history[2].toolCallId, "first-mutation");
@@ -598,9 +607,47 @@ for (const token of ["AIza-secret-0123456789abcdefghijk", "sk-or-secret", "sk-an
 	// Exactly the user turn: no tool ran in this scenario, so there is no
 	// completed toolResult to also expect; a scenario with a tool would keep
 	// any toolResult from a tool that finished BEFORE the abort (the `persist`
-	// filter only withholds the assistant role, never toolResult or user).
+	// filter withholds the assistant role and a call the abort cut short, never
+	// a finished toolResult or the user; see the next block).
 	assert.deepEqual(roles, ["user"], `stored roles after abort: ${JSON.stringify(roles)}`);
 	console.log("PASS the aborted assistant message never reaches sessionStore; only the completed user turn does");
+}
+
+// --- abort mid-tool, by session.abort() or by the caller's signal (the routes' Stop and disconnect): the call the
+// abort cut short stays unfinished (no tool.done, no stored toolResult), no further model request is made, and the
+// store keeps the user turn with exactly one aborted record ---
+for (const via of ["session", "signal"]) {
+	const sessionStore = createSessionStore(mkdtempSync(join(tmpdir(), "cozyclay-agent-runner-errors-tool-abort-")));
+	const models = createModels();
+	const faux = fauxProvider({ provider: "faux", models: [{ id: "scripted", name: "Scripted", input: ["text", "image"] }] });
+	models.setProvider(faux.provider);
+	const calls = installScripts(faux, [
+		fauxAssistantMessage([fauxToolCall("slow_tool", {})], { stopReason: "toolUse" }),
+		fauxAssistantMessage([fauxText("never requested")]),
+	]);
+	const tools = [{
+		name: "slow_tool",
+		parameters: { type: "object", properties: {}, additionalProperties: false },
+		// Settles successfully once stopped: a result that arrives after the abort must not count.
+		handler: async (_args, { signal }) => { if (!signal.aborted) await once(signal, "abort"); return { ok: true }; },
+	}];
+	const runner = createAgentRunner({ models, tools, sessionStore, clock: () => Date.now() });
+	const controller = new AbortController();
+	const frames = [];
+	try {
+		const session = await runner.openSession(`errors-tool-abort-${via}`, { surface: "workflow" });
+		for await (const frame of session.start({ text: "run the slow tool", model: "faux/scripted", ...(via === "signal" ? { signal: controller.signal } : {}) })) {
+			frames.push(frame);
+			if (frame.type === "tool.start") { if (via === "session") await session.abort("test"); else controller.abort(); }
+		}
+	} finally { await runner.close(); }
+	const stored = sessionStore.read(`errors-tool-abort-${via}`);
+	assert.ok(frames.some((frame) => frame.type === "tool.start") && !frames.some((frame) => frame.type === "tool.done"), `${via}: ${JSON.stringify(frames)}`);
+	assert.deepEqual(frames.slice(-2).map((frame) => frame.code ?? frame.type), ["aborted", "done"], `${via}: ${JSON.stringify(frames)}`);
+	assert.equal(calls.length, 1, `${via}: no model request after the abort`);
+	assert.deepEqual((stored?.history || []).map((message) => message.role), ["user"], `${via}: ${JSON.stringify(stored?.history)}`);
+	assert.deepEqual((stored?.turnErrors || []).map((record) => record.code), ["aborted"], `${via}: ${JSON.stringify(stored?.turnErrors)}`);
+	console.log(`PASS an abort mid-tool by ${via === "session" ? "session.abort()" : "the caller's signal"} leaves the call unfinished and stores the user turn with one aborted record`);
 }
 
 // --- status-first classification: a structured numeric status wins over the
@@ -641,6 +688,41 @@ for (const token of ["AIza-secret-0123456789abcdefghijk", "sk-or-secret", "sk-an
 	expect("the tool's '403' text produces a tool.done failure frame, never a run-level error frame", toolDone && toolDone.ok === false, JSON.stringify(frames));
 	expect("the tool failure keeps the CODE: message format instead of being reclassified as code:'unauthorized'", typeof toolDone?.error === "string" && toolDone.error.startsWith("BACKEND_UNAVAILABLE:"), JSON.stringify(toolDone));
 	expect("no run-level error frame was produced for a tool failure that the assistant recovered from", frames.every((f) => f.type !== "error"), JSON.stringify(frames));
+}
+
+// --- provider attribution: the runner's requests carry no pi attribution headers ---
+// pi-agent-core's Agent attributes requests to pi by default (OpenRouter, NVIDIA NIM and OpenCode headers);
+// pi 0.99's runner sent none, and these are CozyClay's requests.
+{
+	const seen = [];
+	const fixture = createServer(async (req, res) => {
+		req.resume(); await once(req, "end");
+		seen.push({ title: req.headers["x-openrouter-title"] ?? null, referer: req.headers["http-referer"] ?? null });
+		res.writeHead(200, { "content-type": "text/event-stream" });
+		res.write(`data: ${JSON.stringify({ id: "c1", object: "chat.completion.chunk", choices: [{ index: 0, delta: { role: "assistant", content: "hi" }, finish_reason: null }] })}\n\n`);
+		res.write(`data: ${JSON.stringify({ id: "c1", object: "chat.completion.chunk", choices: [{ index: 0, delta: {}, finish_reason: "stop" }], usage: { prompt_tokens: 3, completion_tokens: 1, total_tokens: 4 } })}\n\n`);
+		res.end("data: [DONE]\n\n");
+	});
+	const listening = once(fixture, "listening", { signal: AbortSignal.timeout(5000) });
+	fixture.listen(0, "127.0.0.1"); await listening;
+	const env = { OPENROUTER_API_KEY: "sk-or-fixture" };
+	const models = await createAgentModels({ auth: { readStored: () => undefined }, keys: { readKeys: () => ({}) }, env });
+	models.setProvider(await loadProvider("openrouter", { baseUrl: `http://127.0.0.1:${fixture.address().port}/api/v1`, env }));
+	const model = models.getModels("openrouter").find((entry) => entry.api === "openai-completions");
+	const runner = createAgentRunner({ models });
+	let frames;
+	try {
+		const session = await runner.openSession("errors-attribution");
+		frames = await collect(session, { text: "hi", model: `openrouter/${model.id}` });
+	} finally {
+		await runner.close();
+		const closed = once(fixture, "close", { signal: AbortSignal.timeout(5000) });
+		fixture.close(); fixture.closeAllConnections(); await closed;
+	}
+	assert.deepEqual(frames.filter((frame) => frame.type === "error"), [], JSON.stringify(frames));
+	assert.equal(frames.at(-1)?.type, "done", JSON.stringify(frames));
+	assert.deepEqual(seen, [{ title: null, referer: null }], "one request, with no provider attribution header naming pi");
+	console.log("PASS the runner's provider requests carry no pi attribution headers");
 }
 
 process.exit(failures === 0 ? 0 : 1);

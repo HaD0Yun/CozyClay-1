@@ -192,37 +192,6 @@ async function startServer(options) {
 	console.log("PASS a session with a running Studio turn survives pruning");
 }
 
-// --- unit: the compaction option plumbs through to the harness options, default off ---
-async function harnessCompactionSeenFor(compactionOption) {
-	const seen = [];
-	const listeners = new Map();
-	const fakeLane = { setModel: async () => {}, setThinkingLevel: async () => {}, prompt: async () => { listeners.get("run_end")?.({ status: "completed" }); }, steer: async () => ({ ok: true }), abort: async () => ({ ok: true }), inspectExecution: async () => null, appendMessage: async () => {}, findEntries: async () => [] };
-	const fakeHarness = {
-		hooks: { on: () => {} },
-		events: { on: (type, listener) => { listeners.set(type, listener); return () => listeners.delete(type); } },
-		lane: async () => fakeLane,
-		close: async () => {},
-	};
-	const fakePi = {
-		AgentHarness: { create: async (options) => { seen.push(options.compaction); return { harness: fakeHarness }; } },
-		BACKGROUND_CONTEXT: {},
-		MemorySessionRepo: class { async create() { return {}; } async close() {} },
-		clampThinkingLevel: (model, level) => level,
-	};
-	const models = { getModel: () => ({ id: "m", provider: "faux" }), setProvider: () => {} };
-	const runner = createAgentRunner({ models, tools: [], pi: fakePi, ...(compactionOption === undefined ? {} : { compaction: compactionOption }) });
-	const session = await runner.openSession("unit-steer", { surface: "workflow" });
-	for await (const _frame of session.start({ text: "hi", model: "faux/m" })) { /* drain */ }
-	await runner.close();
-	return seen[0];
-}
-{
-	const defaultCompaction = await harnessCompactionSeenFor(undefined);
-	expect("createAgentRunner's default passes enabled:false to the harness options", defaultCompaction?.enabled === false, JSON.stringify(defaultCompaction));
-	const enabledCompaction = await harnessCompactionSeenFor({ enabled: true });
-	expect("createAgentRunner({compaction:{enabled:true}}) passes enabled:true to the harness options", enabledCompaction?.enabled === true, JSON.stringify(enabledCompaction));
-}
-
 // --- the runner's own default clock must be callable with no injected clock ---
 // `clock = performance.now` (an unbound method reference) throws ERR_INVALID_THIS
 // the instant a tool_start/tool_end handler calls it; every real caller

@@ -623,3 +623,49 @@
 		grid-template-columns: 1fr;
 	}
 }
+
+/* Export folder: full-width row because folder names and three controls do not
+   fit the 240px control column used by toggles and language pairs. */
+.v2-preferences .v2-preferences__row--full .v2-preferences__row-copy {
+	margin-bottom: var(--sp-2, 12px);
+}
+
+.v2-preferences .v2-preferences__row--full .v2-preferences__row-control {
+	justify-content: flex-start;
+	flex-wrap: wrap;
+	width: 100%;
+}
+
+.v2-preferences .v2-preferences__export-folder {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: var(--sp-1, 8px);
+	min-width: 0;
+	width: 100%;
+}
+
+.v2-preferences .v2-preferences__export-folder .v2-preferences__language-controls {
+	justify-content: flex-start;
+}
+
+.v2-preferences .v2-preferences__export-folder-name {
+	color: var(--text-1, #e4e4e7);
+	font-size: var(--prefs-ui-size, 12px);
+	line-height: 1.35;
+	overflow-wrap: anywhere;
+}
+
+.v2-preferences .v2-preferences__export-folder-status {
+	color: var(--select, #e8a33d);
+	font-size: var(--prefs-secondary-size, 11px);
+	line-height: 1.35;
+}
+
+.v2-preferences .v2-preferences__export-folder-note {
+	display: block;
+	margin-top: var(--sp-1, 8px);
+	color: var(--text-3, #636369);
+	font-size: var(--prefs-secondary-size, 11px);
+	line-height: 1.35;
+}

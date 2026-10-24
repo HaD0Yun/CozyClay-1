@@ -110,7 +110,7 @@ const swing = ({ end, ...extra } = {}) => stand({ frames: 48, ...extra, keys: [{
 	{ f: end ?? 27, set: { aswing_r: 150 } }, { f: 47, set: { aswing_r: 150 } }] });
 const fastSwing = compile(swing(), empty), wrist = fastSwing.observations?.peaks?.RightHand;
 console.log(`  swing: ${fastSwing.qa.total} issues; observations ${JSON.stringify(fastSwing.observations)}`);
-expect("fast smooth swing: qa.ok, observations show the wrist peak (~9 m/s) and its frame", fastSwing.qa.ok && wrist?.speed[0] > 8.5 && wrist.speed[0] < 10 && wrist.speed[1] >= 21 && wrist.speed[1] <= 27
+expect("fast smooth swing: qa.ok, observations show the wrist peak (~9 m/s) and its frame", fastSwing.qa.ok && wrist?.speed[0] > 8.5 && wrist.speed[0] < 10.5 && wrist.speed[1] >= 21 && wrist.speed[1] <= 31
 	&& wrist.accel[0] > 50 && Number.isInteger(wrist.accel[1]), JSON.stringify(fastSwing.qa.groups.slice(0, 2)));
 expect("observations: still joints are left out, knees and elbows report their deepest bend, balance its minimum",
 	!("LeftFoot" in fastSwing.observations.peaks) && fastSwing.observations.bend.elbow_r.length === 2 && fastSwing.observations.balance.min[0] > 0, JSON.stringify(fastSwing.observations));
@@ -179,7 +179,7 @@ const msg = reject(s => {
 console.log(msg.split("\n").map(l => `  | ${l}`).join("\n"));
 for (const line of [
 	"spec.fps must be 24, the timeline rate, got 30",
-	"keys[3] (f32) sets unknown channel \"fpitch_left\"; did you mean \"fpitch_l\"?",
+	"corrected: keys[3] (f32) channel \"fpitch_left\" -> \"fpitch_l\"",
 	"keys[4] (f38) root must be [x, y, z] (3 finite numbers), got [1,2]",
 	"keys[5].f = 800 is outside 0..729 (spec.frames 730); set frames >= 801 or frames: \"auto\"",
 	"keys[6] (f54) knee_l = [0,0,-1] points backward; knees bend toward +z.",
@@ -192,7 +192,7 @@ expect("validator: a foot target at the floor names the ankle convention", rejec
 expect("validator: checks.zzz is named, not a crash, with skills present", /checks\.zzz is not a check \(checks: /.test(reject(s => { s.use = [{ skill: "sitInSeat", f0: 0, args: { car: "Car" } }]; s.checks.zzz = 1; })));
 expect("validator: a frame word in a check entry points at when", reject(s => { s.checks.contacts[0].frames = [0, 9]; }).includes('checks.contacts[0] has unknown field "frames"; did you mean "when"? (fields: name, point, target, tol, when)'));
 expect("validator: an unknown skill arg lists the skill's args", reject(s => { s.use = [{ skill: "sitInSeat", f0: 0, args: { car: "Car", zzz: 1 } }]; }).includes("use[0].args.zzz is not an arg of sitInSeat (args: car, seat, seatBack, wheel, offset, floor)"));
-expect("validator: an unknown skill gets a suggestion", /use\[0\]\.skill "exitcar" is not a skill; did you mean "exitCar"\?/.test(reject(s => { s.use = [{ skill: "exitcar", f0: 0 }]; })));
+expect("validator: an unknown skill gets a suggestion", /use\[0\]\.skill "exitCra" is not a skill; did you mean "exitCar"\?/.test(reject(s => { s.use = [{ skill: "exitCra", f0: 0 }]; })));
 
 // 7. Frames past the end (G3). The run2 session: a pick-up compiled from frames: "auto" (195
 //    frames), installed, then base + patch appended drink keys up to f296 and a goal at

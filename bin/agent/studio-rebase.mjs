@@ -254,8 +254,9 @@ export function createRebaser({ session, liveHub, workspaceHandle, mutationNames
     const read = await liveHub.command("inspect_studio", { scope: "entities", ids: ids.slice(0, 32), limit: Math.min(32, ids.length) }, workspaceHandle);
     return Array.isArray(read?.entities) ? read.entities : [];
   };
-  const run = async (name, args) => {
-    const scratch = {};
+  // callId: the model's tool call (studio-tools.mjs), carried by every send of this command
+  const run = async (name, args, callId) => {
+    const scratch = { callId };
     try { return await attempt(name, args, scratch); }
     catch (error) {
       const refused = error?.receipt?.mutated === undefined || error.receipt.mutated === false; // nothing applied, provably
@@ -264,7 +265,7 @@ export function createRebaser({ session, liveHub, workspaceHandle, mutationNames
       if (error?.code === "TARGET_BUSY") {
         const waitedMs = session.busyWaitMs ?? BUSY_WAIT_MS;
         if (!await (session.sleep ?? sleepUnlessAborted)(waitedMs, session.signal)) throw error;
-        try { return annotateRebased(await attempt(name, args, {}), { reason: "target_busy", waitedMs, retried: true }); }
+        try { return annotateRebased(await attempt(name, args, { callId }), { reason: "target_busy", waitedMs, retried: true }); }
         catch (second) {
           if (second?.code !== "TARGET_BUSY") throw second;
           throw Object.assign(new Error(busyTeaching({ original: second.message, waitedMs, ids: targetIds() })), { code: "TARGET_BUSY", receipt: second.receipt, autoRebased: false });
@@ -283,7 +284,7 @@ export function createRebaser({ session, liveHub, workspaceHandle, mutationNames
         throw Object.assign(new Error(staleTeaching({ original: error.message, verdict, refusedRevision: fromRevision, freshRevision: fresh.revision?.scene ?? admission.revision, name })), { code: "STALE_SCENE", receipt: error.receipt, autoRebased: false });
       }
       const unrelated = (verdict.survey?.changed.length ?? 0) + (verdict.survey?.added.length ?? 0) + (verdict.survey?.removed.length ?? 0);
-      const again = {};
+      const again = { callId };
       let result;
       try { result = await attempt(name, args, again); }
       catch (second) {

@@ -19,9 +19,8 @@ const KNEE_REST = [0, 0, 1], LEG = ["UpLeg", "Leg", "Foot"];
 const v3 = (x, d = [0, 0, 0]) => (Array.isArray(x) || ArrayBuffer.isView(x) ? [x[0], x[1], x[2]] : d);
 const num = (x, d = 0) => (typeof x === "number" && Number.isFinite(x) ? x : d);
 
-/** Split a body-frame rotation over a chain of bones, each turning about its own joint. */
-function spread(sk, s, bones, yaw, pitch, roll) {
-	const k = bones.length;
+/** Split a body-frame rotation over a chain of bones (k shares), each turning about its own joint. */
+function spread(sk, s, bones, yaw, pitch, roll, k = bones.length) {
 	for (const name of bones) {
 		const b = sk.index[name];
 		rotateSubtree(sk, s, b, s.P[b].slice(), mul(ry(yaw / k), mul(rx(pitch / k), rz(roll / k))));
@@ -117,7 +116,10 @@ export function pose(sk, c, hooks = {}) {
 		if (sw) rotateSubtree(sk, s, a, s.P[a].slice(), rx(-sw));
 	}
 	spread(sk, s, ["Neck", "Head"], num(c.head_yaw), num(c.head_pitch), num(c.head_roll));
-	spread(sk, s, ["Spine", "Spine1", "Spine2"], num(c.spine_yaw), num(c.spine_pitch), num(c.spine_roll));
+	// the top spine bone turns its share of chest_* when flow bakes one (channels.js overlap: it breaks after the two below)
+	const sy = num(c.spine_yaw), sp = num(c.spine_pitch), sr = num(c.spine_roll);
+	spread(sk, s, ["Spine", "Spine1"], sy, sp, sr, 3);
+	spread(sk, s, ["Spine2"], num(c.chest_yaw, sy), num(c.chest_pitch, sp), num(c.chest_roll, sr), 3);
 	// Root: turn about the hips joint, then put the hips at `root`.
 	const hips = sk.index.Hips, yaw = num(c.yaw);
 	rotateSubtree(sk, s, hips, s.P[hips].slice(), mul(ry(yaw), mul(rx(num(c.pitch)), rz(num(c.roll)))));

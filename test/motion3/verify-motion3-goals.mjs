@@ -73,6 +73,20 @@ const groupTravel = len(sub(refPoint(out, 47, `object:${CUP.group}.base`), refPo
 expect("a group (object:<group>) is measured as a whole: the cylinder tipping moves the base of its parts' AABB",
 	groupTravel > 0.05 && r.qa.goals[0].ok && close(r.qa.goals[0].value, groupTravel), JSON.stringify({ groupTravel, goals: r.qa.goals }));
 
+// 3b. landmarks: object .top is the top-face centre of the world bounding box; .rim is the opening (the top face of the
+//     highest part in its own axes), so a tipped cup's rim leaves its .top. A near goal of a round body's .top and the
+//     mouth measures the rim nearest the mouth, and a failing near goal on a .top says which point it read.
+const rimAt = f => refPoint(out, f, "object:cylinder.rim"), topAt = f => refPoint(out, f, "object:cylinder.top");
+expect("rim: upright, the opening is the .top", len(sub(rimAt(0), topAt(0))) < 1e-6 && close(rimAt(0)[1], 0.85), JSON.stringify([rimAt(0), topAt(0)]));
+expect("rim: tipped 90 deg, the opening has left the bounding-box top (> 5 cm)", len(sub(rimAt(47), topAt(47))) > 0.05, JSON.stringify([rimAt(47), topAt(47)]));
+const mouthD = refDistance(out, 47, `object:${CUP.group}.rim`, "landmark:mouth"), centreD = len(sub(refPoint(out, 47, `object:${CUP.group}.rim`), refPoint(out, 47, "landmark:mouth")));
+expect("rim: against a point, the edge of the opening nearest it (closer than the opening's centre, by at most its radius)", mouthD < centreD && centreD - mouthD <= 0.04 + 1e-6, JSON.stringify({ mouthD, centreD }));
+r = run([{ name: "cup at mouth", near: [`object:${CUP.group}.top`, "landmark:mouth"], tol: 0.01, at: 47 }]);
+g = r.qa.groups.find(x => x.kind === "GOAL");
+expect("a round body's .top at the mouth is measured at its rim, and the message says so", close(r.qa.goals[0].value, mouthD) && g.subject.endsWith(`(measured at ${CUP.group}'s rim nearest the mouth, object:${CUP.group}.rim; its .top is its bounding box's top)`), JSON.stringify({ goal: r.qa.goals[0], subject: g?.subject }));
+r = run([{ name: "hand at the top", near: ["joint:LeftHand", "object:cube.top"], tol: 0.01, at: 47 }]);
+expect("any other .top in a failing near goal says it is the bounding box's top-face centre", r.qa.groups[0].subject.endsWith("(object:cube.top is the top-face centre of its world bounding box; object:cube.rim is its opening, which tilts with it)"), r.qa.groups[0].subject);
+
 // 4. all / any over a range: the hand comes within spot's tol only near the end
 const tol = refDistance(out, 44, "joint:LeftHand", "anchor:spot");
 r = run([{ name: "all", near: ["joint:LeftHand", "anchor:spot"], tol, at: [30, 47] }, { name: "any", near: ["joint:LeftHand", "anchor:spot"], tol, at: [30, 47], mode: "any" }]);
@@ -152,21 +166,20 @@ r = run([{ name: "bare", moved: "cylinder", by: 0.02, at: 47 }, { name: "bare gr
 const prefixedRun = run([{ name: "bare", moved: "object:cylinder", by: 0.02, at: 47 }, { name: "bare group", moved: `object:${CUP.group}.top`, at: 47 }]);
 expect("a bare moved id is the object: ref (the same result; the filled-in spec holds object:<id>)", JSON.stringify(r.qa.goals) === JSON.stringify(prefixedRun.qa.goals)
 	&& r.qa.goals[0].ok && r.spec.goals[0].moved === "object:cylinder" && r.spec.goals[1].moved === `object:${CUP.group}.top`, JSON.stringify([r.qa.goals, r.spec.goals]));
-const ALL = "joint:<Bone>, bone:<Bone>, prop:<prop>.<point>, anchor:<name>, landmark:mouth, object:<id>[.center|.top|.base], person:<id>.<Bone>";
+const ALL = "joint:<Bone>, bone:<Bone>, prop:<prop>.<point>, anchor:<name>, landmark:mouth, object:<id>[.center|.top|.base|.rim], person:<id>.<Bone>";
 const bareCases = [
 	[[{ moved: "nope", at: 3 }], ['goals[0].moved "object:nope" names object "nope", which is not in the scene; did you mean "cube"?']],
 	[[{ moved: 3, at: 3 }], ['goals[0].moved must be an object id or a point ref (object:<id>[.center|.top|.base], prop:<prop>.<point>, joint:<Bone>, landmark:mouth, anchor:<name>), got 3']],
-	[[{ near: ["LeftHand", CUP.group], at: 3 }], [`goals[0].near[0] "LeftHand" must be ${ALL}; did you mean "joint:LeftHand"?`,
-		`goals[0].near[1] "${CUP.group}" must be ${ALL}; did you mean "object:${CUP.group}"?`]],
-	[[{ above: ["grip.tip", "spot"], at: 3 }], [`goals[0].above[0] "grip.tip" must be ${ALL}; did you mean "prop:grip.tip"?`,
-		`goals[0].above[1] "spot" must be ${ALL}; did you mean "anchor:spot"?`]],
-	[[{ near: ["mouth", "zzz"], at: 3 }], [`goals[0].near[0] "mouth" must be ${ALL}; did you mean "landmark:mouth"?`,
-		`goals[0].near[1] "zzz" must be ${ALL}`]],
+	[[{ near: ["mouth", "zzz"], at: 3 }], [`goals[0].near[1] "zzz" must be ${ALL}`, '(adjusted before these checks: corrected: goals[0].near[0] "mouth" -> "landmark:mouth")']],
 ];
 for (const [goals, want] of bareCases) {
 	const got = invalid(goals);
 	expect(`bare refs: ${want[0].slice(0, 70)}`, JSON.stringify(got) === JSON.stringify(want), JSON.stringify(got));
 }
+// a bare near / above name with exactly one reading is that ref (C21, lenient.js), named in notes; the compile goes on
+const bareOne = run([{ name: "b1", near: ["LeftHand", CUP.group], at: 3 }, { name: "b2", above: ["grip.tip", "spot"], at: 3 }]);
+expect("a bare name with one reading is corrected to its ref and named", JSON.stringify(bareOne.notes) === JSON.stringify(['corrected: goals[0].near[0] "LeftHand" -> "joint:LeftHand"',
+	`corrected: goals[0].near[1] "${CUP.group}" -> "object:${CUP.group}"`, 'corrected: goals[1].above[0] "grip.tip" -> "prop:grip.tip"', 'corrected: goals[1].above[1] "spot" -> "anchor:spot"']), JSON.stringify(bareOne.notes));
 const lenient = compileSpec(base({ goals: [{ moved: "object:cylinder", by: 0.02, at: 47, extra: 1 }] }), { sk, scene }, { lenient: true });
 expect("lenient ignores an unknown goal field", lenient.qa.goals[0].ok, JSON.stringify(lenient.qa.goals));
 
@@ -196,7 +209,10 @@ expect("without the goal the search keeps the midpoint", r.search.values["keys[2
 		anchors: { spot, far }, fits: [{ side: "l", anchor: "spot", effector: { prop: "grip", point: "tip" } }],
 		keys: [{ f: 0, set: { armw_l: 1, hand_l: HAND0, w_spot_l: 0, w_far_l: 0, tip: 0 } }, { f: 24, set: { w_spot_l: 1, tip: 0 } }, { f: 47, set: { w_spot_l: 1, w_far_l: 1, tip: 0 } }, { f: 34, set: { w_far_l: 0 } }] });
 	expect("H3b leak: keying it as the fix says meets the goal", sealed.qa.goals[0].ok, JSON.stringify(sealed.qa.goals));
-	const pressed = compileSpec(press("stand", 0.7), { sk, scene: { objects: {} } }), pg = pressed.qa.groups.find(x => x.kind === "GOAL"), fr = pressed.out.frames[pg.worstFrame];
+	// 0.7 m ahead the compiler brings the body itself (fix.reach, fix/reach-body.js); 0.9 m is past what it may lean and shift
+	const near = compileSpec(press("stand", 0.7), { sk, scene: { objects: {} } });
+	expect("H3b reach: a button the straight arm misses, but a lean reaches, is met by the compiler (fixed.reachBody says what moved)", near.qa.goals[0].ok && near.fixed.reachBody?.runs?.[0]?.side === "l" && near.fixed.reachBody.runs[0].lean > 0, JSON.stringify({ goals: near.qa.goals, fixed: near.fixed.reachBody }));
+	const pressed = compileSpec(press("stand", 0.9), { sk, scene: { objects: {} } }), pg = pressed.qa.groups.find(x => x.kind === "GOAL"), fr = pressed.out.frames[pg.worstFrame];
 	console.log(`  reach: ${pg.hint} ${JSON.stringify(pg.patch)}`);
 	expect("H3b reach: at full reach the hint moves the body toward the target, the fix is a hold root move, the patch the standIdle at",
 		/^body: move \[[+-][\d.]+, 0, \+[\d.]+\] m toward the target at f\d+, root held since use\[0\] standIdle f0 \(arm l is at full reach\) \(goal "finger on the button"/.test(pg.hint)

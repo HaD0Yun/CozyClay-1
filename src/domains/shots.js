@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { aimAt } from '../controls.jsx';
 import { PRESETS, DEFAULT_DURATION_S, TIMELINE_FPS } from '../app-stage.jsx';
+import { usePlaybackFrameState } from '../motion/playback-frame-store.js';
 import { CAMERA_MOVES, SUBJECT_HEIGHT_M, focalMmToFov, fovToFocalMm } from '../shot.js';
 import { CAMERA_PRESETS, cameraPresetFraming } from '../camera-move.js';
 import { createDocumentStore } from '../document-store.js';
@@ -236,9 +237,8 @@ export function useShots(appContext) {
   const [moveFollow] = useState(true);
   const [railDraw, setRailDraw] = useState(false);
   const [craneSelectedIndex, setCraneSelectedIndex] = useState(null);
-  const [tlFrame, setTlFrame] = useState(0);
-  const [tlFps, setTlFps] = useState(TIMELINE_FPS);
-  const activeShotIdx = shotIndexAtFrame(shots, tlFrame), activeShot = shots[activeShotIdx] ?? null;
+  const [tlFrame, setTlFrameState] = useState(0), [tlFps, setTlFps] = useState(TIMELINE_FPS);
+  const { setTlFrame, commitPlaybackFrame, activeShotIdx, activeShot } = usePlaybackFrameState({ frameCount: tlFrameCount, setReactFrame: setTlFrameState, shots });
   const cameraKeys = activeShot?.cameraKeys ?? [], activeCamera = createCameraBlock(activeShot?.camera);
   const craneActive = !!activeCamera.craneHeight, cameraRail = activeCamera.cameraRail;
   const activeShotDuration = activeShot ? activeShot.endFrame - activeShot.startFrame + 1 : 0;
@@ -418,7 +418,7 @@ export function useShots(appContext) {
   }
   return { ...domain, shots, setShots, editShots, fovDeg, setFovDeg, cameraMove, customMove, startupShotState,
     movePlaying, setMovePlaying, moveFollow, railDraw, setRailDraw, craneSelectedIndex, setCraneSelectedIndex,
-    tlFrame, setTlFrame, tlFrameCount, setTlFrameCount, tlFps, setTlFps, activeShotIdx, activeShot, cameraKeys,
+    tlFrame, setTlFrame, commitPlaybackFrame, tlFrameCount, setTlFrameCount, tlFps, setTlFps, activeShotIdx, activeShot, cameraKeys,
     activeCamera, craneActive, cameraRail, activeShotDuration, hasCameraKeys, changeActiveCamera, changeShotTargetModel,
     syncActiveCameraFraming, commitManualCameraFraming, beginCameraFramingGesture, beginTimelineEditGesture,
     setShotCameraRail, clearShotCameraRail, changeCameraRail, addCameraKeyframe, moveCameraKeyframe, removeCameraKeyframe, clearMove,

@@ -13,10 +13,11 @@
 import { isCarried, carriedPose, compose, relative } from "./carried.js";
 import { seatsInHand, seatOffset, settleAt, between as slide } from "./seat.js";
 import { groupsOf } from "./scene.js";
-import { restState } from "./compiler/skeleton.js";
+import { restState, bonePoint } from "./compiler/skeleton.js";
 import { add, scale, sub, apply, T, matFromQuat, quatFromMat } from "./compiler/math.js";
 import { qmul, qconj, qlog, qexp, qrot, qdot, qnorm } from "./compiler/quat.js";
 import { keyRots, leanPos } from "./key-aim.js";
+import { faceLeaned } from "./face-lean.js";
 import { holdCost } from "./compiler/hold.js";
 import { polePlan, smoothPath, smoothed } from "./hold-plan.js";
 import { secondGrip, secondHold, gripGate } from "./second-hand.js";
@@ -60,7 +61,7 @@ export function curveIn(out, id) {
 	if (!had || had.map !== map || had.baked !== baked) {
 		const hold = out.ctx.hold, solved = new Map(), at = t => { const f = Math.round(t); if (!solved.has(f)) solved.set(f, hold.plainFrame(f).s); return solved.get(f); };
 		const plain = t => quatFromMat(hold.carryOn(id, at(t)).R), strain = (t, pos, q, opts) => hold.strainOn(id, at(t), { pos, R: matFromQuat(q) }, opts);
-		cache.set(id, { map, baked, curve: curveOf(out.ctx.spec.objects[id], f => (map ? map(f) : f), plain, strain, 2 * (out.ctx.scene?.objects?.[id]?.half?.[1] ?? 0)) });
+		cache.set(id, { map, baked, curve: curveOf(hold.entry?.(id) ?? out.ctx.spec.objects[id], f => (map ? map(f) : f), plain, strain, 2 * (out.ctx.scene?.objects?.[id]?.half?.[1] ?? 0)) });
 	}
 	return cache.get(id).curve;
 }
@@ -112,6 +113,17 @@ export function holdHook(ctx, out, solvePlain, solveLed) {
 	const { sk, spec, scene } = ctx, held = keyedEntries(spec);
 	if (!held.length) return null;
 	const seated = new Set(held.map(([id]) => id).filter(id => seatsInHand(spec, spec.objects[id], scene, id)).map(id => spec.objects[id]));
+	// the entry as the compile holds it: mouth keys leaned (faceLeaned), read once per compile on the frames without keys
+	const entries = new WeakMap(), mapped0 = f => (out.timeMap ? Math.round(out.timeMap(f)) : f);
+	const entry = id => {
+		if (!entries.has(out)) entries.set(out, new Map());
+		const cache = entries.get(out);
+		if (!cache.has(id)) {
+			const top = 2 * (scene?.objects?.[id]?.half?.[1] ?? 0);
+			cache.set(id, faceLeaned(spec.objects[id], top, f => bonePoint(solvePlain(mapped0(f)).s, sk.index.Head, sk.landmarks.mouth)));
+		}
+		return cache.get(id);
+	};
 	const palmOf = (o, s) => carriedPose(sk, spec, s, { prop: o.prop }, seated.has(o)), attached = new WeakMap(), attaching = new Set();
 	const restAt = (id, f) => ctx.restingAt?.(id, f) ?? scene?.objects?.[id] ?? groupsOf(scene)[id];
 	// a keyed carry of a thin body (a cup, a can, a bar) whose grip is free (no at/along, no orient: false, no grasp fit, no keyed
@@ -130,7 +142,7 @@ export function holdHook(ctx, out, solvePlain, solveLed) {
 			&& mapped(Math.min(...o.keys.map(key => key.f))) <= grab;
 		if (!free) return null;
 		attaching.add(id);
-		try { cache.set(id, chooseGrip({ sk, o, side: SIDES[k], grab, rest: restAt(id, grab), plain: f => solvePlain(f).s, palmOf: s => palmOf(o, s), map: mapped })); } finally { attaching.delete(id); }
+		try { cache.set(id, chooseGrip({ sk, o: entry(id), side: SIDES[k], grab, rest: restAt(id, grab), plain: f => solvePlain(f).s, palmOf: s => palmOf(o, s), map: mapped })); } finally { attaching.delete(id); }
 		return cache.get(id);
 	};
 	const attach = id => {
@@ -156,7 +168,7 @@ export function holdHook(ctx, out, solvePlain, solveLed) {
 	const strainOn = (id, s, pose, opts) => { const o = spec.objects[id]; return holdCost(sk, s, SIDES[spec.props[o.prop].hand], compose(pose, invert(attach(id))), palmOf(o, s), opts); };
 	const heldAt = (id, o, f) => {
 		const curve = curveIn(out, id), w = leadWeight(curve, spanIn(out, o), f);
-		return w > 0 ? { w, palm: compose(keyedPose(curve, f), invert(attachAt(id, f))), measure: s => palmOf(o, s), comfort: o.keys.some(k => k.lean > 0) } : null;
+		return w > 0 ? { w, palm: compose(keyedPose(curve, f), invert(attachAt(id, f))), measure: s => palmOf(o, s), comfort: entry(id).keys.some(k => k.lean > 0) } : null;
 	};
 	// the elbow's planned path over the frames the keys lead (hold-plan.js), once per baked channels and time map
 	const plans = new WeakMap();
@@ -268,5 +280,5 @@ export function holdHook(ctx, out, solvePlain, solveLed) {
 	const firstKey = id => { const t = Math.min(...spec.objects[id].keys.map(k => k.f)); return out.timeMap ? Math.round(out.timeMap(t)) : t; };
 	// the grips chosen for keyed carries (observations.wrist reads them): [{ id, hand, name, cost, today }]
 	const grips = () => held.map(([id, o]) => { const p = chosen(id); return p && { id, hand: spec.props[o.prop].hand, name: p.name, cost: p.cost, today: p.today }; }).filter(Boolean);
-	return { lead, attach, attachAt, attaching: id => attaching.has(id), plainFrame: solvePlain, carryOn, strainOn, span: id => spanIn(out, spec.objects[id]), firstKey, grips };
+	return { lead, attach, attachAt, attaching: id => attaching.has(id), plainFrame: solvePlain, entry, carryOn, strainOn, span: id => spanIn(out, spec.objects[id]), firstKey, grips };
 }

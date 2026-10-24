@@ -13,7 +13,7 @@ import { createMainTools, doneClaimCorrection, mainContextText } from "./main-ag
 import { MAIN_SYSTEM_PROMPT } from "./main-prompt.mjs";
 import { LOST_STUDIO } from "./studio-turn-transaction.mjs";
 
-const TERMINAL = new Set(["task.done", "task.failed", "task.cancelled", "task.paused"]);
+const TERMINAL = new Set(["task.review", "task.done", "task.failed", "task.cancelled", "task.paused"]);
 const EVENT_TURN_TEXT = "(Task events arrived while the user waited. Tell the user what happened, in their language, in one or two lines.)";
 const fakeResponse = () => ({ headersSent: false, writableEnded: false, destroyed: false, setHeader() {}, writeHead() {}, flushHeaders() {}, write: () => true, once() {}, end() { this.writableEnded = true; } });
 const ownerRequest = owner => ({ headers: { cookie: `studio_owner=${encodeURIComponent(owner)}` } });

@@ -8,6 +8,7 @@
  * window and the listener pair.
  */
 import { exportFailureCode } from "../analytics.js";
+import { saveExport } from "../export-workspace.js";
 
 export const KEYFRAME_PACK_REQUEST = "cozyclay:export-keyframe-pack";
 export const KEYFRAME_PACK_RESULT = "cozyclay:export-keyframe-pack-result";
@@ -64,15 +65,7 @@ export function requestKeyframePack(iframeWindow, {
 	});
 }
 
-/** Save a pack the browser already holds in memory. */
+/** Save a pack the browser already holds in memory; resolves when handed off. */
 export function downloadPack({ name, bytes }) {
-	const url = URL.createObjectURL(new Blob([bytes], { type: "application/zip" }));
-	const anchor = document.createElement("a");
-	anchor.href = url;
-	anchor.download = name || "cozyclay-shot.zip";
-	anchor.click();
-	// Revoking synchronously can race the download in some browsers; one task
-	// later is enough for the click to have been handed off.
-	setTimeout(() => URL.revokeObjectURL(url), 0);
-	return { name: anchor.download, url };
+	return saveExport(new Blob([bytes], { type: "application/zip" }), name || "cozyclay-shot.zip");
 }

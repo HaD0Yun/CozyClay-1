@@ -196,9 +196,10 @@ export function createStudioAppBinding(ports) {
 				...(childIds.length ? { childIds: childIds.slice(0, 12), ...(childIds.length > 12 ? { childCount: childIds.length } : {}) } : {}) };
 		};
 		if (patched.length) return { patched, ...extras() };
-		const shot = s.shots.find(row => row.id === id);
+		// A camera key lives inside its shot: still present there means retained, not removed (#863).
+		const shot = s.shots.find(row => row.id === id), key = !shot && !entity && s.shots.flatMap(row => row.cameraKeys?.map(k => ({ shotId: row.id, frame: k.frame, id: k.id })) ?? []).find(k => k.id === id);
 		if (shot) return { name: shot.name || shot.id, range: { startFrame: shot.startFrame, endFrameExclusive: shot.endFrame + 1 } };
-		if (!entity) return { removed: true };
+		if (!entity) return key ? { shotId: key.shotId, frame: key.frame } : { removed: true };
 		const brief = { name: entity.name || entity.subject || entity.id, position: { x: entity.x, y: entity.y ?? 0, z: entity.z } };
 		if (compact) return brief;
 		if (!object) return { ...brief, yawDeg: entity.rot ?? 0, scale: entity.scale ?? 1, ...extras() };

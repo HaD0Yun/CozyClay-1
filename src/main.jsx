@@ -12,6 +12,7 @@ import { registerPwa } from "./pwa.js";
 import { LOCALE } from "./locale.js";
 import { initAnalytics } from "./analytics.js";
 import { fetchPlaygroundProject, isPlaygroundEmbed, playgroundSceneUrl, stashPlaygroundProject } from "./playground.js";
+import { preloadBodies } from "./motion3/body.js";
 
 registerPwa();
 void initAnalytics();
@@ -34,6 +35,10 @@ async function boot() {
 			</ErrorBoundary>
 		</StrictMode>,
 	);
+	// The motion compiler's body fits are not in the first-load bundle (motion3/body.js): fetch them once
+	// the first screen is up, so a saved take compiled on this thread does not have to wait for them.
+	const idle = globalThis.requestIdleCallback ?? (run => setTimeout(run, 200));
+	idle(() => preloadBodies().catch(error => console.warn("[cozyclay] could not preload the motion body fits", error)));
 }
 
 void boot();

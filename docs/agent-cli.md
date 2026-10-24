@@ -125,13 +125,14 @@ cclay live verify --receipt receipt-mu3uybgp-2 --checks placement --visual frame
 ```
 
 Now frame the shot — camera vocabulary, not coordinates. This scene has no
-shots yet, so the first `frame-shot` creates one spanning the timeline:
+shots yet, so the first `frame-shot` creates one spanning the timeline and
+writes the framing as its one camera key, at the shot's start — a held shot:
 
 ```sh
 cclay live frame-shot --subject char-a --size "wide shot" --view front --level hip
 ```
 ```json
-{"ok":true,"commandId":"c836cddc-9861-4ec0-87e3-fec764666ed7","receiptId":"receipt-mu3uybub-4","host":{…},"status":"applied","authored":true,"revision":{"before":4,"after":5},"affectedIds":["shot-mu3uybub-3"],"delta":[{"id":"shot-mu3uybub-3","after":{"range":{"startFrame":0,"endFrameExclusive":432},"camera":{"position":{"x":-0.011522021105043662,"y":1.0621432515131122,"z":5.077024270710456},"lookAt":{…},"focalMm":24.44391231902759,"sensorId":"fullFrame","slate":"wide shot"},"subjectIds":["char-a"],"shotId":"shot-mu3uybub-3"}}],"checks":{"coverage":"same-frame-subject-bounds-projection","clipped":false,"behindCamera":false,"screenFraction":0.44729099405708983,"derivedSize":"wide shot"},"undo":{"historyEntryId":"be5d9c6f-0bb7-4e5c-be4d-3b1fe7dc887c","entries":1,"canUndoDirect":true},"warnings":[{"code":"OCCLUSION_UNMEASURED"}],"detailCursor":"c836cddc-9861-4ec0-87e3-fec764666ed7"}
+{"ok":true,"commandId":"c836cddc-9861-4ec0-87e3-fec764666ed7","receiptId":"receipt-mu3uybub-4","host":{…},"status":"applied","authored":true,"revision":{"before":4,"after":5},"affectedIds":["shot-mu3uybub-3","camera-key-…"],"delta":[{"id":"shot-mu3uybub-3","after":{"range":{"startFrame":0,"endFrameExclusive":432},"camera":{"position":{"x":-0.011522021105043662,"y":1.0621432515131122,"z":5.077024270710456},"lookAt":{…},"focalMm":24.44391231902759,"sensorId":"fullFrame","slate":"wide shot"},"subjectIds":["char-a"],"shotId":"shot-mu3uybub-3"}}],"checks":{"coverage":"same-frame-subject-bounds-projection","clipped":false,"behindCamera":false,"screenFraction":0.44729099405708983,"derivedSize":"wide shot"},"undo":{"historyEntryId":"be5d9c6f-0bb7-4e5c-be4d-3b1fe7dc887c","entries":1,"canUndoDirect":true},"warnings":[{"code":"OCCLUSION_UNMEASURED"}],"detailCursor":"c836cddc-9861-4ec0-87e3-fec764666ed7"}
 ```
 
 `derivedSize` is what the lens actually produced, measured by projection:
@@ -176,10 +177,14 @@ scene.
 
 ## Worked session (b): reframe at eye level, key it, undo
 
-Continuing in the same scene. `frame-shot` moved the camera but committed no
-key — the shot's `keyCount` is still 0, so the framing is not yet *authored at
-a frame*. Keying needs the `keyAtFrame` argument, which the `frame-shot` verb
-does not surface; this is what the `cmd` escape hatch is for. Any
+Continuing in the same scene. `frame-shot` already authored the framing: the
+shot's `keyCount` is 1, the held key at frame 0. Without `keyAtFrame`, framing
+a shot that holds one framing (a still, or a clip with at most one key)
+replaces that key, so the whole shot is reframed; framing a shot that already
+moves keys the playhead frame. To add a key at a frame you choose — here a
+second key at frame 96, so the camera moves from the wide hip framing into an
+eye-level medium — you need the `keyAtFrame` argument, which the `frame-shot`
+verb does not surface; this is what the `cmd` escape hatch is for. Any
 live-protocol command can be sent raw, but the admitted commands expect the
 full admission envelope — which you build from one `inspect`:
 
@@ -187,7 +192,7 @@ full admission envelope — which you build from one `inspect`:
 cclay live inspect --scope shot
 ```
 ```json
-{"context":{"schema":"studio-context-v1","host":{"surface":"studio","workspaceId":"8306b693-…","documentEpoch":"9110399f-…","sceneId":"scene-mu3uy6d6-1","sceneEpoch":"69c39cf9-…","workspaceHandle":"8306b693-…"},"revision":{"scene":5,"physics":4,"view":3},"units":{…},"scene":{"name":"SCENE 01","aspect":"16:9","floorY":0,"frameCount":432,"objectCount":1,"characterCount":1},"selection":{"kind":"character","id":"char-a","hierarchyId":"characterA"},"activeCharacterId":"char-a","view":{…},"shot":{"id":"shot-mu3uybub-3","name":"Shot 1","range":{"startFrame":0,"endFrameExclusive":432},"mode":"keys"},"camera":{…},"entities":[{"id":"char-a","kind":"character","token":"target-2",…},{"id":"cube","kind":"object","token":"target-5",…}],"entityPage":{"returned":2,"total":2,"truncated":false,"nextCursor":null},"shots":[{"id":"shot-mu3uybub-3","name":"Shot 1","range":{"startFrame":0,"endFrameExclusive":432},"keyCount":0}],"shotsTruncated":false,"assets":[],"recentReceipts":[{"id":"receipt-mu3uybub-4","summary":"applied","canUndoDirect":true},{"id":"receipt-mu3uybgp-2","summary":"applied","canUndoDirect":false},…],"jobs":[],"capabilities":{…}},"entities":[{"id":"char-a","kind":"character","name":"a young woman in a tan coat","token":"target-2"},{"id":"cube","kind":"object","name":"Side box","token":"target-5"}],"total":2,"nextCursor":null}
+{"context":{"schema":"studio-context-v1","host":{"surface":"studio","workspaceId":"8306b693-…","documentEpoch":"9110399f-…","sceneId":"scene-mu3uy6d6-1","sceneEpoch":"69c39cf9-…","workspaceHandle":"8306b693-…"},"revision":{"scene":5,"physics":4,"view":3},"units":{…},"scene":{"name":"SCENE 01","aspect":"16:9","floorY":0,"frameCount":432,"objectCount":1,"characterCount":1},"selection":{"kind":"character","id":"char-a","hierarchyId":"characterA"},"activeCharacterId":"char-a","view":{…},"shot":{"id":"shot-mu3uybub-3","name":"Shot 1","range":{"startFrame":0,"endFrameExclusive":432},"mode":"keys"},"camera":{…},"entities":[{"id":"char-a","kind":"character","token":"target-2",…},{"id":"cube","kind":"object","token":"target-5",…}],"entityPage":{"returned":2,"total":2,"truncated":false,"nextCursor":null},"shots":[{"id":"shot-mu3uybub-3","name":"Shot 1","range":{"startFrame":0,"endFrameExclusive":432},"keyCount":1}],"shotsTruncated":false,"assets":[],"recentReceipts":[{"id":"receipt-mu3uybub-4","summary":"applied","canUndoDirect":true},{"id":"receipt-mu3uybgp-2","summary":"applied","canUndoDirect":false},…],"jobs":[],"capabilities":{…}},"entities":[{"id":"char-a","kind":"character","name":"a young woman in a tan coat","token":"target-2"},{"id":"cube","kind":"object","name":"Side box","token":"target-5"}],"total":2,"nextCursor":null}
 ```
 
 Build the envelope from that context — the four host identity fields and the
@@ -204,7 +209,7 @@ const envelope = {
   args: {
     subjectIds: ["char-a"],
     shotId: c.shot.id,
-    keyAtFrame: 0,
+    keyAtFrame: 96,
     framing: { intent: { size: "medium shot", view: "front", level: "eye", side: "left" } },
   },
   commandId: crypto.randomUUID(),
@@ -224,13 +229,16 @@ cclay live cmd frame_shot --args "$(cat /tmp/329-doc/f-b-envelope.json)"
 {"ok":true,"commandId":"e94748b1-5df7-4859-a1f3-baf9cb20067a","receiptId":"receipt-mu3uyc8d-6","host":{…},"status":"applied","authored":true,"revision":{"before":5,"after":6},"affectedIds":["shot-mu3uybub-3","camera-key-mu3uyc8d-5"],"delta":[{"id":"shot-mu3uybub-3","after":{"range":{"startFrame":0,"endFrameExclusive":432},"camera":{"position":{"x":-0.011522021105043662,"y":1.5894328518973564,"z":2.109947017309772},"lookAt":{…},"focalMm":24.44391231902759,"sensorId":"fullFrame","slate":"medium shot"},"subjectIds":["char-a"],"shotId":"shot-mu3uybub-3"}},{"id":"camera-key-mu3uyc8d-5","after":{…,"keyId":"camera-key-mu3uyc8d-5","frame":0,…}}],"checks":{"coverage":"same-frame-subject-bounds-projection","clipped":true,"behindCamera":false,"screenFraction":1.1027891282716213,"derivedSize":"medium shot"},"undo":{"historyEntryId":"47bcf6d7-2a8e-44bb-b40e-25a3180e7d57","entries":1,"canUndoDirect":true},"warnings":[{"code":"OCCLUSION_UNMEASURED"}],"detailCursor":"e94748b1-5df7-4859-a1f3-baf9cb20067a"}
 ```
 
-Two affected ids this time: the shot *and* the new camera key
-(`camera-key-mu3uyc8d-5`). The camera rose from y 1.06 to y 1.59 — eye level
-for this character — and the derived size tightened to "medium shot"
+The affected ids are the shot and the new camera key
+(`camera-key-mu3uyc8d-5`); the frame-0 key stays, so the shot now has two keys
+and the camera eases from one to the other. At frame 96 the camera sits at
+y 1.59 instead of y 1.06 — eye level for this character — and the derived
+size tightened to "medium shot"
 (`clipped: true` honestly reports the feet crossing the bottom edge; a medium
-shot on a 24 mm lens does crop). Look at it:
+shot on a 24 mm lens does crop). Put the playhead on the key and look at it:
 
 ```sh
+cclay live operate --frame 96
 cclay live capture --framing --out /tmp/329-doc/shots/f-b-eye-keyed.png
 ```
 ```json
@@ -238,8 +246,8 @@ cclay live capture --framing --out /tmp/329-doc/shots/f-b-eye-keyed.png
 ```
 
 The PNG reads as the medium shot at eye level the receipt described. If the
-operator dislikes it, the receipt's undo entry takes the whole thing —
-reframe *and* key — back in one command:
+operator dislikes it, the receipt's undo entry takes the new key back in one
+command, and the shot holds the wide hip framing again:
 
 ```sh
 cclay live undo --receipt receipt-mu3uyc8d-6
@@ -375,7 +383,7 @@ state, never on a guess about what the dead hub saw.
 | `arrange-objects --op '<json>'` \| `-f ops.json` | create / update / remove / group / ungroup set pieces, up to 100 ops, with relative placement and collision policy | yes |
 | `arrange-characters --op '<json>'` \| `-f ops.json` | create / update / remove cast, up to 8 ops | yes |
 | `patch --target <kind>[:<id>] --set '<json>'` | set declared authored fields by path on one `character` / `object` / `shot` / `stage` target; `inspect --scope catalogue` lists the patchable paths | yes |
-| `frame-shot --subject <id> --size … --view … --level … [--side] [--focal]` or `--exact px,py,pz,lx,ly,lz,focal` | move the shot camera by film vocabulary or to an exact pose; `keyAtFrame` (via `cmd`) also authors a camera key | yes |
+| `frame-shot --subject <id> --size … --view … --level … [--side] [--focal]` or `--exact px,py,pz,lx,ly,lz,focal` | frame the shot by film vocabulary or to an exact pose, written as a camera key: a held shot (at most one key) is reframed whole, a moving shot is keyed at the playhead; `keyAtFrame` (via `cmd`) adds or replaces the key at that frame instead | yes |
 | `operate [--select object:<id>] [--frame N] [--mode scene\|camera\|motion] [--play\|--pause]` | transient editor state — selection, playhead, mode; nothing authored | yes (transient) |
 | `verify --receipt <id> --checks placement,framing [--visual frame\|contact_sheet\|plan --out check.png]` | re-run a receipt's evidence, optionally writing its visual proof (`plan` is the Top View) | no |
 | `undo --receipt <id>` | restore the document through the editor's native history, one entry | yes |
@@ -501,6 +509,7 @@ keep resolving.
 | --- | --- | --- |
 | `openai-codex` | ChatGPT (OpenAI Codex) | your ChatGPT sign-in, unchanged |
 | `anthropic` | Anthropic | API key, `ANTHROPIC_API_KEY` |
+| `anthropic-subscription` | Claude (Anthropic) | Claude sign-in (OAuth); requests run through the official Claude Code binary |
 | `openai` | OpenAI | API key, `OPENAI_API_KEY` |
 | `google` | Google Gemini | API key, `GEMINI_API_KEY` or `GOOGLE_API_KEY` |
 | `openrouter` | OpenRouter | API key, `OPENROUTER_API_KEY` |
@@ -508,8 +517,21 @@ keep resolving.
 
 ChatGPT sign-in did not change: the panel still runs the Codex OAuth flow,
 the token still lives in `~/.config/cozyclay/codex-auth.json`, and it is still
-the only provider you sign in to rather than paste a key for. There are no
-OAuth flows for the other five.
+one of only two providers you sign in to rather than paste a key for.
+
+The second sign-in is `anthropic-subscription`. Anthropic ties a Claude
+Pro/Max OAuth token to Claude Code, so a third-party client cannot spend it
+against the API directly. The lane therefore never calls the Anthropic API
+itself: it spawns the official Claude Code binary through the Claude Agent
+SDK, hands the token over as `CLAUDE_CODE_OAUTH_TOKEN`, and replays the
+session history into each one-shot query (`bin/agent/anthropic-subscription.mjs`).
+The binary resolves from `CLAUDE_CODE_EXECUTABLE` first, then the
+`@anthropic-ai/claude-agent-sdk` platform package npm installed, then `claude`
+on `PATH`. The OAuth credential (access, refresh, expires) lives in
+`auth.json` like any pi OAuth login, and pi refreshes it on the five-minute
+window. Claude Code's own tools are disabled and CozyClay's tools are served
+as an SDK MCP server whose execution is always denied, so every tool call
+comes back to the host and runs where it always ran.
 
 ### Where the keys live
 
@@ -717,10 +739,32 @@ read the old file yourself: nothing in the Studio will convert it.
 
 ## Limits
 
-Motion generation is not on the CLI yet: `generate_motion` and the motion
-install verbs are served by the MCP server's own runtime, not the live hub
-(deferred to part E of this plan). Until then, an editor connected to the hub
-refuses those commands with `CAPABILITY_MISSING`, and motion work stays on
-the surfaces that own it — the Studio's motion panels, or a prompt-driven
-session through the Agent panel (**View ▾ → Panels → Agent panel**), which
-remains available and works the same scene.
+Motion is not a dedicated verb, but the editor's registered motion actions
+run through `live run`, admitted like the agent's `run_action` and waiting
+the action's declared timeout (120 s for `motion.compile`). `cclay live
+commands --ids motion.compile` prints the input schema; the spec language is
+in [motion3-agent-guide.md](motion3-agent-guide.md) and
+[motion-api-v3.1.md](motion-api-v3.1.md). Compile without installing first,
+then install the stored spec by its `specId` once QA is clean:
+
+```sh
+cclay live run motion.compile --args '{"characterId":"<id>","spec":{"schema":"cozyclay.motion-spec.v1","fps":24,"frames":48,"use":[{"skill":"standIdle","f0":0,"args":{"at":[0,0],"heading":0,"until":47}}]},"install":false}'
+cclay live run motion.compile --args '{"characterId":"<id>","base":"<specId>","install":"ifClean"}'
+```
+
+The other motion actions (`motion.qa`, `motion.sample`, `motion.describe`,
+`motion.report`, `motion.keyObject`) run the same way. Readiness:
+
+- an Animation project (motion belongs to Animation), with the editor's
+  motion owner mounted; otherwise `motion.compile`, `motion.qa`,
+  `motion.sample` and `motion.keyObject` are refused as unavailable with
+  "The motion owner is not mounted."
+- an X Bot or Y Bot character at scale 1; any other body (a capsule figure
+  included) or scale answers `TARGET_NOT_READY` with the reason.
+- `motion.qa`, `motion.sample` and `motion.keyObject` need a compiled take on
+  the character; compile first.
+
+What is not on the CLI is the old generation surface: there is no
+`generate_motion` tool or prompt-to-motion install verb on the live hub. For
+prompt-driven motion, use a session in the Agent panel (**View ▾ → Panels →
+Agent panel**), which calls the same `motion.compile` on the same scene.

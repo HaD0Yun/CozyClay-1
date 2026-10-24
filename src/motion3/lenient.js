@@ -4,16 +4,22 @@
 //   relaxSpec        on the expanded spec before validation (pipeline.js): a goal window partly past the
 //                    clip is cut to it; an object key with only pos takes the turn of the key before it
 //                    (else after it, else its scene pose: rot for a free entry, aim for a carry so the
-//                    arm picks the roll); a rot of length strictly between 0.5 and 2 is normalized
+//                    arm picks the roll); a rot of length strictly between 0.5 and 2 is normalized; a knee
+//                    pole that points backward in the body frame but forward read as a world direction at
+//                    the root yaw of its frame (a body turned 90 deg or more) is that world direction; a bare
+//                    name in goals near / above that is exactly one ref (refs.js bareRefs) is that ref
+//   (spelling and placement slips in the sent spec: correct.js, before it is stored)
 //   clampProbe       a probe window partly past the take is cut to it (probes.js)
 //   fitEvery         a position probe's every grows to fit its 16 rows (probes.js)
 //   clampFrames      contact-sheet frames past the range are pulled into it (studio-motion-visual.js)
 //   normalizeCompileArgs  install spellings ("always", "if_clean", ...) and repair: { rounds: 0 } / true
 //                    (the registry's normalizeArgs, before the schema check)
-import { quatFromMat } from "./compiler/math.js";
+import { quatFromMat, apply, ry } from "./compiler/math.js";
+import { stateAt } from "./compiler/walk.js";
 import { groupsOf } from "./scene.js";
 import { isCarried } from "./carried.js";
 import { isFree } from "./free-motion.js";
+import { bareRefs } from "./refs.js";
 
 const fmtRange = r => `[${r[0]},${r[1]}]`;
 /** Adds note to notes once (search trials expand the same spec again). */
@@ -72,13 +78,49 @@ function normalizeRots(id, o, notes) {
 	});
 }
 
+const r3 = v => v.map(x => Math.round(x * 1000) / 1000);
+/** A knee pole sent as a world direction (agents facing -Z write [0, 0, -1] for "forward"): its body-frame reading at the root yaw. */
+function worldPoles(spec, notes) {
+	if (!Array.isArray(spec.keys)) return;
+	spec.keys.forEach((key, i) => {
+		for (const ch of ["knee_l", "knee_r"]) {
+			const v = key?.set?.[ch];
+			if (!(Array.isArray(v) && v.length === 3 && v.every(Number.isFinite))) continue;
+			const l = Math.hypot(...v);
+			if (!(l > 1e-6 && v[2] < -0.7 * l)) continue;
+			const yaw = stateAt(spec.keys, key.f).yaw;
+			if (!(Number.isFinite(yaw) && Math.abs(((yaw % 360) + 540) % 360 - 180) >= 90)) continue;
+			const body = r3(apply(ry(-yaw), v));
+			if (body[2] < 0.7 * l) continue;
+			key.set[ch] = body;
+			note(notes, `corrected: ${key.src?.startsWith("keys[") ? key.src : `keys[${i}]`} (f${key.f}) ${ch} [${r3(v)}] is a world direction at root yaw ${Math.round(yaw)}: body frame [${body}] (a pole is +z forward)`);
+		}
+	});
+}
+
+/** goals[i].near / above: a bare name with one reading in the expanded spec, rig and scene takes it ("LeftHand" -> joint:LeftHand). */
+function bareGoalRefs(spec, ctx, notes) {
+	if (!Array.isArray(spec.goals)) return;
+	spec.goals.forEach((g, i) => {
+		for (const kind of ["near", "above"]) (Array.isArray(g?.[kind]) ? g[kind] : []).forEach((ref, j) => {
+			if (typeof ref !== "string" || /^[a-z]+:/.test(ref)) return;
+			const known = bareRefs(spec, ctx, ref);
+			if (known.length !== 1) return;
+			g[kind][j] = known[0];
+			note(notes, `corrected: goals[${i}].${kind}[${j}] "${ref}" -> "${known[0]}"`);
+		});
+	});
+}
+
 /**
- * relaxSpec(spec, scene, notes): the fixes above, in place on the expanded spec (a plain JSON copy the
+ * relaxSpec(spec, scene, notes, sk): the fixes above, in place on the expanded spec (a plain JSON copy the
  * compile measures; the stored spec stays as sent). notes collects one line per fix.
  */
-export function relaxSpec(spec, scene, notes) {
+export function relaxSpec(spec, scene, notes, sk) {
 	if (!spec || typeof spec !== "object") return spec;
 	relaxGoals(spec, notes);
+	bareGoalRefs(spec, { sk, scene }, notes);
+	worldPoles(spec, notes);
 	for (const [id, o] of Object.entries(spec.objects ?? {})) {
 		if (!o || typeof o !== "object" || !Array.isArray(o.keys) || !(isCarried(o) || isFree(o))) continue;
 		fillTurns(id, o, scene, notes);

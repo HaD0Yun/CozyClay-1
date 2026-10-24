@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { useStudioShell } from "./studio-shell-context.js";
+import { useStudioPlaybackFrame, useStudioShell } from "./studio-shell-context.js";
 import { logStore } from "./log-store.js";
 import "./dock.css";
 import LibrarySlot from "./LibrarySlot.jsx";
@@ -68,11 +68,11 @@ function dockTabsFor(previsMode) {
  * switching keeps the Sequencer's scroll and zoom and the Library's folder
  * and search. Any stored tab the mode does not offer opens its first tab. */
 export default function BottomDock({ tab: requestedTab = "animation", onTabChange, embedded = false }) {
-	const { previsMode } = useStudioShell();
+	const { previsMode } = useStudioShell(), liveFrame = useStudioPlaybackFrame();
 	const tabs = embedded ? dockTabsFor(null) : dockTabsFor(previsMode);
 	const tab = tabs.some((entry) => entry.key === requestedTab) ? requestedTab : tabs[0].key;
 	const {
-		tlFrame, motion, waypointMode, craneSelectedIndex,
+		motion, waypointMode, craneSelectedIndex,
 		isCameraSelection, addActiveCranePoint, deleteSelectedCranePoint, setCraneSelectedIndex, tlFrameCount,
 		tlFps, characters, activeCharIndex, ghostLayers, pathSpeed,
 		tlPlaying, workflowMode, waypoints, pendingWaypointFrame,
@@ -206,7 +206,7 @@ export default function BottomDock({ tab: requestedTab = "animation", onTabChang
 			{!embedded && previsMode === "storyboard" && <BoardSlot active={tab === "board"} />}
 			<div className="bottom-timeline" hidden={tab !== "animation"}>
 			<Timeline
-				frame={tlFrame}
+				frame={liveFrame}
 				craneSelectedIndex={craneSelectedIndex}
 				cameraSelected={isCameraSelection}
 				onCranePointAdd={addActiveCranePoint}

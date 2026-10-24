@@ -73,7 +73,7 @@ export default function ResultModal({ result, copied, recordedVideoName, onClose
 					</button>
 					{result.frame && (
 						<button type="button" className="btn" onClick={onDownload} disabled={downloadDisabled}>
-							{result.downloaded ? ko("Download requested", "다운로드 요청됨") : result.frameB ? ko("Download start and end frames", "시작·끝 프레임 다운로드") : ko("Download frame", "프레임 다운로드")}
+							{result.downloaded ? ko("Exported", "내보냄") : result.frameB ? ko("Export start and end frames", "시작·끝 프레임 내보내기") : ko("Export frame", "프레임 내보내기")}
 						</button>
 					)}
 				</div>
@@ -89,8 +89,8 @@ export default function ResultModal({ result, copied, recordedVideoName, onClose
 							<span>{copied ? ko("Copied. Paste it into your AI service's prompt box.", "복사됐어요. AI 서비스의 입력창에 붙여 넣으세요.") : ko("Press “Copy prompt” above, then paste it into your AI service.", "위의 ‘프롬프트 복사’를 누른 뒤 AI 서비스 입력창에 붙여 넣으세요.")}</span>
 						</li>
 						<li>
-							<strong>{ko("Download the frame", "프레임 다운로드")}</strong>
-							<span>{result.frameB ? ko("Press “Download start and end frames” to save both PNGs.", "‘시작·끝 프레임 다운로드’를 눌러 두 PNG를 저장하세요.") : hasFrame ? ko("Press “Download frame” to save the PNG.", "‘프레임 다운로드’를 눌러 PNG를 저장하세요.") : ko("This result has no frame to download.", "이 결과에는 내려받을 프레임이 없어요.")}</span>
+							<strong>{ko("Export the frame", "프레임 내보내기")}</strong>
+							<span>{result.frameB ? ko("Press “Export start and end frames” to save both PNGs.", "‘시작·끝 프레임 내보내기’를 눌러 두 PNG를 저장하세요.") : hasFrame ? ko("Press “Export frame” to save the PNG.", "‘프레임 내보내기’를 눌러 PNG를 저장하세요.") : ko("This result has no frame to export.", "이 결과에는 내보낼 프레임이 없어요.")}</span>
 						</li>
 						<li>
 							<strong>{ko("Attach the image to your AI", "AI에 이미지 첨부")}</strong>

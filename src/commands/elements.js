@@ -111,9 +111,10 @@ export function elementPatchArgs(kind, args) {
   });
   return collection ? ops.length === 1 ? ops[0] : { ops } : ops.reduce((patch, op) => mergeElementSet(patch, op.set), {});
 }
-// Unasked, an optional structured value (a glow, a light) is listed only where
-// the item has one, so every plain object's receipt stays as short as before.
-const listed = (element, item, paths) => paths ? paths.includes(element.path) : element.type !== 'object' || readElement(item, element.path) != null;
+// Unasked, an optional structured value (a glow, a light) or a `sparse` field (a
+// surface preset) is listed only where the item has one, so every plain
+// object's receipt stays as short as before.
+const listed = (element, item, paths) => paths ? paths.includes(element.path) : (element.type !== 'object' && !element.sparse) || readElement(item, element.path) != null;
 export function elementReadback(kind, item, paths, document) {
   return patchElements(projectionKind(kind)).filter(element => listed(element, item, paths)).map(element => {
     const path = element.path;

@@ -8,7 +8,6 @@ import { wrongType, unknownField, missingField, arrayRefusal, duplicateItem, str
 // both pull in three.js, which the agent sidecar must not load. The protocol test pins the lists to their owners.
 const PREVIS_MODES = ["storyboard", "animation"], POSTURES = ["stand", "sit", "lie"];
 
-export const STUDIO_PROTOCOL_VERSION = "studio-agent-v1";
 // Sized for the compact index of up to 400 entities (~100 bytes each) beside
 // 24 detailed rows; a small scene stays far below it.
 export const STUDIO_CONTEXT_MAX_BYTES = 64 * 1024;
@@ -30,7 +29,6 @@ export const STUDIO_TOOLS = Object.freeze(Object.keys(STUDIO_TOOL_LABELS));
 /** One patch target kind per authored commit domain: character→cast,
  * object→objects, shot→shot, stage→stage. */
 export const STUDIO_PATCH_KINDS = Object.freeze(["character", "object", "shot", "stage"]);
-export const STUDIO_PATCH_DOMAINS = Object.freeze({ character: "cast", object: "objects", shot: "shot", stage: "stage" });
 export { STUDIO_ERROR_CODES, refusalCode };
 export const STUDIO_VARIANTS = freezeStudioData({
 	selectionKinds: ["scene", "object", "character", "rig", "camera"], modes: ["scene", "pose", "camera", "motion"], shotModes: ["keys", "follow", "rail"],
@@ -47,7 +45,6 @@ export class StudioProtocolError extends Error {
 	constructor(code, message, details = {}) { super(message); this.name = "StudioProtocolError"; this.code = code; this.details = details; }
 	toJSON() { return { code: this.code, message: this.message, ...(Object.keys(this.details).length ? { details: this.details } : {}) }; }
 }
-export const studioError = (code, message, details) => ({ ok: false, error: new StudioProtocolError(code, message, details).toJSON() });
 export const utf8ByteLength = (text) => new TextEncoder().encode(text).byteLength;
 export function freezeStudioData(value) {
 	if (value && typeof value === "object" && !Object.isFrozen(value)) { for (const child of Object.values(value)) freezeStudioData(child); Object.freeze(value); }
@@ -302,8 +299,7 @@ const receiptVariants = {
 	installed: object({ ...authoredReceipt, status: literal("installed"), jobId: id, artifactId: id, installed, verification }, {
 		// Who accepted an unverified take: the user's explicit button, or the
 		// runtime's advisory install policy. Exactly these two may admit one.
-		mutated: literal(true), explicitUnverifiedAcceptance: bool, acceptance: literal("advisory-policy"),
-		repairs: object({ autoPhysicsInvocations: integer(0, 1), fixCollisionsInvocations: integer(0, 1), remaining: integer(0, 2) }), ...batchDetails,
+		mutated: literal(true), explicitUnverifiedAcceptance: bool, acceptance: literal("advisory-policy"), ...batchDetails,
 	}),
 	undone: object({ ...authoredReceipt, status: literal("undone"), undoneReceiptId: id, restoredTargets: array(guardSchema, 100, 1) }, { mutated: literal(true), ...batchDetails }),
 };
@@ -311,7 +307,7 @@ const receiptSchema = union(...Object.values(receiptVariants));
 const failureSchema = object({ ok: literal(false), commandId: id, host: identity, code: choices(STUDIO_ERROR_CODES), phase: choices(["admission", "execution", "prepare", "verify", "repair", "commit", "reconcile", "undo"]),
 	affectedIds: ids(100, 0), expectedTargets: array(guardSchema, 24), currentTargets: array(guardSchema, 24), mutated: union(bool, literal("unknown")),
 	preserved: object({ authoredState: choices(["unchanged", "changed", "unknown"]) }), recovery: object({ action: choices(["none", "inspect", "retry", "new_intent", "reconcile", "sign_in"]) }, { retryAllowed: bool }),
-}, { message: text(500), jobId: id, txId: id, candidates: array(object({ id, kind: choices(["object", "character", "rig"]), position: nullable(vec3) }), 5) });
+}, { message: text(2000), jobId: id, txId: id, candidates: array(object({ id, kind: choices(["object", "character", "rig"]), position: nullable(vec3) }), 5) });
 
 // These are JSON Schema data, not validators with hidden browser dependencies.
 // x-studio-range is the sole relational schema annotation: end > start.
@@ -382,7 +378,6 @@ export function validateStudioSchema(schema, value, code = "INVALID_ARGUMENT", p
 	throw new Error("Unsupported internal Studio schema.");
 }
 export const validateStudioIdentity = value => validateStudioSchema(identity, value, "INVALID_IDENTITY");
-export const validateFrameRange = value => freezeStudioData(validateStudioSchema(range, value, "INVALID_RANGE"));
 
 export function mandatoryStudioTargetIds(context) {
 	return [...new Set([
@@ -544,6 +539,6 @@ export function validateReceipt(value) {
 		if (previous !== frameCount || r.installed.durationSeconds !== frameCount / 24 || r.verification.range.startFrame !== 0 || r.verification.range.endFrameExclusive !== frameCount || r.verification.evaluatedFrames > frameCount) fail("INVALID_RECEIPT", "Installed schedule and verification coverage disagree.");
 		if (r.verification.status === "verified" && r.verification.evaluatedFrames !== frameCount) fail("INVALID_RECEIPT", "Verified motion requires whole-clip coverage.");
 		if (r.verification.status === "unverified" && r.explicitUnverifiedAcceptance !== true && r.acceptance !== "advisory-policy") fail("INVALID_RECEIPT", "Unverified installation requires explicit user or advisory-policy acceptance.");
-	} else if (r.installed || r.verification || (r.jobId && !["started", "completed"].includes(r.status)) || r.artifactId || r.repairs || r.explicitUnverifiedAcceptance !== undefined) fail("INVALID_RECEIPT", "Installation evidence is exclusive to installed receipts.");
+	} else if (r.installed || r.verification || (r.jobId && !["started", "completed"].includes(r.status)) || r.artifactId || r.explicitUnverifiedAcceptance !== undefined) fail("INVALID_RECEIPT", "Installation evidence is exclusive to installed receipts.");
 	return freezeStudioData(r);
 }

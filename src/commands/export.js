@@ -15,6 +15,6 @@ export function register(registry, ports) {
 			const result = await ports.exportShotVideo({ shotId: shotId ?? null, ...(scope ? { scope } : {}) }, context);
 			if (!result?.fileName) fail("TARGET_NOT_READY", "The video export did not finish; the editor's export panel shows why and offers Retry.");
 			return { affectedIds: shot ? [shot.id] : [], output: { fileName: result.fileName, frameCount: result.frameCount },
-				summary: `Recorded ${scope === "timeline" ? "the whole timeline" : shot ? shotLabel(shot) : "the shot"} to ${result.fileName} (${result.frameCount} frames); the browser was asked to download it.` };
+				summary: `Recorded ${scope === "timeline" ? "the whole timeline" : shot ? shotLabel(shot) : "the shot"} to ${result.fileName} (${result.frameCount} frames); it was handed to the configured export folder or the browser download.` };
 		} });
 }

@@ -28,8 +28,9 @@ import { appendAttachments, ATTACHMENT_MAX_COUNT } from "./attachment-image.js";
 import { ko } from "../locale.js";
 import { AGENT_TOOL_CATEGORIES, EXECUTION_TELEMETRY_VALUES } from "../execution-telemetry.js";
 import { STUDIO_VARIANTS, validateReceipt } from "../studio-agent-protocol.js";
-import { requestAgentImage, sidecarRequest, sidecarUrl } from "../agent-image-client.js";
+import { requestAgentImage, sidecarRequest, sidecarUrl } from "../agent-image-client.js"; import { clearSculptSketch, sculptSketchFrame } from "../sculpt-sketch-state.js";
 import { actionLabelsOf, changedLine, scriptNow, stepFields, thinkingLine, withCompose, withThinking, withToolStart, withTurnEnd } from "./agent-turn.js";
+import { isPlanFrame, restoredPlans, withPlanEnd, withPlanFrame } from "./agent-plan.js";
 
 const AGENT_PANEL_WIDTH_KEY = "cozyclay.workflow.agentPanel.width";
 export const AGENT_PANEL_WIDTH_DEFAULT = 360;
@@ -1325,6 +1326,8 @@ export function createAgentChatStore({
 			});
 			return;
 		}
+		// The turn's step checklist (bin/agent/plan-tool.mjs): one card under the prompt; the plan call itself is no step.
+		if (isPlanFrame(event)) { setItems((items) => withPlanFrame(items, event, newId)); return; }
 		if (event?.type === "tool.start") {
 			setItems((items) => withToolStart(items, { kind: "tool", id: event.callId || newId(), callId: event.callId, name: event.name, label: event.label, args: event.args, status: "running", startedAt: clock(), ...stepFields(event.name, event.args, actionLabels) }));
 			return;
@@ -1406,11 +1409,10 @@ export function createAgentChatStore({
 		set({ sessionId: newId(), turnId: null, items: [], pendingAttachments: [], rateLimit: null, lastPrompt: "", turnStartedAt: null, lastTurn: null });
 	};
 	const restore = (transcript, sessionId = state.sessionId) => {
-		abandonSupervisorNotes();
-		seenReceipts.clear();
-		settledActions.clear();
+		abandonSupervisorNotes(); seenReceipts.clear(); settledActions.clear();
 		const restoredReceiptIds = new Set();
-		const restored = (Array.isArray(transcript) ? transcript : []).flatMap((item) => {
+		// Each turn's plan card comes back under its prompt, settled by how the turn ended (agent-plan.js).
+		const restored = restoredPlans((Array.isArray(transcript) ? transcript : []).flatMap((item) => {
 			if (item?.kind === "user" || item?.kind === "assistant") {
 				const attachments = Array.isArray(item.attachments) ? item.attachments.filter((entry) => typeof entry?.dataUrl === "string") : [];
 				return [{ kind: item.kind, id: newId(), text: String(item.text ?? ""), ...(attachments.length ? { attachments } : {}) }];
@@ -1425,8 +1427,8 @@ export function createAgentChatStore({
 				return [{ kind: "receipt", id: `receipt:${item.receiptId || newId()}`, receiptId: item.receiptId, summary: item.summary || "Receipt", receipt: { status: "applied", warnings: [], verification: { status: "verified" } } }];
 			}
 			if (item?.kind === "failure") return [{ kind: "failure", id: newId(), failure: { code: item.code || "upstream", message: String(item.message || "The turn failed."), recovery: { action: "retry", retryAllowed: true } } }];
-			return [];
-		});
+			return item?.kind === "plan" ? [{ kind: "plan", id: newId(), steps: item.steps }] : [];
+		}));
 		const lastPrompt = [...restored].reverse().find((item) => item.kind === "user")?.text || "";
 		set({ sessionId, turnId: null, items: restored, rateLimit: null, lastPrompt, turnStartedAt: null, lastTurn: null, streaming: false });
 		return restored;
@@ -1498,14 +1500,15 @@ export function createAgentChatStore({
 					model: options.model,
 					effort: options.effort ?? undefined,
 					...(typeof options.supervisor === "boolean" ? { supervisor: options.supervisor } : {}), ...(options.tasks ? { tasks: true } : {}),
-				}, applyEvent, signal);
+				}, (event) => { sculptSketchFrame(event); applyEvent(event); }, signal);
 			} catch (error) {
 				if (!signal.aborted) applyEvent({ type: "error", code: "upstream", message: String(error?.message || error) });
 			} finally {
 				if (controller?.signal === signal) controller = null;
-				// A turn the author already replaced owns none of this state.
+				// A turn the author already replaced owns none of this state. Its live sculpt sketch
+				// (the ghost clay of a call still being written) ends with it, whatever ended it.
 				if (activeTurn === turn) {
-					wireTurnId = null;
+					wireTurnId = null; clearSculptSketch();
 					// Ending with nothing on screen is a failure, not a result.
 					if (!turn.produced && !turn.failure && !signal.aborted) {
 						turn.failure = { code: "no_output", message: "The turn ended without a response.", recovery: { action: "retry", retryAllowed: true } };
@@ -1515,7 +1518,7 @@ export function createAgentChatStore({
 					activeTurn = null;
 					// The end state stays in the transcript with the turn's steps (agent-turn.js withTurnEnd).
 					const lastTurn = { status: signal.aborted ? "stopped" : turn.failure ? "failed" : "done", endedAt, durationMs: endedAt - startedAt, failure: turn.failure };
-					set({ streaming: false, turnStartedAt: null, lastTurn, items: withTurnEnd(state.items, lastTurn, newId) });
+					set({ streaming: false, turnStartedAt: null, lastTurn, items: withPlanEnd(withTurnEnd(state.items, lastTurn, newId), lastTurn.status) });
 					if (studio && turn.reviewable && options.supervisor === true && !signal.aborted) requestSupervisorNote(turnId);
 				}
 			}
