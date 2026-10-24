@@ -130,7 +130,8 @@ function compilePrepared(prepared, { sk, scene }, opts, notes, refusals) {
 	if (load) Object.assign(observations, { units: `${observations.units}; ${LOAD_UNITS}`, load });
 	Object.assign(observations, { units: `${observations.units}; ${LIFE_UNITS}`, life: observeLife(sk, out, resolved?.keys) });
 	const gait = observeGait(sk, out, out.keys);
-	if (gait) Object.assign(observations, { units: `${observations.units}; ${GAIT_UNITS}`, gait });
+	// a walk too short to read is its steps alone, which need no units (the answer budget)
+	if (gait) Object.assign(observations, gait.cadence ? { units: `${observations.units}; ${GAIT_UNITS}`, gait } : { gait });
 	// a skill that paced its beats to fit a short span says so where every answer keeps it (C7 tier 1)
 	const paced = used.filter(u => u.paced).map(u => `${u.skill} paced ${u.paced.toFixed(2)} to fit f${u.f0}..f${u.end}`);
 	if (paced.length) observations.paced = paced;

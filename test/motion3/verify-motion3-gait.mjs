@@ -34,8 +34,8 @@ expect("period 14, step 0.6 walks about 104 steps a minute, not warned for caden
 expect("gait warnings leave QA alone", [four, six, brisk].every(r => r.qa.ok && r.qa.total === 0), json([four, six, brisk].map(r => r.qa.groups)));
 expect("a recompile reads the same gait", json(walk({ to: [0, 6] }).observations.gait) === json(g6));
 
-const short = walk({ to: [0, 1.2] }).observations.gait;
-expect("a walk under 4 steps reports only its steps", short && json(Object.keys(short)) === json(["steps"]) && short.steps < 4, json(short));
+const shortObs = walk({ to: [0, 1.2] }).observations, short = shortObs.gait;
+expect("a walk under 4 steps reports only its steps, without units", short && json(Object.keys(short)) === json(["steps"]) && short.steps < 4 && !shortObs.units.includes("gait ("), json(short));
 
 // a retime moves the walk's keys onto fractional frames: the card reads frame indices
 const retimed = compileSpec({ schema: "cozyclay.motion-spec.v1", fps: 24, frames: 300, fix: { retime: true }, checks: { limits: { speedCore: 0.02 } },
