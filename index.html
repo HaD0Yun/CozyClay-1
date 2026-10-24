@@ -153,7 +153,9 @@
         padding-top: calc(var(--header-h) + 2vh);
       }
       .stage h1 {
-        margin: 0; padding: 0 2vw; width: 100%; max-width: none; font-size: 21.5vw; line-height: .98; letter-spacing: -.045em; font-weight: 400; text-align: center;
+        margin: 0; padding: 0 4vw; width: 100%; max-width: none; text-align: center;
+        font-family: var(--sans); font-size: clamp(44px, 8.6vw, 140px); line-height: 1; letter-spacing: -.06em; font-weight: 600;
+        font-feature-settings: "ss01", "cv11";
         opacity: calc(.88 * (1 - var(--p) * 1.4));
         transform: translateY(calc(var(--p) * -12vh)) scale(calc(1 - var(--p) * .12));
         transform-origin: 50% 0;
