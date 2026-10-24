@@ -37,6 +37,11 @@ expect("a recompile reads the same gait", json(walk({ to: [0, 6] }).observations
 const short = walk({ to: [0, 1.2] }).observations.gait;
 expect("a walk under 4 steps reports only its steps", short && json(Object.keys(short)) === json(["steps"]) && short.steps < 4, json(short));
 
+// a retime moves the walk's keys onto fractional frames: the card reads frame indices
+const retimed = compileSpec({ schema: "cozyclay.motion-spec.v1", fps: 24, frames: 300, fix: { retime: true }, checks: { limits: { speedCore: 0.02 } },
+	use: [{ skill: "standIdle", f0: 0, args: { at: [0, 0], heading: 0 } }, { skill: "walkTo", f0: 6, args: { to: [0, 4] } }] }, { sk, scene });
+expect("a retimed walk (keys on fractional frames) compiles and reads its gait", retimed.out.keys.some(k => k.f % 1) && retimed.observations.gait?.steps >= 4, json(retimed.observations.gait));
+
 const still = compileSpec({ schema: "cozyclay.motion-spec.v1", fps: 24, frames: 60, use: [{ skill: "standIdle", f0: 0, args: { at: [0, 0], heading: 0 } }] }, { sk, scene });
 expect("a take without a walk has no gait", !("gait" in still.observations) && !still.observations.units.includes("gait ("), json(Object.keys(still.observations)));
 

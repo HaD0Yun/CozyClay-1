@@ -42,7 +42,8 @@ function pelvisOf(hipLine, hips, a, b) {
 /** observeGait(sk, out, keys) -> observations.gait or null; keys are the compiled keys (walk.js tags their src). */
 export function observeGait(sk, out, keys) {
 	const F = out.frames, n = F.length, f0 = out.f0 ?? 0, fps = out.fps ?? 24, I = sk.index;
-	const spans = walkSpans(keys ?? []).map(([a, b]) => [Math.max(0, a - f0), Math.min(n - 1, b - f0 + PAD)]).filter(([a, b]) => b > a);
+	// a retime keeps its keys on fractional frames (fix/retime.js): the spans are frame indices
+	const spans = walkSpans(keys ?? []).map(([a, b]) => [Math.max(0, Math.round(a - f0)), Math.min(n - 1, Math.round(b - f0) + PAD)]).filter(([a, b]) => b > a);
 	if (!spans.length) return null;
 	const sole = { Left: [], Right: [] };
 	for (const [a, b] of spans) for (let f = a; f <= b; f++) for (const S of ["Left", "Right"]) sole[S][f] ??= groundSole(out, f, S);
