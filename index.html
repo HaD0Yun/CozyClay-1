@@ -140,12 +140,13 @@
       .cta { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
 
       /* Hero: headline left, the pitch and the two ways in on the right. */
-      .hero { padding: 96px 0 48px; }
-      .hero-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 32px 64px; align-items: end; }
-      .hero h1 { max-width: none; }
-      .hero-side { display: flex; flex-direction: column; gap: 20px; }
+      .hero { padding: 112px 0 56px; }
+      .hero-grid { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 28px; }
+      .hero h1 { max-width: none; font-size: clamp(44px, 8.4vw, 112px); line-height: .98; letter-spacing: -.055em; font-weight: 700; }
+      .hero h1 em { display: inline-block; }
+      .hero-side { display: flex; flex-direction: column; align-items: center; gap: 22px; max-width: 640px; }
       .lede { margin: 0; color: var(--muted); font-size: 19px; }
-      .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+      .hero-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
       .cmd {
         display: inline-flex; align-items: center; gap: 4px; padding: 0 4px 0 14px; min-height: 48px;
         background: var(--panel); border: 1px solid var(--line-strong); border-radius: 8px;
@@ -155,7 +156,7 @@
       .cmd .copy .ic-done { display: none; color: var(--ok); }
       .cmd .copy[data-state="copied"] .ic-copy { display: none; }
       .cmd .copy[data-state="copied"] .ic-done { display: block; }
-      .meta-line { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0; color: var(--muted); font-size: 14px; }
+      .meta-line { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 16px; margin: 0; color: var(--muted); font-size: 14px; }
       .meta-line a { color: var(--muted); }
       .meta-line > * + *::before { content: "·"; margin-right: 8px; }
       .meta-line { gap: 4px 8px; }
@@ -356,9 +357,9 @@
     <main>
       <section class="hero">
         <div class="wrap hero-grid">
-          <h1>Block the shot before you <em>pay to render it</em></h1>
+          <h1>Make the scene. <em>Then the video.</em></h1>
           <div class="hero-side">
-            <p class="lede">Previs in a browser tab. Block the set, move the cast, cut the camera, then hand the shot to an AI video model.</p>
+            <p class="lede">Block the set, move the cast and cut the camera in a browser tab, then hand the exact shot to an AI video model.</p>
             <div class="hero-actions">
               <a class="btn primary" href="/app/">Try it in your browser</a>
               <span class="cmd">
@@ -581,37 +582,6 @@ npm run dev</code></pre>
               <span class="more">Read →</span>
             </a>
           </div>
-        </div>
-      </section>
-
-      <section id="faq" class="alt">
-        <div class="wrap narrow">
-        <span class="kicker">FAQ</span>
-        <h2>Questions</h2>
-        <details>
-          <summary>What is CozyClay?</summary>
-          <p>Open source previs software in a browser: block a scene, pose characters, author camera moves and cuts, preview motion.</p>
-        </details>
-        <details>
-          <summary>Previs or previz?</summary>
-          <p>Same thing. Previsualization: the rough 3D pass where a shot gets blocked before anyone pays for final assets or renders.</p>
-        </details>
-        <details>
-          <summary>Can I use it for camera control in AI video?</summary>
-          <p>That is why it exists. Block the shot in 3D, then hand the camera move to the video model instead of describing it in a prompt. See <a href="/ai-camera-control/">camera control for AI video</a>.</p>
-        </details>
-        <details>
-          <summary>Do I need Blender, Unity or a GPU?</summary>
-          <p>No. It runs in a Chromium browser with no GPU, Python or model download. Controls follow Unity conventions.</p>
-        </details>
-        <details>
-          <summary>Can an AI agent drive it?</summary>
-          <p>Yes. Use the agent panel in the studio, connect any MCP client with <code>npx -y cozyclay mcp</code>, or drive a running studio from the terminal with <code>cclay live</code>.</p>
-        </details>
-        <details>
-          <summary>Is it free? Does it phone home?</summary>
-          <p>Free, AGPL-3.0, runs on your machine and works offline. Project content is never uploaded. The npm package sends anonymous usage metrics; <code>cclay telemetry off</code> disables them.</p>
-        </details>
         </div>
       </section>
 
