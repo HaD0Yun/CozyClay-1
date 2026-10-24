@@ -144,6 +144,9 @@
       .hero-grid { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 28px; }
       .hero h1 { max-width: none; font-size: clamp(34px, 8.4vw, 112px); line-height: .98; letter-spacing: -.055em; font-weight: 700; }
       .hero h1 em { display: inline-block; white-space: nowrap; }
+      .hero h1 .line { display: inline-block; white-space: nowrap; }
+      .hero h1.curved { padding-bottom: .16em; }
+      .curved .ch { display: inline-block; white-space: pre; transform-origin: 50% 100%; will-change: transform; }
       .hero-side { display: flex; flex-direction: column; align-items: center; gap: 22px; max-width: 640px; }
       .lede { margin: 0; color: var(--muted); font-size: 19px; }
       .hero-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
@@ -357,7 +360,7 @@
     <main>
       <section class="hero">
         <div class="wrap hero-grid">
-          <h1>Previs the shot <em>before you generate it.</em></h1>
+          <h1 class="curved" aria-label="Previs the shot before you generate it."><span class="line">Previs the shot</span> <em class="line">before you generate it.</em></h1>
           <div class="hero-side">
             <p class="lede">Block the set, move the cast and cut the camera in a browser tab, then hand the exact shot to an AI video model.</p>
             <div class="hero-actions">
@@ -675,6 +678,37 @@ npm run dev</code></pre>
         new IntersectionObserver(([entry]) => { flowSeen = entry.isIntersecting; playOpenStep(); }).observe(flowView);
         document.querySelectorAll(".flow-tabs [role=tab]").forEach((tab) => tab.addEventListener("click", playOpenStep));
         document.querySelector(".flow-tabs").addEventListener("keydown", () => setTimeout(playOpenStep));
+        // Hero headline: the letters sit on the front of a cylinder, so the
+        // middle rises and the ends dip and narrow a little.
+        const headline = document.querySelector("h1.curved");
+        headline.querySelectorAll(".line").forEach((line) => {
+          const text = line.textContent;
+          line.textContent = "";
+          line.setAttribute("aria-hidden", "true");
+          for (const char of text) {
+            const span = document.createElement("span");
+            span.className = "ch";
+            span.textContent = char;
+            line.appendChild(span);
+          }
+        });
+        const bend = () => {
+          const chars = [...headline.querySelectorAll(".ch")];
+          chars.forEach((c) => { c.style.transform = ""; });
+          const box = headline.getBoundingClientRect();
+          const centre = box.left + box.width / 2;
+          const half = Math.max(...[...headline.querySelectorAll(".line")].map((l) => l.getBoundingClientRect().width)) / 2;
+          const lift = parseFloat(getComputedStyle(headline).fontSize) * 0.16;
+          chars.forEach((c) => {
+            const r = c.getBoundingClientRect();
+            const u = Math.max(-1, Math.min(1, (r.left + r.width / 2 - centre) / half));
+            const tilt = Math.atan((2 * lift * u) / half) * 180 / Math.PI;
+            c.style.transform = "translateY(" + (lift * u * u).toFixed(2) + "px) rotate(" + tilt.toFixed(2) + "deg) scaleX(" + (1 - 0.1 * u * u).toFixed(3) + ")";
+          });
+        };
+        bend();
+        document.fonts.ready.then(bend);
+        addEventListener("resize", bend);
         greybox.addEventListener("timeupdate", follow);
         greybox.addEventListener("seeked", follow);
         greybox.addEventListener("play", follow);
