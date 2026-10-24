@@ -661,10 +661,27 @@ npm run dev</code></pre>
           if (compare.hasPointerCapture(event.pointerId)) fromPointer(event);
         });
         range.addEventListener("input", () => setPos(Number(range.value)));
-        const follow = () => {
-          if (Math.abs(take.currentTime - greybox.currentTime) > 0.08) take.currentTime = greybox.currentTime;
+        // The greybox is the clock. Every frame the take is checked against it and
+        // re-seeked when it drifts more than about one frame; both files have a
+        // keyframe every second, so the seek lands at once. A short cooldown lets
+        // a seek finish before the next check. The take holds while the greybox
+        // buffers.
+        let settleUntil = 0;
+        const syncTake = () => {
           if (greybox.paused !== take.paused) (greybox.paused ? take.pause() : take.play().catch(() => {}));
+          if (take.seeking || performance.now() < settleUntil) return;
+          if (Math.abs(take.currentTime - greybox.currentTime) > 0.045) {
+            take.currentTime = greybox.currentTime;
+            settleUntil = performance.now() + 400;
+          }
         };
+        const tick = () => {
+          if (!greybox.paused) syncTake();
+          if (greybox.requestVideoFrameCallback) greybox.requestVideoFrameCallback(tick);
+          else requestAnimationFrame(tick);
+        };
+        tick();
+        greybox.addEventListener("waiting", () => take.pause());
         // Tab lists (workflow steps, agent surfaces): click or arrow keys pick a panel.
         document.querySelectorAll("[role=tablist]").forEach((list) => {
           const tabs = [...list.querySelectorAll("[role=tab]")];
@@ -758,10 +775,9 @@ npm run dev</code></pre>
         onScroll();
         addEventListener("scroll", queue, { passive: true });
         addEventListener("resize", () => { measure(); queue(); });
-        greybox.addEventListener("timeupdate", follow);
-        greybox.addEventListener("seeked", follow);
-        greybox.addEventListener("play", follow);
-        greybox.addEventListener("pause", follow);
+        greybox.addEventListener("seeked", syncTake);
+        greybox.addEventListener("play", syncTake);
+        greybox.addEventListener("pause", syncTake);
       })();
     </script>
 
