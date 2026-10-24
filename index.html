@@ -243,6 +243,7 @@
       .ai { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); gap: 24px 40px; align-items: start; }
       .ai-view p { margin: 0 0 16px; color: var(--muted); }
       .ai-view .shortcut { margin: 0; padding: 18px 22px; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; color: var(--ink); line-height: 2; }
+      .ai-view .keys { white-space: nowrap; }
       .ai-view kbd { padding: 2px 8px; border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 6px; background: var(--paper); }
 
       .code {
@@ -471,7 +472,7 @@
             <div class="ai-view">
               <div role="tabpanel" id="ai-p1" aria-labelledby="ai-t1">
                 <p>Chat beside the viewport and watch each change land. Sign in with ChatGPT or use your own key. Every change the agent makes is one undo step.</p>
-                <p class="shortcut">Open the studio, then press <kbd>Cmd/Ctrl</kbd> + <kbd>B</kbd></p>
+                <p class="shortcut">Open the studio, then press <span class="keys"><kbd>Cmd/Ctrl</kbd> + <kbd>B</kbd></span></p>
               </div>
               <div role="tabpanel" id="ai-p2" aria-labelledby="ai-t2" hidden>
                 <p>Add CozyClay to Claude Desktop, Claude Code, Cursor or any MCP client. The agent edits the scene in the studio you have open.</p>
