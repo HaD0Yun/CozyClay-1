@@ -12,8 +12,7 @@ const CACHE_PREFIX = "cozyclay-pwa-";
 // v8: CozyClay 3 drops the shipped walk clip (motion is compiled in the studio).
 // v9: start-screen template thumbnails (public/thumbs, tools/render-start-thumbs.mjs).
 // v10: the City Block starter and its thumbnails are removed.
-// v11: site.css redesigned with the landing (#903); drop the cached dark copy.
-const CACHE_NAME = `${CACHE_PREFIX}v11`;
+const CACHE_NAME = `${CACHE_PREFIX}v10`;
 // The installable app is the studio, not the landing page.
 const APP_SHELL = "/app/";
 const CORE_ASSETS = [
