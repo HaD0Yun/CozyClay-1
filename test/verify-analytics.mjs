@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import * as analytics from "../src/analytics.js";
 import { startExportAttempt } from "../src/export-attempt.js";
 import * as friction from "../src/analytics-friction.js";
+import { STRICT_EVENT_KEYS, bucketAge, bucketLong, refusalCodeOf, strictPropValidator } from "../src/analytics-strict.js";
+import * as postTurn from "../src/post-turn-edits.js";
 import { createAppContext } from "../src/app-context.js";
 import { readFileSync } from "node:fs";
 import {
@@ -427,6 +429,59 @@ console.log("PASS export retries, scene size, stop stage/progress, new export ki
 	friction.reset();
 }
 console.log("PASS friction counters: closed buckets, per-event caps, validator, and feature-detected long tasks");
+
+// PR B base: the four bus friction events have closed schemas, and the
+// post-turn window counts only the user's edit gestures for 120 s.
+{
+	const turn = "c".repeat(32);
+	assert.deepEqual([0, 9999, 10_000, 30_000, 60_000, 120_000, 300_000, NaN].map(bucketLong), ["lt10s", "lt10s", "10-30s", "30-60s", "1-2m", "2-5m", "gte5m", "lt10s"]);
+	assert.deepEqual([0, 1999, 2000, 10_000, 60_000, -1].map(bucketAge), ["lt2s", "lt2s", "2-10s", "10-60s", "gte60s", "lt2s"]);
+	assert.deepEqual(["STALE_SCENE", "PRIVATE", "", undefined].map(refusalCodeOf), ["STALE_SCENE", "other", "other", "other"]);
+	const valid = {
+		"studio:refused": { code: "TARGET_BUSY", origin: "agent", phase: "admission", group: "shot" },
+		"edit:undone": { age: "2-10s", kind: "agent_turn", via: "key", result: "done" },
+		"agent:turn_summary": { turn_id: turn, outcome: "cancelled", wall: "1-2m", first_tool: "lt10s", tool_calls: "4-5", tool_failed: "1", refused: "1", refusal_top: "STALE_SCENE",
+			stale_retry: "0", authored: true, drafts: "3", qa_first: "problems", qa_last: "clean", qa_trend: "improved", stuck: false, cancel_phase: "during_tool" },
+		"agent:post_turn_edit": { turn_id: turn, edited: true, pose: "2", camera: "0", object: "1", shot: "0", prompt_block: "0", first_delay: "10-30s" },
+	};
+	for (const [event, props] of Object.entries(valid)) {
+		assert.deepEqual(sanitizeProps(event, { ...props, prompt_text: "private", name: "Private" }), props, `${event} keeps its closed values and nothing else`);
+		for (const key of Object.keys(props)) {
+			for (const unsafe of ["private value", "PRIVATE", 7, null, {}, "gte12", "TURN".repeat(8)]) {
+				if (props[key] === unsafe) continue;
+				assert.equal(Object.hasOwn(sanitizeProps(event, { [key]: unsafe }), key), false, `${event} rejects ${key}=${JSON.stringify(unsafe)}`);
+			}
+		}
+	}
+	assert.deepEqual(sanitizeProps("agent:turn_summary", { refusal_top: "none" }), { refusal_top: "none" });
+	assert.deepEqual(sanitizeProps("studio:refused", { origin: "mcp" }), {}, "an MCP refusal is reported as agent, never mcp");
+	assert.equal(strictPropValidator("scene:loaded"), null, "events without a closed schema keep the generic rule");
+
+
+	let clock = 1000, timer = null;
+	const timers = { now: () => clock, set: (fn, ms) => { timer = { fn, ms }; return 1; }, clear: () => { timer = null; } };
+	const emitted = [];
+	const emit = (event, props) => emitted.push({ event, props });
+	const userEdit = (group) => postTurn.noteEditGesture(group);
+	assert.equal(userEdit("pose"), false, "no window, nothing counted");
+	postTurn.openPostTurnWindow(turn, emit, timers);
+	assert.equal(timer.ms, postTurn.POST_TURN_WINDOW_MS);
+	clock += 15_000; userEdit("pose"); userEdit("pose"); userEdit("object");
+	assert.equal(userEdit("private_group"), false);
+	timer.fn();
+	assert.deepEqual(emitted.pop(), { event: "agent:post_turn_edit", props: { turn_id: turn, edited: true, pose: "2", camera: "0", object: "1", shot: "0", prompt_block: "0", first_delay: "10-30s" } }, "the 120 s timer closes the window");
+	assert.deepEqual(sanitizeProps("agent:post_turn_edit", valid["agent:post_turn_edit"]), valid["agent:post_turn_edit"]);
+	assert.equal(postTurn.closePostTurnWindow(), null, "a closed window closes once");
+	postTurn.openPostTurnWindow(turn, emit, timers);
+	postTurn.openPostTurnWindow("d".repeat(32), emit, timers);
+	assert.deepEqual(emitted.pop().props, { turn_id: turn, edited: false, pose: "0", camera: "0", object: "0", shot: "0", prompt_block: "0" }, "the next window closes the previous one; no edit, no first_delay");
+	clock += postTurn.POST_TURN_WINDOW_MS;
+	assert.equal(userEdit("shot"), false, "a late edit past 120 s (timer not yet fired) closes the window instead of counting");
+	assert.equal(emitted.pop().props.edited, false);
+	postTurn.openPostTurnWindow(turn, () => { throw new Error("transport"); }, timers);
+	assert.doesNotThrow(() => postTurn.closePostTurnWindow(), "a failing transport cannot break editing");
+	console.log("PASS bus friction schemas, and the post-turn window: 120 s, next turn, closed groups only");
+}
 assert.deepEqual(sanitizeProps("export:blocking_frame_succeeded", { ...allProps, format: "png" }), { format: "png" });
 
 // Previs events (#653): closed values only, never a caption, name or prompt.
@@ -756,9 +811,8 @@ async function runtimeFixture({
 	};
 	for (const [key, value] of Object.entries(values)) Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
 	const source = runtimeSource
-		.replace('"./semantic-edit.js"', JSON.stringify(new URL("../src/semantic-edit.js", import.meta.url).href))
-		.replace('"./analytics-values.js"', JSON.stringify(new URL("../src/analytics-values.js", import.meta.url).href))
-		.replace('"./analytics-friction.js"', JSON.stringify(new URL("../src/analytics-friction.js", import.meta.url).href))
+		// A data: module cannot resolve analytics.js's relative imports itself.
+		.replace(/from "\.\/([a-z-]+\.js)"/g, (_match, file) => `from ${JSON.stringify(new URL(`../src/${file}`, import.meta.url).href)}`)
 		.replace("import.meta.env", JSON.stringify(env))
 		.replace('import("posthog-js")', "Promise.resolve({ default: globalThis.__analyticsSdkFixture })");
 	const module = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}#${++runtimeFixtureId}`);
@@ -966,13 +1020,24 @@ assert.deepEqual(sanitizeProps("mcp:result_applied", { request_id: executionId, 
 	assert.equal(events[1].props.duration_bucket, "3-10s");
 }
 
-const executionDisclosure = new Map();
+const executionDisclosure = new Map(), strictRows = new Set();
 for (const row of privacyHtml.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/g)) {
 	const cells = [...row[1].matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/g)].map((cell) => cell[1].replace(/<[^>]*>/g, " "));
 	for (const event of cells[0]?.match(/\b(?:workflow|agent|mcp):[a-z_]+\b/g) ?? []) {
-		executionDisclosure.set(event, new Set(cells[1]?.match(/\b[a-z][a-z0-9_]*\b/g) ?? []));
+		// Closed-schema agent events (turn summary, post-turn edits) are checked below with the other strict events.
+		if (!Object.hasOwn(STRICT_EVENT_KEYS, event)) executionDisclosure.set(event, new Set(cells[1]?.match(/\b[a-z][a-z0-9_]*\b/g) ?? []));
 	}
 }
+// Every strict event's row names each of its properties.
+for (const row of privacyHtml.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/g)) {
+	const cells = [...row[1].matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/g)].map((cell) => cell[1].replace(/<[^>]*>/g, " "));
+	const event = cells[0]?.trim();
+	if (!["studio:refused", "edit:undone", "agent:turn_summary", "agent:post_turn_edit"].includes(event)) continue;
+	const tokens = new Set(cells[1]?.match(/[A-Za-z0-9][A-Za-z0-9_-]*/g) ?? []);
+	for (const key of STRICT_EVENT_KEYS[event]) assert.ok(tokens.has(key), `the privacy page discloses ${event} ${key}`);
+	strictRows.add(event);
+}
+assert.deepEqual([...strictRows].sort(), ["agent:post_turn_edit", "agent:turn_summary", "edit:undone", "studio:refused"], "each bus friction event has its own privacy row");
 const executionSchemas = {
 	"workflow:run_requested": ["surface", "run_id", "node_count_bucket"],
 	"workflow:run_succeeded": ["run_id", "duration_bucket"],
