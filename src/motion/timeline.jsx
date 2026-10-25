@@ -10,7 +10,7 @@ import { insertPathMark, pathMarks, pathMetrics, pathProgressAt, MAX_PATH_LEAN }
 import { NumberField } from "../ui.jsx";
 import { flatTiming, timingIsFlat, envelopeDrag, insertCut, removeCut, CUT_MIN_GAP } from "../speed-envelope.js";
 import { checkShotAgainstPreset, presetById } from "../model-presets.js";
-import { TakeSegmentClips, TakeSegmentTools } from "./take-segments.jsx"; import { BeatBoard } from "./beat-board.jsx";
+import { TakeSegmentClips, TakeSegmentTools } from "./take-segments.jsx"; import { BeatBoard } from "./beat-board.jsx"; import { PhysicsToggle } from "../physics-toggle.jsx";
 import "./timeline.css";
 export { timelineTake } from "./take-segments.jsx";
 
@@ -1708,7 +1708,7 @@ export default function Timeline({
 						</div>
 						{onClearMotion && (
 							<div className="tl-head-group tl-motion-tools" role="group" aria-label={ko("Motion controls", "모션 컨트롤")}>
-								{motion?.segments && motionTools && <TakeSegmentTools motion={motion} frame={frame} />}
+								{motion?.segments && motionTools && <TakeSegmentTools motion={motion} frame={frame} />}{motionTools && <PhysicsToggle />}
 								<button
 									type="button"
 									className="tl-btn clear"
