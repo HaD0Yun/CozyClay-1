@@ -23,8 +23,8 @@ export function ikDragRecord(current, frame) {
 }
 
 // Told once per drag, the first time the projection moves the handle.
-const CONTACT_HINT = ["Stopped at the other character's body. Hold Alt while dragging to pass through",
-	"다른 인물의 몸에 닿아 멈췄어요. Alt를 누른 채 드래그하면 통과해요", "已停在另一个角色的身体上。按住 Alt 拖动即可穿过"];
+const contactHint = () => ko("Stopped at the other character's body. Hold Alt while dragging to pass through",
+	"다른 인물의 몸에 닿아 멈췄어요. Alt를 누른 채 드래그하면 통과해요", "已停在另一个角色的身体上。按住 Alt 拖动即可穿过");
 // Studio capsule id -> the motion3 QA part an allow entry names (qa/geometry.js CAPSULES).
 const QA_PART = { UpperArm: "uarm", ForeArm: "farm", Hand: "hand", Thigh: "thigh", Shin: "shin", Foot: "foot" };
 const qaPart = (capsuleId) => capsuleId.replace(/^(left|right)(\w+)$/, (_, side, part) => `${QA_PART[part] ?? part}_${side[0]}`);
@@ -77,7 +77,7 @@ export function clampDragTarget({ kind, trackId, targetWorld, bodyContact, chain
 	if (depth === 0) contact.lastGood = target.clone();
 	if (!target.equals(floored) && !contact.told) {
 		contact.told = true;
-		contact.notify?.(ko(CONTACT_HINT[0], CONTACT_HINT[1], CONTACT_HINT[2]));
+		contact.notify?.(contactHint());
 	}
 	return target;
 }
