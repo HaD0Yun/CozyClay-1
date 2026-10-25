@@ -20,7 +20,7 @@
 // ctx = { sk, scene: { objects: { id: { pos, R, half, ancestors } } } }; out.ctx.scene keeps the scene (object-pose.js)
 import { add, sub, scale, norm, len, dot, apply, axisRot } from "./math.js";
 import { isCarried, isFollow, hingePose, movesRecord, compose, relative } from "../carried.js";
-import { isFree, freePoseAt } from "../free-motion.js";
+import { isFree, freeSwungAt } from "../free-motion.js";
 import { groupsOf } from "../scene.js";
 import { pose, SIDES } from "./pose.js";
 import { graspAnchor } from "./socket-grip.js";
@@ -46,7 +46,7 @@ const REACH_SLACK = 0.02;
 
 /**
  * Scene boxes by frame. A body moves with its own spec.objects entry or its nearest group's (a
- * switch entry moves nothing; hinge: turned; free (C17): where its keys and falls put it, under the time map `mapOf()`;
+ * switch entry moves nothing; hinge: turned; free (C17): where its keys and falls put it, under the time map `mapOf()`, swung by its spring;
  * carry and follow: left at its scene pose and marked `carried` with the moving id). `obstacles` drops the carried
  * ones: QA, refs and object anchors read a carry where it rides (object-pose.js objectPoseAt, qa/object-checks.js);
  * a follow entry rides the body and is no obstacle.
@@ -63,7 +63,7 @@ function objectTracks(spec, scene, baked, mapOf = () => undefined) {
 			const mover = [id, ...(o.ancestors ?? [])].find(k => movesRecord(spec.objects?.[k])), entry = spec.objects?.[mover];
 			if (!entry) out[id] = o;
 			else if (isCarried(entry) || isFollow(entry)) out[id] = { ...o, carried: mover };
-			else if (isFree(entry)) out[id] = { ...o, ...compose(freePoseAt({ spec, scene, timeMap: map }, mover, f), relative(scene.objects[mover] ?? groupsOf(scene)[mover], o)) };
+			else if (isFree(entry)) out[id] = { ...o, ...compose(freeSwungAt({ spec, scene, timeMap: map }, mover, f), relative(scene.objects[mover] ?? groupsOf(scene)[mover], o)) };
 			else out[id] = { ...o, ...hingePose(entry, o, baked, f) };
 		}
 		cache.set(f, out);
