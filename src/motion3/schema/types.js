@@ -144,6 +144,7 @@ export const FIX_TYPES = {
 	retime: bool("speed spikes borrow frames from the neighbouring keys", { default: false }),
 	stance: bool("a standIdle stance in a scene body slides out of it (observations.placed)", { default: true }),
 	grasp: bool("fingers close on what the hand holds; it rests in the hand", { default: true }),
+	person: bool("arms kept out of the other characters (QA PERSON)", { default: true }),
 };
 
 export const REF_DOCS = {

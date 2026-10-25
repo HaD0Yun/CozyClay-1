@@ -2,7 +2,7 @@
 // the baked channels or the per-frame IK offsets and re-solves only the frames it touched, so QA
 // still measures the final frames; every fix reports what it changed (counts, worst amount).
 //
-// spec.fix = { reach: true, slide: true, penetration: 0.02, self: true, retime: false } (false = all off)
+// spec.fix = { reach: true, slide: true, penetration: 0.02, self: true, retime: false, person: true } (false = all off)
 //   reach        wrist targets past the arm's reach go onto it through a soft knee (no snap);
 //                ankle targets past the leg's reach lower the hips just enough, eased in and out; a hand
 //                on a pinned target (a world or a scene object's anchor) that the straight arm misses brings
@@ -18,6 +18,8 @@
 //   retime       speed spikes get more frames, borrowed from the neighbouring keys
 //   stance       a standIdle stance whose legs, feet or hips are in a scene body slides out of it, the least
 //                distance (skills/stance.js; applied when the skills expand, reported in observations.placed)
+//   person       arms out of the other characters (scene.people, their installed takes; QA PERSON): the wrist
+//                target moves out by the depth, back the side the hand came from, eased in and out (person.js)
 //   grasp        a holding hand's fingers close on what it holds and the object rests in the hand (#816);
 //                false keeps the preset grip and the grab-frame offset
 import { lowerHips, armReach } from "./reach.js";
@@ -28,15 +30,16 @@ import { liftSoles } from "./ground.js";
 import { pushOut } from "./push.js";
 import { retime } from "./retime.js";
 import { selfClear } from "./self.js";
+import { personOut } from "./person.js";
 
-const FIX_KEYS = ["reach", "slide", "penetration", "self", "retime", "stance", "grasp"];
+const FIX_KEYS = ["reach", "slide", "penetration", "self", "retime", "stance", "grasp", "person"];
 export { FIX_KEYS };
 
 export function fixOptions(fix) {
-	if (fix === false) return { reach: false, slide: false, penetration: 0, self: false, retime: false, stance: false, grasp: false };
+	if (fix === false) return { reach: false, slide: false, penetration: 0, self: false, retime: false, stance: false, grasp: false, person: false };
 	const f = fix ?? {};
 	const pen = f.penetration === true ? 0.02 : Math.min(0.05, Math.max(0, Number(f.penetration) || 0));
-	return { reach: f.reach !== false, slide: f.slide !== false, penetration: pen, self: f.self !== false, retime: f.retime === true, stance: f.stance !== false, grasp: f.grasp !== false };
+	return { reach: f.reach !== false, slide: f.slide !== false, penetration: pen, self: f.self !== false, retime: f.retime === true, stance: f.stance !== false, grasp: f.grasp !== false, person: f.person !== false };
 }
 
 /** The slide report with the flat feet whose turn waited (turn.js): turns { frames, max deg }. */
@@ -55,6 +58,7 @@ export function applyFixes(out, fix, engine, { whole = true } = {}) {
 	if (fix.reach && fixed.slide?.pivots) put("reachLegs", mergeReach(fixed.reachLegs, lowerHips(out, engine)));
 	if (fix.penetration > 0) put("penetration", pushOut(out, engine, fix.penetration));
 	if (fix.self) put("self", selfClear(out, engine));
+	if (fix.person) put("person", personOut(out, engine));
 	if (fix.reach) put("reachArms", armReach(out));
 	return fixed;
 }
