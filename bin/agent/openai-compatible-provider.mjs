@@ -33,6 +33,29 @@ function endpointModel(id, base) {
 	};
 }
 
+/** Moonshot's own API (#947): a host check on the address, nothing else. */
+export const isMoonshotBase = (base) => { try { return /^api\.moonshot\.(ai|cn)$/.test(new URL(base).hostname); } catch { return false; } };
+// The documented default output limit for Kimi K3 models; the catalog's 1048576 is the context window.
+const KIMI_K3_MAX_TOKENS = 131072;
+
+/** A Kimi K3 model on Moonshot's API (#947), or null. It always reasons (low/high/max, never off) and needs its
+ * reasoning_content sent back, so it takes pi-ai's catalog kimi-k3 as its template, with a larger output limit than
+ * the generic 8192 that its reasoning alone can use up. Null when the catalog has no template: the generic shape. */
+export async function moonshotModel(id, base, moonshot = isMoonshotBase(base)) {
+	if (!moonshot || !/^kimi-k3/.test(id)) return null;
+	try {
+		const cn = new URL(base).hostname.endsWith(".cn");
+		const catalog = cn
+			? (await import("@earendil-works/pi-ai/providers/moonshotai-cn.models")).MOONSHOTAI_CN_MODELS
+			: (await import("@earendil-works/pi-ai/providers/moonshotai.models")).MOONSHOTAI_MODELS;
+		const template = catalog?.["kimi-k3"];
+		if (!template?.compat) return null;
+		return { ...structuredClone(template), id, name: id, provider: OPENAI_COMPATIBLE_ID, baseUrl: v1(base), maxTokens: KIMI_K3_MAX_TOKENS };
+	} catch { return null; }
+}
+
+const serverModel = async (id, base) => (await moonshotModel(id, base)) ?? endpointModel(id, base);
+
 /** The server's model ids, or an error that says what went wrong in words the login and the picker can show. */
 async function listEndpoint(base, key, signal) {
 	let data;
@@ -82,7 +105,7 @@ export async function openaiCompatibleProvider() {
 		api: { "openai-completions": completionsApi },
 		fetchModels: async ({ credential, signal }) => {
 			const base = credential?.env?.[BASE_ENV];
-			return base ? (await listEndpoint(base, credential.key, signal)).map((id) => endpointModel(id, base)) : [];
+			return base ? Promise.all((await listEndpoint(base, credential.key, signal)).map((id) => serverModel(id, base))) : [];
 		},
 	});
 }
