@@ -4,7 +4,8 @@
 // rings a swing that decays under 1 degree; more damping settles sooner; the same spec bakes the same take twice; a
 // stiffness past the stable range and a spring on a hinge are refused; every allowed setting stays finite and settles;
 // a free spring's obstacle box tilts as drawn; a keyed carry swings without a false REACH; the solver uses no
-// transcendental functions.
+// transcendental functions. Defaults: a length without stiffness is k = 9.81 / L, damping 0.5; the research's V2 bag
+// swings within its targets, and a base far from the hand is a SPRING_PIVOT observation.
 import { readFileSync } from "node:fs";
 import { compileSpec } from "../../src/motion3/pipeline.js";
 import { motionScene } from "../../src/motion3/scene.js";
@@ -12,7 +13,7 @@ import { skeletonFor } from "../../src/motion3/rigs/index.js";
 import { buildKit } from "../../src/kits/index.js";
 import { bakeTake } from "../../src/motion3/take.js";
 import { validateSpec } from "../../src/motion3/compiler/validate.js";
-import { springAngles, SPRING } from "../../src/motion3/compiler/spring.js";
+import { springAngles, springOpts, SPRING } from "../../src/motion3/compiler/spring.js";
 import { mul, T } from "../../src/motion3/compiler/math.js";
 import { takeHash } from "./fixtures/take-hash.mjs";
 import { rootPoseAt, basePoseAt } from "../../src/motion3/object-pose.js";
@@ -131,6 +132,36 @@ const swings = (with_, without, id, frames) => Array.from({ length: frames }, (_
 	expect("the keyed bat swings (peak > 1 deg), peaking after it stops (its base's fastest frame, then braking)", sw[peakAt] > 1 && peakAt > stop, `${sw[peakAt]} at f${peakAt}, fastest f${stop}`);
 }
 
+// defaults (follow-up 3): length given and stiffness left out is a pendulum of that length, k = 9.81 / L; damping 0.5
+{
+	const anchors = Array.from({ length: 12 + 72 }, (_, f) => [Math.min(f, 12) * 1.5 / FPS, 1, 0]), same = (a, b) => a.every(([x, z], i) => x === b[i][0] && z === b[i][1]);
+	const lone = springAngles({ anchors, fps: FPS, length: 0.5 });
+	expect("(a) length 0.5 without stiffness swings as stiffness 19.62 (9.81 / 0.5), bit for bit", same(lone, springAngles({ anchors, fps: FPS, length: 0.5, stiffness: 19.62, damping: 0.5 })) && !same(lone, springAngles({ anchors, fps: FPS, length: 0.5, stiffness: 80, damping: 0.5 })));
+	expect("(b) damping defaults to 0.5 (SPRING.damping.default, and the solver with damping left out)", SPRING.damping.default === 0.5 && same(springAngles({ anchors, fps: FPS, length: 0.5, stiffness: 30 }), springAngles({ anchors, fps: FPS, length: 0.5, stiffness: 30, damping: 0.5 })));
+	expect("springOpts: a given stiffness and damping are kept, the length falls back to the object's", JSON.stringify(springOpts({ stiffness: 60, damping: 0.2 }, 24, 0.13)) === JSON.stringify({ fps: 24, stiffness: 60, damping: 0.2, length: 0.13 }));
+}
+
+// (c) the research's V2 bag (logs demo-redo A.2b): a 0.26 m box carried by its base at the hand (at [0.04, 0, 0] along
+// [1, 0, 0]), walkTo armSwing 0, spring { length: 0.5, damping: 0.5 }: under 15 deg while walking, a 15..30 deg swing
+// after the stop that stays under 5 deg within 1.2 s. The same bag carried by its far end (at [0.3, 0, 0]) is SPRING_PIVOT.
+{
+	const xsk = skeletonFor("x-bot-tpose"), scene = motionScene([{ id: "cube", name: "Bag", renderer: "cube", x: 1.5, y: 0, z: 1.5, rot: 0, rotX: 0, rotZ: 0, scaleX: 0.1, scaleY: 0.26, scaleZ: 0.1, footprint: { width: 1, depth: 1 }, height: 1 }]);
+	const bag = (obj, walk) => ({ schema: "cozyclay.motion-spec.v1", fps: FPS, frames: 148, props: { bagGrip: { hand: "r", origin: ["RightHandIndex2", "RightHandMiddle2"], points: {} } },
+		use: [{ skill: "standIdle", f0: 0, args: { at: [0, -1.6], heading: 0 } }, { skill: "walkTo", f0: 6, args: { to: [0, 0], period: 12, step: 0.6, ...walk } }],
+		objects: { cube: { prop: "bagGrip", ...obj, spring: { length: 0.5, damping: 0.5 } } } });
+	const { out, observations } = compileSpec(bag({ at: [0.04, 0, 0], along: [1, 0, 0] }, { armSwing: 0 }), { sk: xsk, scene });
+	const sw = out.frames.map((_, f) => turnDeg(rootPoseAt(out, "cube", f).R, basePoseAt(out, "cube", f).R));
+	const hips = out.frames.map(fr => fr.s.P[xsk.index.Hips]), speed = hips.map((p, f) => (f ? Math.hypot(p[0] - hips[f - 1][0], p[2] - hips[f - 1][2]) * FPS : 0));
+	const start = speed.findIndex(v => v > 0.5), stop = speed.findLastIndex(v => v > 0.5), walking = Math.max(...sw.slice(start, stop + 1)), after = sw.slice(stop + 1);
+	const peak = Math.max(...after), settle = (after.findLastIndex(v => v >= 5) + 1) / FPS;
+	console.log(`  V2 bag: walking f${start}..f${stop} max ${walking.toFixed(2)} deg, peak after the stop ${peak.toFixed(2)} deg, under 5 deg after ${settle.toFixed(2)} s`);
+	expect("(c) V2: under 15 deg while walking, 15..30 deg after the stop, settled under 5 deg within 1.2 s", walking < 15 && peak >= 15 && peak <= 30 && settle < 1.2, `${walking} ${peak} ${settle}`);
+	expect("V2: a base at the hand is no SPRING_PIVOT", !observations.spring, JSON.stringify(observations.spring));
+	const far = compileSpec(bag({ at: [0.3, 0, 0], along: [-1, 0, 0] }, {}), { sk: xsk, scene }).observations.spring ?? [];
+	console.log(`  far end: ${far.join("; ")}`);
+	expect("a base 0.30 m from the hand is a SPRING_PIVOT observation", far.length === 1 && /^SPRING_PIVOT cube: base is 0\.30 m from the hand; the swing pivots there, so put the base at the hand with at\/along$/.test(far[0]), far.join());
+}
+
 // validation: the stable range, unknown fields, hinges
 {
 	const kit = buildKit("ball", [], { position: { x: 0.5, y: 1.0, z: 0.5 } }), id = kit.rootId, scene = motionScene(kit.records);
@@ -139,6 +170,7 @@ const swings = (with_, without, id, frames) => Array.from({ length: frames }, (_
 	const stiff = refused({ [id]: { keys, spring: { stiffness: 5000 } } });
 	expect("(e) stiffness 5000 is refused with its range", /spring\.stiffness must be 0\.\.500/.test(stiff), stiff);
 	expect("damping 1.5 is refused", /spring\.damping must be 0\.\.1/.test(refused({ [id]: { keys, spring: { damping: 1.5 } } })));
+	expect("length 3 is refused with its range (0.05..2 m)", /spring\.length must be 0\.05\.\.2/.test(refused({ [id]: { keys, spring: { length: 3 } } })));
 	expect("an unknown spring field is refused by name", /spring has unknown field "stifness"/.test(refused({ [id]: { keys, spring: { stifness: 50 } } })));
 	const hinge = refused({ [id]: { pivot: [0, 0, 0], channel: "door", spring: { stiffness: 50 } } });
 	expect("a spring on a hinge is refused (spring is not for hinged objects)", /spring is not for hinged objects/.test(hinge), hinge);
