@@ -186,7 +186,7 @@ export function freePoseAt(ctx, id, f) {
 const swings = new WeakMap();
 /**
  * freePoseAt turned by the entry's spring (spec.objects[id].spring, compiler/spring.js), else freePoseAt: the pendulum
- * walks frames 0..f of the unswung pose, cached per spec, entry and time map. The one swing of a free entry: the take and
+ * walks frames 0..f of the unswung pose and stops dead on a fall's landing (landedAt), cached per spec, entry and time map. The one swing of a free entry: the take and
  * refs (object-pose.js rootPoseAt) and the obstacle boxes QA and fixes read (compiler/compile.js objectTracks).
  */
 export function freeSwungAt(ctx, id, f) {
@@ -197,8 +197,22 @@ export function freeSwungAt(ctx, id, f) {
 	let c = cache.get(id);
 	if (!c || c.map !== ctx.timeMap || c.o !== o) cache.set(id, c = { map: ctx.timeMap, o, states: [], length: springLength(partsIn(ctx.scene, id).flatMap(p => corners(ctx.scene.objects[p]))) });
 	const opts = springOpts(o.spring, ctx.spec.fps ?? 30, c.length);
-	for (let k = c.states.length; k <= f; k++) c.states[k] = springStep(k ? c.states[k - 1] : springRest(), (k === f ? pose : freePoseAt(ctx, id, k)).pos, opts);
+	for (let k = c.states.length; k <= f; k++) {
+		const s = springStep(k ? c.states[k - 1] : springRest(), (k === f ? pose : freePoseAt(ctx, id, k)).pos, opts);
+		// landed, it rests on its face and hangs from nothing: no swing, and none carried on (its corners stay on the surface)
+		c.states[k] = landedAt(ctx, id, k) ? { ...s, th: [0, 0], w: [0, 0] } : s;
+	}
 	return swungPose(pose, swingOf(c.states[f]));
+}
+
+/** True when free entry `id` at absolute f is on or past a fall's landing and no key has lifted it since; freePoseAt at f planned its falls. */
+function landedAt(ctx, id, f) {
+	let landed = false;
+	for (const e of timelineOf(ctx, id, ctx.spec.objects[id], ctx.timeMap, "all")) {
+		if (e.run) { if (f < e.curve.t[0]) return landed; if (f <= e.curve.t.at(-1)) return false; landed = false; }
+		else { if (f < e.fall.t) return landed; if (f < e.plan.land) return false; landed = true; }
+	}
+	return landed;
 }
 
 /** Where carry `id` (entry o) is before its grab at absolute f: its scene pose, or where a fall before grab left it. */

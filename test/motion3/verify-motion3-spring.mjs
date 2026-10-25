@@ -3,7 +3,7 @@
 // its anchor's acceleration and settles. A still anchor never swings and a spec without spring bakes as before; a stop
 // rings a swing that decays under 1 degree; more damping settles sooner; the same spec bakes the same take twice; a
 // stiffness past the stable range and a spring on a hinge are refused; every allowed setting stays finite and settles;
-// a free spring's obstacle box tilts as drawn; a keyed carry swings without a false REACH; the solver uses no
+// a free spring's obstacle box tilts as drawn; a free spring that lands stops swinging, every corner on the floor; a keyed carry swings without a false REACH; the solver uses no
 // transcendental functions. Defaults: a length without stiffness is k = 9.81 / L, damping 0.5; the research's V2 bag
 // swings within its targets, and a base far from the hand is a SPRING_PIVOT observation.
 import { readFileSync } from "node:fs";
@@ -17,6 +17,7 @@ import { springAngles, springOpts, SPRING } from "../../src/motion3/compiler/spr
 import { mul, T } from "../../src/motion3/compiler/math.js";
 import { takeHash } from "./fixtures/take-hash.mjs";
 import { rootPoseAt, basePoseAt } from "../../src/motion3/object-pose.js";
+import { corners, fallPlans } from "../../src/motion3/free-motion.js";
 import { SCENE_OBJECTS as BAT_SCENE, SWING_SPEC, SWING_KEYS, BAT } from "./fixtures/bat-swing.mjs";
 
 let failures = 0;
@@ -29,6 +30,7 @@ const sk = skeletonFor("y-bot-tpose");
 const STAND = { skill: "standIdle", args: { at: [0, 0], heading: 0 }, f0: 0 };
 const spec = (frames, objects, extra = {}) => ({ schema: "cozyclay.motion-spec.v1", fps: FPS, frames, use: [STAND], objects, ...extra });
 const turnDeg = (A, B) => Math.acos(Math.max(-1, Math.min(1, (mul(A, T(B)).reduce((s, row, i) => s + row[i], 0) - 1) / 2))) * DEG;
+const freeCtxOf = out => ({ spec: out.ctx.spec, scene: out.ctx.scene, timeMap: out.timeMap });
 const swings = (with_, without, id, frames) => Array.from({ length: frames }, (_, f) => turnDeg(rootPoseAt(with_, id, f).R, rootPoseAt(without, id, f).R));
 
 // the solver alone: a still anchor, a stop, damping
@@ -92,6 +94,21 @@ const swings = (with_, without, id, frames) => Array.from({ length: frames }, (_
 	const off = Math.max(...tilt.map((v, f) => Math.abs(v - drawn[f]))), peak = Math.max(...tilt.slice(12));
 	console.log(`  free box obstacle: peak tilt ${peak.toFixed(2)} deg after the stop, largest gap to the drawn pose ${off.toExponential(1)} deg`);
 	expect("the obstacle box of a free spring object tilts as drawn (out.objectsAt R = rootPoseAt R, peak > 1 deg)", peak > 1 && off < 1e-6, `${peak} ${off}`);
+}
+
+// a 1 m box keyed across 1 m and stopped, still swinging when it falls 1 m (fall at 9, bounce 0, tumble false): landed,
+// it hangs from nothing, so the swing stops and no corner of the drawn pose or the obstacle box goes into the floor
+{
+	const scene = motionScene([{ id: "box", name: "box", renderer: "cube", x: 0, y: 1, z: 0, rot: 0, rotX: 0, rotZ: 0, scaleX: 0.3, scaleY: 1, scaleZ: 0.3, footprint: { width: 1, depth: 1 }, height: 1 }]);
+	const box = { keys: [{ f: 0, pos: [0, 1, 0] }, { f: 8, pos: [1, 1, 0] }], fall: { at: 9, bounce: 0, tumble: false }, spring: {} }, sp = spec(72, { box });
+	const a = compileSpec(sp, { sk, scene }).out, b = compileSpec(sp, { sk, scene }).out, half = scene.objects.box.half;
+	const land = Math.ceil(fallPlans(freeCtxOf(a), "box")[0].land), low = p => Math.min(...corners({ ...p, half }).map(c => c[1]));
+	const after = Array.from({ length: 72 - land }, (_, i) => Math.min(low(rootPoseAt(a, "box", land + i)), low(a.objectsAt(land + i).box)));
+	const swungBefore = turnDeg(rootPoseAt(a, "box", land - 1).R, scene.objects.box.R), lowest = Math.min(...after);
+	console.log(`  falling spring box: swing ${swungBefore.toFixed(2)} deg the frame before landing (f${land}), lowest corner after ${lowest.toFixed(4)} m`);
+	expect("a free spring box that lands still swinging keeps every corner on the floor (>= -1 mm on every frame after landing)", swungBefore > 1 && lowest >= -0.001, `${swungBefore} ${lowest}`);
+	const place = { position: [0, 0, 0], yaw: 0 }, h1 = takeHash(bakeTake(sk, a, place));
+	expect(`the falling spring box bakes the same take twice (${h1})`, h1 === takeHash(bakeTake(sk, b, place)));
 }
 
 // a carried ball: the hand still (standIdle) leaves it flat and the take as without spring; the hand moving makes it swing
