@@ -18,7 +18,7 @@ export const FIT_FIELDS = ["side", "anchor", "effector", "offset", "orient"];
 export const OBJECT_FIELDS = { hinge: ["pivot", "axis", "channel"], carry: ["prop", "at", "along", "visible", "level", "grab", "release", "keys", "fall", "grasp", "mass", "spring"], switch: ["visible", "level"],
 	follow: ["follow", "offset", "aim", "visible", "level"], free: ["keys", "fall", "visible", "level", "spring"] };
 /** spec.objects[id].spring (a carry or a free entry): a damped swing behind its anchor's acceleration, compiler/spring.js. */
-export const SPRING_FIELDS = ["stiffness", "damping"];
+export const SPRING_FIELDS = ["length", "stiffness", "damping"];
 /** One spec.objects[id].fall entry (C17): the frame it starts to fall, what it lands on, how much it bounces, whether it rolls to rest, the velocity it leaves with. */
 export const FALL_FIELDS = ["at", "onto", "bounce", "tumble", "v"];
 /** One spec.objects[id].keys entry (C14): the held object's world pose at frame f; aim (+ roll) in place of rot (C16). */

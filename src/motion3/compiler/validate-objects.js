@@ -100,12 +100,12 @@ function validateFalls(err, unknown, at, o, { frames, scene, carry }) {
 	});
 }
 
-/** objects.<id>.spring: { stiffness?, damping? }, each a number in its SPRING range (a larger stiffness would blow the fixed-step solver up). */
+/** objects.<id>.spring: { length?, stiffness?, damping? }, each a number in its SPRING range (a larger stiffness would blow the fixed-step solver up). */
 function validateSpring(err, unknown, at, o) {
-	const sp = o.spring, SPR = "{ stiffness?, damping? }";
+	const sp = o.spring, SPR = "{ length?, stiffness?, damping? }";
 	if (!sp || typeof sp !== "object" || Array.isArray(sp)) return err(`${at}.spring must be ${SPR}, got ${fmt(sp)}`);
 	for (const k of Object.keys(sp)) if (!SPRING_FIELDS.includes(k)) unknown(`${at}.spring has unknown field "${k}"${didYouMean(k, SPRING_FIELDS)}; a spring is ${SPR}`);
-	const what = { stiffness: "how fast it swings back, 1/s^2", damping: "how soon it settles, 1 = no overshoot" };
+	const what = { length: "string or rod length, m", stiffness: "how fast it swings back, 1/s^2", damping: "how soon it settles, 1 = no overshoot" };
 	for (const k of SPRING_FIELDS) {
 		const v = sp[k], { min, max } = SPRING[k];
 		if (v !== undefined && !(Number.isFinite(v) && v >= min && v <= max)) err(`${at}.spring.${k} must be ${min}..${max} (${what[k]}), got ${fmt(v)}`);

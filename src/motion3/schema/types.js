@@ -96,8 +96,8 @@ const SPRING_TYPE = { type: "object", properties: Object.fromEntries(Object.entr
 	additionalProperties: false };
 
 export const OBJECT_TYPES = {
-	pivot: ref("vec3", "world point"), axis: ref("vec3", "default +Y"), channel: str("angle, deg"),
-	prop: str("spec.props name"), at: ref("vec3", "palm offset [d, l, n]"), along: ref("vec3", "+Y on the palm"),
+	pivot: ref("vec3", "world"), axis: ref("vec3", "default +Y"), channel: str("angle, deg"),
+	prop: str("spec.props name"), at: ref("vec3", "palm offset [d, l, n]"), along: ref("vec3", "+Y on palm"),
 	visible: str("channel: shown > 0.5"), level: str("channel: 0..4"), grab: int("hand takes it", { default: 0 }), release: int("let go, else end"),
 	keys: { type: "array", items: { type: "object", properties: Object.fromEntries(OBJECT_KEY_FIELDS.map(f => [f, OBJECT_KEY_TYPES[f]])), required: ["f", "pos"], additionalProperties: false },
 		description: "world pose; hand follows" },

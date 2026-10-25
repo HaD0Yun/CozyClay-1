@@ -116,8 +116,10 @@ Flow (`spec.flow`) also leads the head into a turn: `headLead` (default on, 5 fr
 - Fits move the wrist until an effector (a prop point or fingertips) sits exactly on an anchor while that anchor's weight is on.
 - Objects: `objects: { id: { pivot, axis, channel } }` hinges a scene object by a keyed angle channel. Use it for doors.
 - Carried objects: `objects: { id: { prop, at, along, visible } }` puts a scene object (a small cylinder, cone or box you placed) on a held prop every frame. `at` is its base along the palm axes [d, l, n] from the prop origin, `along` the palm direction its +Y takes, and `visible` a channel that shows it above 0.5 (step it on when the hand leaves the pocket). Carried objects are not obstacles for QA.
-- Spring: `spring: { stiffness, damping }` on a carried (keyed included) or free (keys/fall) object makes it swing a beat behind the hand's (or its keys') pushes and settle, e.g. `"bag": { prop: "bag", spring: { stiffness: 60, damping: 0.2 } }`.
-- `stiffness` (0..500, default 80, about 1.4 swings a second) is how fast it swings back; `damping` (0..1, default 0.3; 1 settles with no overshoot) how soon it stops. It only turns the object about its base, up to 60 degrees; a still hand leaves it still.
+- Spring: `spring: { length, stiffness, damping }` on a carried (keyed included) or free (keys/fall) object makes it swing a beat behind the hand's (or its keys') pushes and settle, e.g. `"bag": { prop: "bag", spring: { length: 0.5 } }`.
+- `length` (0.05..2 m, default half the object's longest side) is the pendulum length.
+- `stiffness` (0..500 1/s^2) is how fast it swings back; left out it is 9.81 / length, a real pendulum of that length. `damping` (0..1, default 0.5; 1 settles with no overshoot) is how soon it stops.
+- It only turns the object about its base, up to 60 degrees; a still hand leaves it still.
 - The swing is computed once at compile time and baked into the take, so scrub, playback and export show the same frames. A hinge refuses it (`spring is not for hinged objects`). On a keyed carry the hand follows the keys and the swing rides on top: REACH measures the hand, not the swing.
 
 ## Grasp, weight, throw and catch (`fix.grasp`, on by default)
