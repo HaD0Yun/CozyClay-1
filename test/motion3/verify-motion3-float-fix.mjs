@@ -4,7 +4,7 @@
 // The arc itself (zero on a true parabola, the closed-form apex on a held run, refused without anchors or past
 // 0.5 m); on a compiled hop held flat the hint names the amount, the patch lifts the root keys by the arc, the
 // patched spec has no FLOAT and repair keeps it; the same spec gives the same hint and take; a run that touches
-// the end of the take gets the hint's words and no patch.
+// the end of the take gets the hint's words and no patch; a hop keyed by the feet only gets root keys at both anchors too.
 import { compileSpec } from "../../src/motion3/pipeline.js";
 import { motionScene } from "../../src/motion3/scene.js";
 import { skeletonFor } from "../../src/motion3/rigs/index.js";
@@ -60,6 +60,14 @@ for (const model of ["x-bot-tpose", "y-bot-tpose"]) {
 	// 4. a run that touches the end of the take: no landing anchor, the words only
 	const cut = compile(hop(32)), g4 = cut.qa.groups.find(x => x.kind === "FLOAT");
 	expect(`${model}: a run to the last frame keeps the hint's words, no arc and no patch`, g4 && g4.last === 31 && /lower the root/.test(g4.hint) && !/ballistic arc/.test(g4.hint) && !g4.patch && !g4.fix, JSON.stringify(g4));
+	// 5. the same hop with foot keys only (the root is standIdle's): the patch keys the anchors at their own height
+	const feetOnly = () => { const s = hop(); s.keys.forEach(k => delete k.set.root); return s; };
+	const b = compile(feetOnly()), gb = b.qa.groups.find(x => x.kind === "FLOAT"), bp = compile(applyPatch(feetOnly(), gb?.patch ?? []));
+	const count = (o, kind) => o.qa.groups.filter(x => x.kind === kind).length, runOf = o => o.qa.groups.filter(x => x.kind === "FLOAT").reduce((n, x) => Math.max(n, x.last - x.first + 1), 0);
+	const hipsY = (o, f) => o.out.frames[f].s.P[sk.index.Hips][1], land = gb ? gb.last + 2 : 0;
+	expect(`${model}: foot keys only: the patch keys the root at both anchors, REACH does not grow, the FLOAT run is no longer, the hips after landing stay where they were`,
+		gb?.patch?.some(o => o.value?.f === gb.first - 1) && gb.patch.some(o => o.value?.f === gb.last + 1) && count(bp, "REACH") <= count(b, "REACH") && runOf(bp) <= gb.last - gb.first + 1
+			&& [land, land + 5, 59].every(f => near(hipsY(bp, f), hipsY(b, f), 1e-4)), JSON.stringify({ patch: gb?.patch, after: bp.qa.groups.map(x => `${x.kind} ${x.subject}`) }));
 }
 
 if (failures) { console.log(`\n${failures} FAILED`); process.exit(1); }

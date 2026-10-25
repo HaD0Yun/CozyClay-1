@@ -73,7 +73,7 @@ function floatArc(X, g) {
 	return { ...at(arc.worst), from: arc.from + f0, to: arc.to + f0, dyAt, keys: arcFrames(arc).map(at) };
 }
 
-/** Root keys moved up or down by the arc: the agent's root key within 2 frames moves by the arc at its own frame, else a key is added. */
+/** Root keys moved up or down by the arc: the agent's root key within 2 frames moves by the arc at its own frame, else a key is added; the anchors get their own height unless a root key sits within 2 frames. */
 function arcOps(X, userSpec, arc) {
 	const ops = Array.isArray(userSpec.keys) ? [] : [{ op: "add", path: "/keys", value: [] }], used = new Set(), r4 = v => Math.round(v * 1e4) / 1e4;
 	for (const { f, dy } of arc.keys) {
@@ -85,6 +85,9 @@ function arcOps(X, userSpec, arc) {
 		const value = [r4(r[0]), r4(r[1] + d), r4(r[2])];
 		ops.push(i >= 0 ? { op: "replace", path: `/keys/${i}/set/root`, value } : { op: "add", path: "/keys/-", value: { f, set: { root: value } } });
 	}
+	// the anchors keep their height: without a root key near takeoff and landing the channel would ease into the arc early and hold its last key after
+	const near = f => (userSpec.keys ?? []).some(k => Array.isArray(k?.set?.root) && Math.abs(k.f - f) <= 2);
+	for (const f of [arc.from, arc.to]) if (!near(f) && Array.isArray(X.fr(f).c.root)) ops.push({ op: "add", path: "/keys/-", value: { f, set: { root: X.fr(f).c.root.map(r4) } } });
 	return ops;
 }
 
