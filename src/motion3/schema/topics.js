@@ -72,7 +72,7 @@ export const NOTES = {
 		"A fit on a scene body also turns the hand about the forearm into a grip: a thin body (a can, a bar, a handle, a neck) across the palm, else thumb up; never past a comfortable forearm turn. A wrist you turn (wtwist/wflex) wins; fit.orient: false (reachGrip args.orient: false) turns it off.",
 		"reachGrip adds props.<anchor>Grip and its fit. Carry a scene object with objects.<id>.prop (topic objects).",
 		"Do not pin a carried thing on a knuckle point: without at/along it rests in the palm and the fingers close on it (fix.grasp). objects.<id>.grasp names how: power, pinch, hook, palm, spherical (a ball). objects.<id>.mass (kg) weighs on the arm; past one hand QA says LOAD and patches in the other hand.",
-		"objects.<id>.spring { stiffness, damping } (a carry or a free entry, no hinge) swings it a beat behind the hand or its keys, then settles: a bag, a lantern. "
+		"objects.<id>.spring { stiffness, damping } (an unkeyed carry or a free entry) swings it a beat behind the hand or its keys, then settles: a bag, a lantern. "
 			+ "stiffness (1/s^2; 80: 1.4 swings/s) is how fast it swings back, damping how soon it stops (1: no overshoot); { stiffness: 60, damping: 0.2 } a loose bag. "
 			+ "It turns, at most 60 deg about its base, never moves; a still hand leaves it still."],
 	objects: ["A hinge turns the object (a body or a group) about pivot/axis by the angle channel your keys set.",

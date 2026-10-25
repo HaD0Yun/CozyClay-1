@@ -94,6 +94,8 @@ const swings = (with_, without, id, frames) => Array.from({ length: frames }, (_
 	expect("an unknown spring field is refused by name", /spring has unknown field "stifness"/.test(refused({ [id]: { keys, spring: { stifness: 50 } } })));
 	const hinge = refused({ [id]: { pivot: [0, 0, 0], channel: "door", spring: { stiffness: 50 } } });
 	expect("a spring on a hinge is refused (spring is not for hinged objects)", /spring is not for hinged objects/.test(hinge), hinge);
+	const keyedCarry = refused({ [id]: { prop: "hand", keys, spring: { stiffness: 60 } } });
+	expect("a spring on a keyed carry is refused (its keys pose it)", /a keyed carry is posed by its keys/.test(keyedCarry), keyedCarry);
 	expect("a valid spring passes", refused({ [id]: { keys, spring: { stiffness: 60, damping: 0.2 } } }) === "");
 }
 

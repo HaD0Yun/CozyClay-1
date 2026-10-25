@@ -165,6 +165,8 @@ export function validateObjects(spec, err, { sk, scene, frames = spec.frames, un
 			if (o.keys !== undefined) validateKeys(err, unknown, at, o, frames);
 			if (o.fall !== undefined) validateFalls(err, unknown, at, o, { frames, scene, carry: true });
 			if (o.spring !== undefined) validateSpring(err, unknown, at, o);
+			// the keys pose a keyed carry and the arm follows them: a swing would pull it off its keys (QA REACH)
+			if (o.spring !== undefined && o.keys !== undefined) err(`${at}.spring: a keyed carry is posed by its keys, so a spring would pull it off them; drop spring, or key the swing`);
 			continue;
 		}
 		if (o?.keys !== undefined || o?.fall !== undefined) err(`${at}: a hinge turns by its channel "${o.channel}", keyed in spec.keys; keys and fall move an object with no pivot, axis or channel (C17), or a carried one (prop)`);
