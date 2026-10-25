@@ -45,8 +45,11 @@ XDG_CONFIG_HOME="$(mktemp -d)" npx --yes cozyclay@VERSION \
 
 Verify the first launch creates the anonymous state and that PostHog receives
 `install:first_launch`, `app:session_started`, and `$pageview` with
-`distribution: npm`. Then run `cclay telemetry off` and verify a reload sends
-nothing further.
+`distribution: npm`. A first launch also sends `studio:ready`, and
+`app:friction_summary` after the tab closes; `track()` drops any event that
+is not on its list, so a missing event (not an empty one) is the failure
+sign. Then run `cclay telemetry off` and verify a reload sends nothing
+further.
 
 Then check the update notice on an older global install (`npm install -g
 cozyclay@<previous>`, then `cclay`): the top bar shows **Update VERSION**,
