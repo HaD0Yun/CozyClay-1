@@ -3657,7 +3657,7 @@ export default function App() {
 				const point = new THREE.Vector3(); bone.getWorldPosition(point);
 				return point.toArray();
 			},
-			committedIkEdits, waypoints,
+			committedIkEdits, waypoints, rigs, characters, // rigs/characters: every cast member (QA reads a second rig)
 			// Scene props as the stage sees them, for QA that places a box and
 			// waits for its transform to land before fitting to it.
 			objects: sceneObjects,

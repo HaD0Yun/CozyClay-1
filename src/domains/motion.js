@@ -12,7 +12,6 @@ import {
 	ikKeyframes,
 	ikRemoveKeyframe,
 	ikSeedTargets,
-	clampIkTargetToFloor,
 	solveIk,
 	MID_TRACKS,
 	solveMidJoint,
@@ -35,7 +34,7 @@ import { ko } from "../locale.js";
 import { isProxyFigure } from "../scenes.js";
 import { refuseRigOnly } from "../character-kind.js";
 import { DEFAULT_POSE, restoreBindPositions, applyPose, applyHipsOffset } from "../poses.js";
-import { bakeIkDragKey, bakeIkDragRange, chainsChangedBy, ikDragRecord, ikDragTouch } from "../motion/ik-drag.js";
+import { bakeIkDragKey, bakeIkDragRange, chainsChangedBy, clampDragTarget, ikDragRecord, ikDragTouch } from "../motion/ik-drag.js";
 import { ikKeyJson, ikTrackKeyFromJson } from "../motion/ik-key-json.js";
 import { chooseIkEntryPose } from "../ik-camera.js";
 import { applyRangePin, captureRangePinTarget, normalizeRangePin, rangePinTargetWorld, rangePinTracks, removeRangePinKeys } from "../motion/range-pin.js";
@@ -741,7 +740,7 @@ export function useMotion(appContext) {
 	// chain toward the target; mid joints reposition the elbow/knee with both
 	// ends pinned (the handle snaps to the clamped position); FK joints swing
 	// toward the pointer. The solved pose stays a preview until Apply.
-	function ikSolve(kind, trackId, targetWorld) {
+	function ikSolve(kind, trackId, targetWorld, input = null) {
 		if (ikDragRef.current && ikDragRef.current.characterId !== appContext.shared.activeChar.id) return;
 		const state = appContext.shared.ikStateRef.current;
 		const ikChains = state.chains;
@@ -762,12 +761,13 @@ export function useMotion(appContext) {
 			ikDragRef.current = { frame: appContext.shared.tlFrame, ids: new Set(pending?.ids ?? []) };
 		}
 		ikDragRef.current = Object.assign(ikDragRecord(ikDragRef.current, appContext.shared.tlFrame), { characterId: appContext.shared.activeChar.id });
-		const touch = (id) => ikDragTouch(appContext.shared.ikStateRef.current, ikDragRef.current, id);
+		const touch = (id) => ikDragTouch(appContext.shared.ikStateRef.current, ikDragRef.current, id), activeId = appContext.shared.activeChar.id;
+		const clamp = () => clampDragTarget({ kind, trackId, targetWorld, bodyContact, chains: ikChains, record: ikDragRef.current, bypass: input?.bypass, open: () => ({ rigs: appContext.shared.rigs, activeId, cast: appContext.shared.characters, allow: domain.layer(activeId).take?.source?.spec?.checks?.allow, notify: appContext.notify }) });
 		if (kind === "chain") {
 			const chain = appContext.shared.ikStateRef.current.chains?.get(trackId);
 			if (!chain) return;
 			touch(trackId);
-			const clampedTarget = bodyContact ? clampIkTargetToFloor(trackId, targetWorld, 0, ikChains?.get(trackId)?.contactHeights ?? ikChains?.values().next().value?.contactHeights) : targetWorld;
+			const clampedTarget = clamp();
 			appContext.shared.ikStateRef.current.targets.set(trackId, clampedTarget.clone());
 			solveIk(chain, clampedTarget);
 			return;
@@ -778,7 +778,7 @@ export function useMotion(appContext) {
 			const chain = midDef ? appContext.shared.ikStateRef.current.chains?.get(midDef.chain) : null;
 			if (!chain) return;
 			touch(chain.track.id);
-			solveMidJoint(chain, bodyContact ? clampIkTargetToFloor(trackId, targetWorld, 0, chain.contactHeights) : targetWorld);
+			solveMidJoint(chain, clamp());
 			return;
 		}
 		// Effector swing: the rotation ring on a focused hand/foot. Rotates

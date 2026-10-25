@@ -1,4 +1,10 @@
-import { createIkState, ikBakeKeyframe, ikTouch } from "./ik.js";
+import * as THREE from "three";
+import { clampIkTargetToFloor, createIkState, ikBakeKeyframe, ikTouch, MID_TRACKS, solveIk, solveMidJoint } from "./ik.js";
+import { buildCollisionCapsules } from "./fix-collisions.js";
+import { blockerCharacterId, characterBlockers } from "./collision-blockers.js";
+import { createContactProjector } from "./contact-project.js";
+import { allowance } from "../motion3/qa/checks.js";
+import { ko } from "../locale.js";
 
 /**
  * Per-drag bookkeeping for manual IK drags over a loaded motion.
@@ -14,6 +20,66 @@ import { createIkState, ikBakeKeyframe, ikTouch } from "./ik.js";
  * on another frame (a click-sized drag that never ended) is stale and resets. */
 export function ikDragRecord(current, frame) {
 	return current && current.frame === frame ? current : { frame, ids: new Set() };
+}
+
+// Told once per drag, the first time the projection moves the handle.
+const CONTACT_HINT = ["Stopped at the other character's body. Hold Alt while dragging to pass through",
+	"다른 인물의 몸에 닿아 멈췄어요. Alt를 누른 채 드래그하면 통과해요", "已停在另一个角色的身体上。按住 Alt 拖动即可穿过"];
+// Studio capsule id -> the motion3 QA part an allow entry names (qa/geometry.js CAPSULES).
+const QA_PART = { UpperArm: "uarm", ForeArm: "farm", Hand: "hand", Thigh: "thigh", Shin: "shin", Foot: "foot" };
+const qaPart = (capsuleId) => capsuleId.replace(/^(left|right)(\w+)$/, (_, side, part) => `${QA_PART[part] ?? part}_${side[0]}`);
+
+/** The contact side of a drag, built once when it opens: the other cast members'
+ * capsules as they stand now (they do not move during a drag), the dragged
+ * chain's own capsules (upper arm, forearm, hand / thigh, shin, foot; no
+ * fingers) and the active take's person allowances (spec.checks.allow
+ * `{ part, object: "person:<id>", depth }`, read as QA reads them). */
+function openDragContact(kind, chain, { rigs, activeId, cast = null, allow = null, notify = null }) {
+	const blockers = characterBlockers(rigs, activeId, { characterIds: cast });
+	const own = blockers.length ? buildCollisionCapsules(chain.rig) : null;
+	if (!own) return null;
+	const capsules = [...own.values()].filter((c) => c.def.movable?.chain === chain.track.id && !c.def.handId && !c.def.optional);
+	const allowFor = (probeId, blockerId) => allowance(allow, qaPart(probeId), `person:${blockerCharacterId(blockerId)}`);
+	const reads = capsules.map((c) => ({ id: c.def.id, start: c.bones[0], end: c.bones[1] ?? c.bones[0], radius: c.radius, a: c.a.clone(), b: c.b.clone() }));
+	return {
+		projector: createContactProjector({ blockers, allow: allowFor }),
+		// the limb's capsules with its handle exactly at `candidate`: solve there, read the bones
+		probe: (candidate) => {
+			if (kind === "mid") solveMidJoint(chain, candidate); else solveIk(chain, candidate, { exactHinge: true });
+			for (const read of reads) { read.start.getWorldPosition(read.a); read.end.getWorldPosition(read.b); }
+			return reads;
+		},
+		lastGood: chain.bones[kind === "mid" ? 1 : 2].getWorldPosition(new THREE.Vector3()),
+		notify,
+	};
+}
+
+/**
+ * Where a chain or mid drag may put its handle: on the floor with Body contact,
+ * then out of the other characters (contact-project.js). `open()` returns
+ * `{ rigs, activeId, cast, allow }` and is read once, on the first event of the
+ * drag (`record` keeps the result). `bypass` (Alt held) skips the contact
+ * projection for that event and leaves the side to keep untouched.
+ */
+export function clampDragTarget({ kind, trackId, targetWorld, bodyContact, chains, record = null, open = null, bypass = false }) {
+	const chain = chains?.get(kind === "mid" ? MID_TRACKS.find((t) => t.id === trackId)?.chain : trackId);
+	const heights = chain?.contactHeights ?? chains?.values().next().value?.contactHeights;
+	const floored = bodyContact ? clampIkTargetToFloor(trackId, targetWorld, 0, heights) : targetWorld;
+	if (!chain || !record || !open || (kind !== "chain" && kind !== "mid")) return floored;
+	if (record.contact === undefined) record.contact = openDragContact(kind, chain, open());
+	const contact = record.contact;
+	if (!contact || bypass) return floored;
+	// probing poses the limb; put it back so the caller's own solve starts from this event's pose
+	const pose = chain.bones.map((bone) => bone.quaternion.clone());
+	const { target, depth } = contact.projector.project(floored, contact.probe, contact.lastGood);
+	chain.bones.forEach((bone, i) => bone.quaternion.copy(pose[i]));
+	chain.bones[0].updateMatrixWorld(true);
+	if (depth === 0) contact.lastGood = target.clone();
+	if (!target.equals(floored) && !contact.told) {
+		contact.told = true;
+		contact.notify?.(ko(CONTACT_HINT[0], CONTACT_HINT[1], CONTACT_HINT[2]));
+	}
+	return target;
 }
 
 /** Mark `id` as written by this drag and touch it into the live layer. */
