@@ -11,7 +11,7 @@
 import { sub, len, dot, angle } from "../compiler/math.js";
 import { CAPSULES, segPoints, sdBox } from "./geometry.js";
 import { groundSole, groundY } from "./ground.js";
-import { balanceAt, offsetWords } from "./com.js";
+import { balanceAt } from "./com.js";
 
 const SPEED_JOINTS = ["Hips", "Head", "LeftHand", "RightHand", "LeftFoot", "RightFoot", "LeftLeg", "RightLeg", "LeftForeArm", "RightForeArm"];
 const CORE = new Set(["Hips", "Head"]);
@@ -156,7 +156,8 @@ export function styleChecks(sk, out, checks, L) {
 	});
 	if (on("balance")) balanceFrames(out, checks.supports).forEach((b, f) => {
 		if (b === "air") push("BALANCE", "no foot on the ground", f, 0, 0);
-		else if (b && -b.margin > L.balance) push("BALANCE", `centre of mass ${offsetWords(b)}, f${f + (out.f0 ?? 0)}`, f, -b.margin, L.balance);
+		// one subject whatever the direction: a lean that swings from ahead to left stays one group; the hint says how far and which way
+		else if (b && -b.margin > L.balance) push("BALANCE", "centre of mass outside the feet", f, -b.margin, L.balance);
 	});
 	return issues;
 }
