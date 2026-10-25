@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
-import { mkdtempSync, readdirSync, rmSync } from "node:fs";
-import { createRequire } from "node:module";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { availableParallelism, tmpdir } from "node:os";
 import { join, relative } from "node:path";
 
@@ -401,17 +400,11 @@ const hasNodeSqlite = meetsMinimumNodeVersion(NODE_SQLITE_MIN);
 // fresh clone those suites must degrade to an actionable EXCLUDE instead of
 // a startup timeout that swallows the real ERR_MODULE_NOT_FOUND (CI installs
 // them explicitly with `npm --prefix mcp ci`, so its coverage is unchanged).
-// Probes the same dependency set bin/mcp-runtime.mjs verifies before running.
+// Every mcp/package.json dependency must be in mcp/node_modules itself: most of
+// them also resolve from the root tree, which would hide a missing mcp install.
 function hasMcpRuntimeDeps() {
-	try {
-		const requireFromMcp = createRequire(new URL("../mcp/package.json", import.meta.url));
-		for (const dependency of ["@modelcontextprotocol/sdk/server/mcp.js", "three", "ws", "zod"]) {
-			requireFromMcp.resolve(dependency);
-		}
-		return true;
-	} catch {
-		return false;
-	}
+	const { dependencies = {} } = JSON.parse(readFileSync(new URL("../mcp/package.json", import.meta.url), "utf8"));
+	return Object.keys(dependencies).every((name) => existsSync(new URL(`../mcp/node_modules/${name}/package.json`, import.meta.url)));
 }
 
 const mcpDepsInstalled = hasMcpRuntimeDeps();
