@@ -25,6 +25,7 @@ import { curveOf, keyedPose } from "./object-keys.js";
 import { add, apply, sub, T, quatFromMat, I3 } from "./compiler/math.js";
 import { shapeOf, airPath, settlePath, settledAt, spinOf, spinEnergy, TIP } from "./settle.js";
 import { fallVelocity, moves, flightTime, drift, landingWith } from "./flight.js";
+import { springRest, springStep, swingOf, swungPose, springLength, SPRING } from "./compiler/spring.js";
 
 /** Gravity, m/s^2. */
 export const G = 9.8;
@@ -180,6 +181,24 @@ export function freePoseAt(ctx, id, f) {
 	const rest = restOf(ctx.scene, id), o = ctx.spec.objects?.[id];
 	if (!rest || !o) return null;
 	return walk(timelineOf(ctx, id, o, ctx.timeMap, "all"), f, { pos: rest.pos, R: rest.R }, planner(ctx, id));
+}
+
+const swings = new WeakMap();
+/**
+ * freePoseAt turned by the entry's spring (spec.objects[id].spring, compiler/spring.js), else freePoseAt: the pendulum
+ * walks frames 0..f of the unswung pose, cached per spec, entry and time map. The one swing of a free entry: the take and
+ * refs (object-pose.js rootPoseAt) and the obstacle boxes QA and fixes read (compiler/compile.js objectTracks).
+ */
+export function freeSwungAt(ctx, id, f) {
+	const pose = freePoseAt(ctx, id, f), o = ctx.spec.objects?.[id];
+	if (!pose || !o?.spring) return pose;
+	if (!swings.has(ctx.spec)) swings.set(ctx.spec, new Map());
+	const cache = swings.get(ctx.spec);
+	let c = cache.get(id);
+	if (!c || c.map !== ctx.timeMap || c.o !== o) cache.set(id, c = { map: ctx.timeMap, o, states: [], length: springLength(partsIn(ctx.scene, id).flatMap(p => corners(ctx.scene.objects[p]))) });
+	const opts = { fps: ctx.spec.fps ?? 30, stiffness: o.spring.stiffness ?? SPRING.stiffness.default, damping: o.spring.damping ?? SPRING.damping.default, length: c.length };
+	for (let k = c.states.length; k <= f; k++) c.states[k] = springStep(k ? c.states[k - 1] : springRest(), (k === f ? pose : freePoseAt(ctx, id, k)).pos, opts);
+	return swungPose(pose, swingOf(c.states[f]));
 }
 
 /** Where carry `id` (entry o) is before its grab at absolute f: its scene pose, or where a fall before grab left it. */

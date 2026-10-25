@@ -32,8 +32,9 @@ import { groupsOf } from "./scene.js";
 import { solveFrame } from "./compiler/compile.js";
 import { channelsAt } from "./compiler/channels.js";
 import { resolveBone } from "./bones.js";
-import { isFree, freePoseAt, beforeGrab, afterRelease, fallsAfter, corners, topOf, under, TOUCH } from "./free-motion.js";
+import { isFree, freePoseAt, freeSwungAt, beforeGrab, afterRelease, fallsAfter, corners, topOf, under, TOUCH } from "./free-motion.js";
 import { add } from "./compiler/math.js";
+import { springRest, springStep, swingOf, swungPose, springLength, SPRING } from "./compiler/spring.js";
 
 /**
  * Body ids that make up `id` in a motionScene: [id] for a body (plus any bodies parented under
@@ -161,6 +162,39 @@ function carriedAt(out, id, o, f) {
  * solved frame, so the carrying hand must already be solved (compiler/anchors.js).
  */
 export function rootPoseAt(out, id, f, now = null) {
+	const o = out.ctx.spec.objects?.[id];
+	if (o?.spring && isFree(o)) return freeSwungAt(freeCtx(out), id, f);
+	const pose = basePoseAt(out, id, f, now);
+	return o?.spring && pose && isCarried(o) ? swungPose(pose, springAt(out, id, o, f, now ? pose : null)) : pose;
+}
+
+const springs = new WeakMap();
+
+/**
+ * The swing [tx, tz] of spring carry `id` at absolute f (compiler/spring.js): the solver walks frames 0..f of the
+ * record's unswung pose (its anchor). Each frame's state is cached with the solved frame it was read on, and reused
+ * while frames 0..k are still those frames (a fix that re-solves a frame starts the walk again there). `nowPose`: the
+ * unswung pose of frame f while it is being solved (not cached).
+ */
+function springAt(out, id, o, f, nowPose) {
+	if (!springs.has(out)) springs.set(out, new Map());
+	const cache = springs.get(out), f0 = out.f0 ?? 0, fps = out.fps ?? out.ctx.spec.fps ?? 30, { scene } = out.ctx;
+	if (!cache.has(id)) cache.set(id, { states: [], keys: [], length: springLength(partsOf(scene, id).flatMap(p => corners(scene.objects[p]))) });
+	const c = cache.get(id), opts = { fps, stiffness: o.spring.stiffness ?? SPRING.stiffness.default, damping: o.spring.damping ?? SPRING.damping.default, length: c.length };
+	const end = nowPose ? f - 1 : f;
+	let k = 0;
+	while (k <= end && k < c.states.length && c.keys[k] === (out.frames[k - f0] ?? null)) k += 1;
+	c.states.length = k; c.keys.length = k;
+	for (; k <= end; k++) {
+		c.states[k] = springStep(k ? c.states[k - 1] : springRest(), basePoseAt(out, id, k).pos, opts);
+		c.keys[k] = out.frames[k - f0] ?? null;
+	}
+	const last = end >= 0 ? c.states[end] : springRest();
+	return swingOf(nowPose ? springStep(last, nowPose.pos, opts) : last);
+}
+
+/** rootPoseAt before a spring swings it: where the keys and the hand put it (qa/key-checks.js measures the keys on it). */
+export function basePoseAt(out, id, f, now = null) {
 	const { spec, scene } = out.ctx, o = movesRecord(spec.objects?.[id]) ? spec.objects[id] : undefined, rest = restPose(scene, id);
 	if (isFollow(o)) return followPose(now ? { ...out, f0: f, frames: [now] } : out, o, f);
 	if (isCarried(o) && (rest || !keepsOffset(scene, id, o))) {

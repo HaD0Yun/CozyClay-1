@@ -71,15 +71,18 @@ export const NOTES = {
 		"fits: the hand target moves so the effector (a prop point or the mean of joints), not the wrist, lands on the anchor.",
 		"A fit on a scene body also turns the hand about the forearm into a grip: a thin body (a can, a bar, a handle, a neck) across the palm, else thumb up; never past a comfortable forearm turn. A wrist you turn (wtwist/wflex) wins; fit.orient: false (reachGrip args.orient: false) turns it off.",
 		"reachGrip adds props.<anchor>Grip and its fit. Carry a scene object with objects.<id>.prop (topic objects).",
-		"Do not pin a carried thing on a knuckle point: without at/along it rests in the palm and the fingers close on it (fix.grasp). objects.<id>.grasp names how: power, pinch, hook, palm, spherical (a ball). objects.<id>.mass (kg) weighs on the arm; past one hand QA says LOAD and patches in the other hand."],
-	objects: ["A hinge turns the object (a body or a group) about pivot/axis by the angle channel your keys set (degrees).",
+		"Do not pin a carried thing on a knuckle point: without at/along it rests in the palm and the fingers close on it (fix.grasp). objects.<id>.grasp names how: power, pinch, hook, palm, spherical (a ball). objects.<id>.mass (kg) weighs on the arm; past one hand QA says LOAD and patches in the other hand.",
+		"objects.<id>.spring { stiffness, damping } (a carry, keyed included, or a free entry) swings it a beat behind the hand or its keys, then settles: a bag, a lantern. "
+			+ "stiffness (1/s^2; 80: 1.4 swings/s) is how fast it swings back, damping how soon it stops (1: no overshoot); { stiffness: 60, damping: 0.2 } a loose bag. "
+			+ "It turns, at most 60 deg about its base, never moves; a still hand leaves it still."],
+	objects: ["A hinge turns the object (a body or a group) about pivot/axis by the angle channel your keys set.",
 		"A carry follows the prop's hand: before grab the scene pose, grab..release in the hand, after release where it was let go, riding a body under it that keys or a hinge move.",
-		"No grab: in hand from frame 0; no release: to the end. No at/along: it rests in the palm, fingers closed on it.",
+		"No at/along: it rests in the palm, fingers closed on it.",
 		"A group (Empty) id moves all its parts; at/along pin a group's root to the palm too (an object.createKit kit). A carried object is an obstacle for the body and the scene.",
-		"A switch { visible?, level? } (no prop, no hinge field) moves nothing: it shows or hides any record (a part, a light, an effect) and sets its level, 0..4 light, glow and effect strength "
+		"A switch { visible?, level? } moves nothing: it shows or hides any record (a part, a light, an effect) and sets its level, 0..4 light, glow and effect strength "
 			+ "(an unkeyed level reads 1). Hiding a group hides its parts. A carry takes level too.",
-		"keys pose a carried object in the world while in hand: pos its base (a group: its root), rot a quaternion [x, y, z, w], "
-			+ "or aim [x, y, z] where its +Y points (a bat's barrel) plus roll degrees about it (none: the roll the arm holds most easily). "
+		"keys pose a carried object in the world while in hand: pos its base (a group: its root), rot a quaternion, "
+			+ "or aim [x, y, z] where its +Y points (a bat's barrel) plus roll degrees about it (none: the easiest roll). "
 			+ `The object leads and the arm follows (elbow, forearm, then the wrist within ${Object.entries(WRIST_LIMITS).map(([k, [lo, hi]]) => `${k} ${lo}..${hi}`).join(", ")} deg; dev + toward the thumb); `
 			+ "a left hand on a prop anchor of it turns with it; "
 			+ `the hand eases in and out over ${KEY_BLEND} frames. REACH "<id>: n cm off its keys" is what the hand could not reach; `
