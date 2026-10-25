@@ -7,7 +7,7 @@ import { allowance, QA_LIMITS } from "./checks.js";
 import { dist } from "../compiler/math.js";
 
 /** Two bodies whose hips are this far apart (m) cannot touch: a body is under 1 m from its hips to any skin. */
-const APART = 2.2;
+export const APART = 2.2;
 
 /** The person's capsule endpoints at timeline frame f: [part, A, B, r] with the joints read from P. */
 export function personCapsules(p, f) {

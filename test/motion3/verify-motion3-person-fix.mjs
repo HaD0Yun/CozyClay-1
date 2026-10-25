@@ -9,6 +9,9 @@ import { bakeTake } from "../../src/motion3/take.js";
 import { motionScene } from "../../src/motion3/scene.js";
 import { skeletonFor } from "../../src/motion3/rigs/index.js";
 import { peopleOf } from "../../src/motion3/people.js";
+import { runCompileJob } from "../../src/motion3/compile-job.js";
+import { takeSource, compileTakeSource } from "../../src/domains/motion/take-source.js";
+import { createHash } from "node:crypto";
 import { takeHash } from "./fixtures/take-hash.mjs";
 
 let failures = 0;
@@ -65,7 +68,8 @@ expect("with checks.allow person:char-b (depth 0.2) fix.person leaves the hands 
 // 5. no people, or no contact: the take is the one of before (pinned from the tree before fix.person, upstream 3.1.6)
 const PINS = { pokeAlone: "ed92acb11cd0b503", noContact: "c61eaa7747c7bd73", shoulder: "d2859d1c6ef6223d" };
 const alone = compile(poke(1.93), empty), apart = compile(poke(1.62));
-const shoulder = compile({ ...spec0, frames: 90, use: [stand(1.52), { skill: "reachGrip", f0: 10, args: { anchor: "shoulder", side: "r", define: { kind: "person", person: "char-b", bone: "LeftArm" }, hold: 30 } }] });
+const onShoulder = { ...spec0, frames: 90, use: [stand(1.52), { skill: "reachGrip", f0: 10, args: { anchor: "shoulder", side: "r", define: { kind: "person", person: "char-b", bone: "LeftArm" }, hold: 30 } }] };
+const shoulder = compile(onShoulder);
 for (const [name, r] of [["pokeAlone", alone], ["noContact", apart], ["shoulder", shoulder]])
 	expect(`${name}: no fix.person report and the take of before (${hash(r)})`, !r.out.fixed.person && hash(r) === PINS[name], JSON.stringify({ fixed: r.out.fixed.person, hash: hash(r) }));
 
@@ -74,6 +78,19 @@ const walk = { ...spec0, frames: 120, use: [{ skill: "standIdle", f0: 0, args: {
 const through = compile(walk), fk = through.out.fixed.person;
 expect(`walking through her with FK arms: fixed.person.skipped ${fk?.skipped}, the arms' PERSON stays, the take unchanged`,
 	fk?.skipped > 0 && fk.frames === 0 && through.qa.groups.some(g => g.kind === "PERSON" && /^(hand|farm)_/.test(g.subject)) && hash(through) === hash(compile(off(walk))), JSON.stringify(fk));
+
+// 7. the saved source compiles the same take again without her take: the body fix.person pushed out of rides with it
+// (people.js keptPeople); a take fix.person did not move saves the source of before (pinned from the tree before this)
+const job = (spec, sc = scene) => runCompileJob({ model: "y-bot-tpose", scene: sc, spec, bake: { position: [0, 0, 0], yaw: 0 } });
+const saved = r => JSON.stringify(takeSource(r.take, [])), sha = s => createHash("sha256").update(s).digest("hex").slice(0, 16);
+const pushed = job(poke(1.93)), source = JSON.parse(saved(pushed)), again = compileTakeSource(source);
+expect(`poke z 1.93 (fixed.person.frames ${pushed.fixed.person?.frames}): the saved source (${Object.keys(source.scene.people ?? {}).join(", ")}) compiles the same take`,
+	pushed.fixed.person?.frames > 0 && takeHash(again) === takeHash(pushed.take), `${takeHash(pushed.take)} -> ${takeHash(again)}`);
+const SOURCES = { pokeAlone: [570, "8006d3ff95ae8a05"], noContact: [570, "ce488561492cac9e"], shoulder: [3469, "6aaa0de2a92a813c"] };
+for (const [name, r] of [["pokeAlone", job(poke(1.93), empty)], ["noContact", job(poke(1.62))], ["shoulder", job(onShoulder)]]) {
+	const s = saved(r);
+	expect(`${name}: the saved source of before (${s.length} bytes, ${sha(s)})`, s.length === SOURCES[name][0] && sha(s) === SOURCES[name][1], JSON.stringify([s.length, sha(s)]));
+}
 
 let refusal = "";
 try { compile({ ...poke(1.8), fix: { person: 1 } }); } catch (error) { refusal = error.message; }

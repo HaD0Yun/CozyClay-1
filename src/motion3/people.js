@@ -8,6 +8,8 @@ import { skeletonFor } from "./rigs/index.js";
 import { fk } from "./compiler/skeleton.js";
 import { add, apply, ry } from "./compiler/math.js";
 import { resolveBone } from "./bones.js";
+import { CAPSULES } from "./qa/geometry.js";
+import { APART } from "./qa/people-checks.js";
 
 const sampled = new WeakMap();
 // joints are kept to 1e-5 m: what a saved take keeps of them (keptPeople) is then exactly what its compile read
@@ -61,8 +63,10 @@ export const peopleList = scene => Object.entries(scene?.people ?? {}).map(([id,
  * What a take keeps of the people so that its saved source compiles the same again without the others' takes
  * (take-source.js): only the joints its person anchors and refs name (anywhere in the spec: anchors, a skill's
  * define, goals, probes; a bare person:<id> in a skill's from is that person's Hips), as plain arrays (a saved project is JSON), or null.
+ * When fix.person moved an arm (out.fixed.person.frames), every capsule joint (qa/geometry.js CAPSULES) of each person whose
+ * hips came within APART of mine is kept too, so the saved source pushes the same arm out again (fix/person.js).
  */
-export function keptPeople(scene, spec) {
+export function keptPeople(scene, spec, out) {
 	const want = new Map(), keep = (id, b) => {
 		const p = scene?.people?.[id], bone = p && resolveBone(skeletonFor(p.rig), b).bone;
 		if (bone) want.set(id, new Set([...(want.get(id) ?? []), bone]));
@@ -73,6 +77,17 @@ export function keptPeople(scene, spec) {
 		else if (v && typeof v === "object") { if (v.kind === "person") keep(v.person, v.bone); for (const [k, x] of Object.entries(v)) walk(x, k); }
 	};
 	walk(spec);
+	if (out?.fixed?.person?.frames > 0) {
+		const H = out.ctx.sk.index.Hips, f0 = out.f0 ?? 0, joints = CAPSULES.flatMap(([, a, b]) => [a, b]);
+		for (const [id, p] of Object.entries(scene?.people ?? {})) {
+			const j = p.names.indexOf(CAPSULES.find(c => c[0] === "hips")[1]), J = p.names.length;
+			const near = j >= 0 && out.frames.some(({ s }, i) => {
+				const at = (Math.max(0, Math.min(p.frames - 1, i + f0)) * J + j) * 3, h = s.P[H];
+				return Math.hypot(h[0] - p.P[at], h[1] - p.P[at + 1], h[2] - p.P[at + 2]) <= APART;
+			});
+			if (near) for (const b of joints) if (p.names.includes(b)) keep(id, b);
+		}
+	}
 	if (!want.size) return null;
 	return Object.fromEntries([...want].map(([id, bones]) => {
 		const p = scene.people[id], names = [...bones], J = p.names.length, P = [];
