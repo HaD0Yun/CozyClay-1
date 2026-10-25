@@ -55,7 +55,7 @@ const CARRY = { props: EXAMPLES.objects.props, objects: { cup: EXAMPLES.objects.
 export const NOTES = {
 	essentials: ["types: ? optional, =v default, a..b range, A | B one of, [key]: T map, a|b?: T both, x_l|r each side, (text) meaning.",
 		`A carried object: ${literal(CARRY)}. ${NO_JUMP}`,
-		"motion.describe { topic } or { topic: 'skills', name }: the rest."],
+		"motion.describe { topic } or { topic: 'skills', name }: more."],
 	spec: [UNITS,
 		"frames: an integer, or \"auto\" (the last skill end, generator end or key f, plus 1); the stored spec keeps the number.",
 		"Any number may be { range: [lo, hi] } (int: true for frames): the compiler searches it, QA 0 first, at most search.budget compiles.",
