@@ -27,7 +27,7 @@ const RANGES = [
 	[/^wflex_[lr]$/, -70, 70, "flex about the knuckle line, deg"],
 	[/^fpitch_[lr]$/, -60, 90, "toe-down pitch, deg: + lifts the heel (toes flat), - lifts the toes"],
 	// the whole-body pitch and roll have none: they turn in full (flips, cartwheels; pose.js tiltFrame)
-	[/^(spine_pitch|head_pitch)$/, -120, 120, "degrees, + bends forward"],
+	[/^(spine_pitch|head_pitch)$/, -120, 120, "deg, + bends forward"],
 	[/^(spine_roll|head_roll)$/, -90, 90, "degrees"],
 ];
 export const rangeOf = ch => RANGES.find(([re]) => re.test(ch)) ?? null;
