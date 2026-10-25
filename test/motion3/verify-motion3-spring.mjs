@@ -2,7 +2,9 @@
 // Spring secondary motion (spec.objects[id].spring, compiler/spring.js): a carried or free object swings a beat behind
 // its anchor's acceleration and settles. A still anchor never swings and a spec without spring bakes as before; a stop
 // rings a swing that decays under 1 degree; more damping settles sooner; the same spec bakes the same take twice; a
-// stiffness past the stable range and a spring on a hinge are refused; the solver uses no transcendental functions.
+// stiffness past the stable range and a spring on a hinge are refused; every allowed setting stays finite and settles;
+// a free spring's obstacle box tilts as drawn; a keyed carry swings without a false REACH; the solver uses no
+// transcendental functions.
 import { readFileSync } from "node:fs";
 import { compileSpec } from "../../src/motion3/pipeline.js";
 import { motionScene } from "../../src/motion3/scene.js";
@@ -13,7 +15,8 @@ import { validateSpec } from "../../src/motion3/compiler/validate.js";
 import { springAngles, SPRING } from "../../src/motion3/compiler/spring.js";
 import { mul, T } from "../../src/motion3/compiler/math.js";
 import { takeHash } from "./fixtures/take-hash.mjs";
-import { rootPoseAt } from "../../src/motion3/object-pose.js";
+import { rootPoseAt, basePoseAt } from "../../src/motion3/object-pose.js";
+import { SCENE_OBJECTS as BAT_SCENE, SWING_SPEC, SWING_KEYS, BAT } from "./fixtures/bat-swing.mjs";
 
 let failures = 0;
 function expect(name, condition, detail = "") {
@@ -112,6 +115,22 @@ const swings = (with_, without, id, frames) => Array.from({ length: frames }, (_
 	expect("(d) the carried spring bakes the same take twice", h === takeHash(bakeTake(sk, compileSpec(move(spec(96, { [id]: carry({ spring: { stiffness: 80, damping: 0.3 } }) }, { props })), { sk, scene }).out, place)));
 }
 
+// a keyed carry with a spring: the bat swing keyed at four frames (fix.self off, as verify-motion3-carried). The hand
+// follows the keys and the swing rides on top, so REACH (measured before the swing) finds the bat on its keys
+{
+	const bscene = motionScene(BAT_SCENE), sp = structuredClone(SWING_SPEC);
+	Object.assign(sp.objects[BAT], { keys: SWING_KEYS, spring: {} });
+	sp.fix = { ...(sp.fix ?? {}), self: false };
+	const { out, qa } = compileSpec(sp, { sk, scene: bscene }), off = qa.groups.filter(g => g.kind === "REACH" && /off its keys/.test(g.subject));
+	const sw = Array.from({ length: sp.frames }, (_, f) => turnDeg(rootPoseAt(out, BAT, f).R, basePoseAt(out, BAT, f).R));
+	// the stop: the bat's base is fastest through the zone, then brakes hard; a pendulum peaks after it
+	const speed = Array.from({ length: sp.frames }, (_, f) => (f ? Math.hypot(...[0, 2].map(i => basePoseAt(out, BAT, f).pos[i] - basePoseAt(out, BAT, f - 1).pos[i])) : 0));
+	const peakAt = sw.indexOf(Math.max(...sw)), stop = speed.indexOf(Math.max(...speed));
+	console.log(`  keyed bat: ${off.length} REACH off its keys, swing peak ${sw[peakAt].toFixed(2)} deg at f${peakAt}, the base fastest at f${stop} (keys f${SWING_KEYS[0].f}..f${SWING_KEYS.at(-1).f})`);
+	expect("a spring on a keyed carry: REACH finds no key missed (0 'off its keys')", off.length === 0, off.map(g => `${g.subject} (${g.count})`).join("; "));
+	expect("the keyed bat swings (peak > 1 deg), peaking after it stops (its base's fastest frame, then braking)", sw[peakAt] > 1 && peakAt > stop, `${sw[peakAt]} at f${peakAt}, fastest f${stop}`);
+}
+
 // validation: the stable range, unknown fields, hinges
 {
 	const kit = buildKit("ball", [], { position: { x: 0.5, y: 1.0, z: 0.5 } }), id = kit.rootId, scene = motionScene(kit.records);
@@ -123,8 +142,6 @@ const swings = (with_, without, id, frames) => Array.from({ length: frames }, (_
 	expect("an unknown spring field is refused by name", /spring has unknown field "stifness"/.test(refused({ [id]: { keys, spring: { stifness: 50 } } })));
 	const hinge = refused({ [id]: { pivot: [0, 0, 0], channel: "door", spring: { stiffness: 50 } } });
 	expect("a spring on a hinge is refused (spring is not for hinged objects)", /spring is not for hinged objects/.test(hinge), hinge);
-	const keyedCarry = refused({ [id]: { prop: "hand", keys, spring: { stiffness: 60 } } });
-	expect("a spring on a keyed carry is refused (its keys pose it)", /a keyed carry is posed by its keys/.test(keyedCarry), keyedCarry);
 	expect("a valid spring passes", refused({ [id]: { keys, spring: { stiffness: 60, damping: 0.2 } } }) === "");
 }
 

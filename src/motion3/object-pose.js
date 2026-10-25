@@ -193,8 +193,8 @@ function springAt(out, id, o, f, nowPose) {
 	return swingOf(nowPose ? springStep(last, nowPose.pos, opts) : last);
 }
 
-/** rootPoseAt before a spring swings it. */
-function basePoseAt(out, id, f, now = null) {
+/** rootPoseAt before a spring swings it: where the keys and the hand put it (qa/key-checks.js measures the keys on it). */
+export function basePoseAt(out, id, f, now = null) {
 	const { spec, scene } = out.ctx, o = movesRecord(spec.objects?.[id]) ? spec.objects[id] : undefined, rest = restPose(scene, id);
 	if (isFollow(o)) return followPose(now ? { ...out, f0: f, frames: [now] } : out, o, f);
 	if (isCarried(o) && (rest || !keepsOffset(scene, id, o))) {

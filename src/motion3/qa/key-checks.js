@@ -8,9 +8,10 @@
 // wrist turn past its limit after the elbow swung and the forearm turned (lane K8: the whole arm
 // follows the object, compiler/arm-orient.js).
 // Measured, not judged (C16, output.observations.held): every key as drawn, so the agent sees how
-// far each one is from what the hand can hold without a probe.
+// far each one is from what the hand can hold without a probe. Both read the pose before a spring swings it
+// (object-pose.js basePoseAt): the swing rides on the keys, it is not the hand falling short.
 import { keyedEntries, curveIn, keyedPose } from "../object-keys.js";
-import { rootPoseAt, partsOf } from "../object-pose.js";
+import { basePoseAt, partsOf } from "../object-pose.js";
 import { relative } from "../carried.js";
 import { groupsOf } from "../scene.js";
 import { WRIST_LIMITS } from "../compiler/arm-orient.js";
@@ -36,7 +37,7 @@ export function keyIssues(out, L, push) {
 		const curve = curveIn(out, id), corners = cornersOf(scene, id);
 		if (!corners.length) continue;
 		for (let f = Math.max(f0, Math.ceil(curve.t[0])); f <= Math.min(f0 + out.frames.length - 1, Math.floor(curve.t[curve.t.length - 1])); f++) {
-			const want = keyedPose(curve, f), got = rootPoseAt(out, id, f);
+			const want = keyedPose(curve, f), got = basePoseAt(out, id, f);
 			const off = Math.max(...corners.map(c => dist(add(want.pos, apply(want.R, c)), add(got.pos, apply(got.R, c)))));
 			if (off > L.reach) push("REACH", `${id}: ${(off * 100).toFixed(1)} cm off its keys`, f - f0, off, L.reach);
 		}
@@ -75,7 +76,7 @@ export function heldReadings(out) {
 		// the keys as the compile holds them: a mouth key the compile leaned says so (object-keys.js faceLeaned)
 		const curve = curveIn(out, id), keys = [...(out.ctx.hold?.entry?.(id) ?? o).keys].sort((a, b) => a.f - b.f);
 		return [id, keys.map((k, i) => {
-			const got = rootPoseAt(out, id, Math.round(curve.t[i])), y = [got.R[0][1], got.R[1][1], got.R[2][1]];
+			const got = basePoseAt(out, id, Math.round(curve.t[i])), y = [got.R[0][1], got.R[1][1], got.R[2][1]];
 			const want = k.aim ? norm(k.aim) : apply(matFromQuat(curve.q[i]), [0, 1, 0]), deg = r1(angle(want, y));
 			return { f: k.f, deg, cm: r1(dist(k.pos, got.pos) * 100), ...(deg >= 1 ? { got: y.map(r2) } : {}), ...(k.aim ? { rot: curve.rots[i] } : {}), ...(k.leaned ? { lean: k.lean } : {}) };
 		})];
