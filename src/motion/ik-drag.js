@@ -49,9 +49,14 @@ function openDragContact(kind, chain, { rigs, activeId, cast = null, allow = nul
 		probe: (candidate) => {
 			restorePose(chain, contact.pose);
 			solveDragTarget(kind, chain, candidate);
+			return contact.shown();
+		},
+		// the limb's capsules as they stand (the pose on screen at event start)
+		shown: () => {
 			for (const read of reads) { read.start.getWorldPosition(read.a); read.end.getWorldPosition(read.b); }
 			return reads;
 		},
+		handle: chain.bones[kind === "mid" ? 1 : 2],
 		lastGood: chain.bones[kind === "mid" ? 1 : 2].getWorldPosition(new THREE.Vector3()),
 		notify,
 	};
@@ -91,7 +96,9 @@ export function clampDragTarget({ kind, trackId, targetWorld, bodyContact, chain
 	// every probe starts from this event's pose, and the limb goes back to it
 	// so the caller's solveDragTarget starts there too
 	contact.pose = chain.bones.map((bone) => bone.quaternion.clone());
-	const { target, depth } = contact.projector.project(floored, contact.probe, contact.lastGood);
+	// the sweep starts from the limb as displayed, not from a re-solve toward lastGood
+	const from = { at: contact.handle.getWorldPosition(new THREE.Vector3()), capsules: contact.shown() };
+	const { target, depth } = contact.projector.project(floored, contact.probe, contact.lastGood, from);
 	restorePose(chain, contact.pose);
 	if (depth === 0) contact.lastGood = target.clone();
 	if (!target.equals(floored) && !contact.told) {

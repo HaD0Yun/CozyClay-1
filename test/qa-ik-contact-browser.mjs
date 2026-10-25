@@ -85,7 +85,7 @@ expect("second character mounts its rig (window.__cozyclay.rigs)", await waitFor
 expect("the active character stays the first one", await evaluate(`window.__cozyclay.rigA === window.__cozyclay.rigs[${JSON.stringify(ACTIVE)}]`));
 
 // page helpers: the same capsules the projection reads (fix-collisions.js, measured radii)
-await evaluate(`(async () => {
+const PAGE_HELPERS = `(async () => {
 	const { buildCollisionCapsules } = await import("/src/motion/fix-collisions.js");
 	const { closestPointsSegmentSegment } = await import("/src/motion/fix-collisions.js");
 	const THREE = await import("/node_modules/.vite/deps/three.js");
@@ -112,7 +112,8 @@ await evaluate(`(async () => {
 		},
 	};
 	return true;
-})()`);
+})()`;
+await evaluate(PAGE_HELPERS);
 
 await key("Digit2", "2", 50);
 expect("Pose mode enters IK", await waitFor("window.__cozyclay?.ikMode === true && !!window.__cozyclay?.ikChains && !!window.__ikControlScreenPositions"));
@@ -129,12 +130,13 @@ console.log("drag path", JSON.stringify(path));
 expect("the right hand handle is on screen", Number.isFinite(path.from.x) && Number.isFinite(path.to.x), JSON.stringify(path));
 
 // every toast text shown from here on (a toast only stays up for a couple of seconds)
-await evaluate(`(() => {
+const TOAST_WATCH = `(() => {
 	window.__qaToasts = [];
 	const seen = () => { for (const t of document.querySelectorAll(".toast")) if (!window.__qaToasts.includes(t.textContent)) window.__qaToasts.push(t.textContent); };
 	new MutationObserver(seen).observe(document.body, { subtree: true, childList: true, characterData: true });
 	return true;
-})()`);
+})()`;
+await evaluate(TOAST_WATCH);
 const dragOnce = async (modifiers = 0) => {
 	await drag(path.from, path.to, modifiers);
 	return { hand: await evaluate("window.__qaContact.hand()"), depth: await evaluate("window.__qaContact.depth()") };
@@ -331,6 +333,85 @@ if (cross && cross.score >= 0.015) {
 	})()`);
 	console.log(`crossing event cost (30 cm sweep + passes): ${sweep.toFixed(3)} ms`);
 	expect("the crossing event stays within the 2 ms budget", sweep < 2, String(sweep));
+}
+
+// 6. the same fast crossing seen from the FRONT (demo finding): camera in front
+// of the active character, the other one at a fixed placement with its arms out,
+// the hand walked up to its left forearm in 16 events, then one 30 cm event.
+// The plain drag solve trails its target, so the last clean target re-solved
+// from the displayed pose touched the other's upper arm; the sweep read that as
+// a start in contact, let it leave, and the hand crossed to the far side with
+// no toast. It must stop on the near side, with the toast.
+// (test/fixtures/ik-contact-front-cross.json is this placement for the node test.)
+const FRONT = {
+	cam: { position: { x: -0.5, y: 1.45, z: 2.3 }, target: { x: -0.5, y: 1.2, z: 0 } },
+	placement: { x: -0.6072350353635989, z: 0.267567967933502, rot: 60 },
+	x: [-0.36083234767437733, 1.4357081461298358, -0.28264259826348026], u: [0.9272036811241623, 0.37306088952841626, 0.033450058506221056],
+	near: [-0.4720967894092768, 1.3909408393864258, -0.28665660528422676], far: [-0.19393568507202813, 1.5028591062449508, -0.27662158773236045],
+};
+await backToStart("front");
+// a fresh page: Pose mode re-enters on the camera it last had, so the front
+// camera is framed before Pose mode opens for the first time, as the demo did
+await send("Page.navigate", { url: process.env.QA_URL || "http://127.0.0.1:5180/app/" });
+expect("front: the app becomes ready again", await waitFor("!!window.__cozyclay?.rigA && Array.isArray(window.__cozyclay?.characters)", 60000));
+if (!(await evaluate(`!!window.__cozyclay.characters.find((c) => c.id === ${JSON.stringify(OTHER)})`))) {
+	await evaluate(`window.__cozyclay.runStudioAction("character.add", { character: { id: ${JSON.stringify(OTHER)}, model: ${JSON.stringify(model)}, x: -0.55, z: 0, rot: 90, subject: "a person" } })`);
+}
+expect("front: the second rig is mounted", await waitFor(`!!window.__cozyclay.rigs?.[${JSON.stringify(OTHER)}]`, 20000));
+await sleep(800);
+await evaluate(PAGE_HELPERS);
+await evaluate(TOAST_WATCH);
+await evaluate(`(async () => {
+	const { applyPose } = await import("/src/poses.js");
+	const rigB = () => window.__cozyclay.rigs[${JSON.stringify(OTHER)}];
+	window.__qaCross = {
+		armsOut() { applyPose(rigB(), { lArm: [0, 0, 0], rArm: [0, 0, 0], lForeArm: [0, 0, 0], rForeArm: [0, 0, 0] }); rigB().updateMatrixWorld(true); return true; },
+		armsAreOut: () => window.__qaContact.caps(rigB()).filter((c) => /ForeArm$/.test(c.def.id)).every((c) => Math.abs(c.a.y - c.b.y) < 0.03),
+	};
+	return true;
+})()`);
+await evaluate(`window.__cozyclay.frameEditorCam(${JSON.stringify(FRONT.cam.position)}, ${JSON.stringify(FRONT.cam.target)})`);
+await sleep(300);
+await key("Digit2", "2", 50);
+expect("front: Pose mode enters on the front camera", await waitFor("window.__cozyclay?.ikMode === true && !!window.__ikControlScreenPositions"));
+await sleep(600);
+await moveOther(FRONT.placement.x, FRONT.placement.z, FRONT.placement.rot);
+await sleep(300);
+expect("front: the other character holds its arms out", await evaluate("window.__qaCross.armsAreOut()"));
+expect("front: the hand starts clear of the placed character", (await evaluate("window.__qaContact.depth()")).worst < 0, JSON.stringify(await evaluate("window.__qaContact.depth()")));
+{
+	const xy = await evaluate(`(() => { const V = window.__qaContact.THREE.Vector3; return { hand: window.__ikControlScreenPositions().rightHand, near: window.__ikProject(new V(...${JSON.stringify(FRONT.near)})), far: window.__ikProject(new V(...${JSON.stringify(FRONT.far)})) }; })()`);
+	console.log("front crossing path", JSON.stringify(xy));
+	const sideOf = (hand) => FRONT.u.reduce((s, ui, i) => s + ui * (hand[i] - FRONT.x[i]), 0);
+	const read = async () => {
+		const hand = await evaluate("window.__qaContact.hand()");
+		return { hand, side: sideOf(hand), depth: await evaluate("window.__qaContact.depth()") };
+	};
+	await waitFor(`!document.querySelector(".toast")`, 8000);
+	await evaluate("window.__qaToasts = []; true");
+	await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: Math.round(xy.hand.x), y: Math.round(xy.hand.y), button: "none", buttons: 0 });
+	await mouse("mousePressed", xy.hand.x, xy.hand.y);
+	for (let i = 1; i <= STEPS; i++) {
+		await mouse("mouseMoved", xy.hand.x + ((xy.near.x - xy.hand.x) * i) / STEPS, xy.hand.y + ((xy.near.y - xy.hand.y) * i) / STEPS);
+		await sleep(40);
+	}
+	await sleep(300);
+	const before = await read();
+	await mouse("mouseMoved", xy.far.x, xy.far.y);
+	await sleep(16);
+	// read before the release: drag end re-poses the other cast member from its
+	// take, which drops the arms-out staging (the hand itself does not move)
+	const after = { ...(await read()), armsOut: await evaluate("window.__qaCross.armsAreOut()") };
+	await mouse("mouseReleased", xy.far.x, xy.far.y);
+	await sleep(300);
+	const released = { ...(await read()), armsOut: await evaluate("window.__qaCross.armsAreOut()") };
+	console.log("front fast drag", JSON.stringify({ before, after, released }));
+	expect("front: before the fast event the arm is clear, on the near side", before.depth.worst < -0.01 && before.side < -0.1, JSON.stringify(before));
+	expect("front: the fast event stops on the near side of the forearm", after.side < 0, JSON.stringify(after));
+	expect("front: the other character still holds its arms out at the stop", after.armsOut);
+	expect("front: touching the other body (within 2 cm), not inside it (overlap <= 5 mm)", after.depth.worst > -0.02 && after.depth.worst <= 0.005, JSON.stringify(after.depth));
+	expect("front: a toast says how to pass through", await waitFor(`window.__qaToasts.some((text) => /Hold Alt|Alt를 누른 채/.test(text))`, 3000),
+		JSON.stringify(await evaluate("window.__qaToasts")));
 }
 
 expect("browser run has no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));

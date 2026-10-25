@@ -66,31 +66,29 @@ export function createContactProjector({ blockers = [], allow = 0, margin = 0.00
 	}
 
 	/**
-	 * Move `target` out of the blockers.
-	 * @param {THREE.Vector3} target  the dragged point (not mutated)
-	 * @param {(candidate:THREE.Vector3) => Array<{id:string,a:THREE.Vector3,b:THREE.Vector3,radius:number}>} probe
-	 *   the dragged limb's capsules when its handle sits at `candidate`
-	 * @param {THREE.Vector3|null} lastGood  the last clean target of this drag (the side to keep)
-	 * @returns {{ target: THREE.Vector3, contact: boolean, depth: number }}
-	 *   `contact` = a push happened; `depth` = what is left after the last pass (0 = clean)
-	 */
-	/**
 	 * SWEEP. A clean endpoint is not enough: one pointer event can carry the
-	 * limb clean across a thin blocker (a forearm, a hand). Walk lastGood ->
-	 * target in equal substeps no longer than the thinnest blocker's radius
-	 * (at most `maxSteps`; a longer jump gets longer substeps) and stop at the
-	 * first substep that touches after a clean one. Returns that substep (the
-	 * keep-the-side push then runs there, with the clean substep before it as
-	 * the side), `{ at: null }` when the target is clean and so was the way
-	 * there, or null when the path never got clean (it starts in contact, the
-	 * drag opened touching, and a start in contact only stops once clean).
+	 * limb clean across a thin blocker (a forearm, a hand). Walk from the
+	 * handle as displayed (`from.at`) to the target in equal substeps no
+	 * longer than the thinnest blocker's radius (at most `maxSteps`; a longer
+	 * jump gets longer substeps) and stop at the first substep that touches
+	 * after a clean one. Returns that substep (the keep-the-side push then runs
+	 * there, with the clean substep before it as the side), `{ at: null }`
+	 * when the target is clean and so was the way there, or null when the path
+	 * never got clean (the limb as displayed is in contact, e.g. the drag
+	 * opened touching, and a start in contact only stops once clean).
+	 *
+	 * The start is judged on the limb AS DISPLAYED (`from.capsules`), not by
+	 * solving toward lastGood again: the drag's solve does not land its handle
+	 * on the target in one call, so a second solve toward the same clean
+	 * target moves the limb on, into the blocker it had stopped short of, and
+	 * the whole crossing then read as a start in contact allowed to leave.
 	 */
-	function firstTouch(target, probe, lastGood) {
-		const steps = Math.min(maxSteps, Math.max(1, Math.ceil(lastGood.distanceTo(target) / thinnest)));
-		let wasClean = !deepest(probe(lastGood));
-		const clean = lastGood.clone();
+	function firstTouch(target, probe, from) {
+		const steps = Math.min(maxSteps, Math.max(1, Math.ceil(from.at.distanceTo(target) / thinnest)));
+		let wasClean = !deepest(from.capsules);
+		const clean = from.at.clone();
 		for (let k = 1; k <= steps; k++) {
-			const at = k === steps ? target.clone() : lastGood.clone().lerp(target, k / steps);
+			const at = k === steps ? target.clone() : from.at.clone().lerp(target, k / steps);
 			if (!deepest(probe(at))) {
 				wasClean = true;
 				clean.copy(at);
@@ -99,11 +97,23 @@ export function createContactProjector({ blockers = [], allow = 0, margin = 0.00
 		return wasClean ? { at: null, clean } : null;
 	}
 
-	function project(target, probe, lastGood = null) {
+	/**
+	 * Move `target` out of the blockers.
+	 * @param {THREE.Vector3} target  the dragged point (not mutated)
+	 * @param {(candidate:THREE.Vector3) => Array<{id:string,a:THREE.Vector3,b:THREE.Vector3,radius:number}>} probe
+	 *   the dragged limb's capsules when its handle sits at `candidate`
+	 * @param {THREE.Vector3|null} lastGood  the last clean target of this drag (the side to keep)
+	 * @param {{at:THREE.Vector3, capsules:Array}|null} [from]  the handle and the limb's
+	 *   capsules as displayed when the event began: where the sweep starts
+	 *   (default: lastGood, with the limb probed there)
+	 * @returns {{ target: THREE.Vector3, contact: boolean, depth: number }}
+	 *   `contact` = a push happened; `depth` = what is left after the last pass (0 = clean)
+	 */
+	function project(target, probe, lastGood = null, from = null) {
 		let out = target.clone();
 		let contact = false;
 		if (!blockers.length) return { target: out, contact, depth: 0 };
-		const hit = lastGood ? firstTouch(out, probe, lastGood) : null;
+		const hit = lastGood ? firstTouch(out, probe, from ?? { at: lastGood, capsules: probe(lastGood) }) : null;
 		if (hit && !hit.at) return { target: out, contact, depth: 0 };
 		if (hit) out = hit.at;
 		const keep = hit?.clean ?? lastGood;

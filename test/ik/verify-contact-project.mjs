@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import * as THREE from "three";
 import { createContactProjector } from "../../src/motion/contact-project.js";
 import { clampDragTarget, solveDragTarget } from "../../src/motion/ik-drag.js";
@@ -198,7 +199,91 @@ function overlap(mine, theirs) {
 	check("the same drag from the same pose gives the same target", (() => { record.contact = undefined; return drag().equals(out); })());
 }
 
-// 7. cost: 2 probes x 2 blockers, sweep + 4 passes per event, in node
+/* The studio's real rigs from a fixture (test/fixtures/ik-contact-front-cross.json,
+ * exported from the browser): bones as posed, the parent placement matrix, and one
+ * skinned vertex per contact joint at exactly the radius the page measured, so
+ * measureContactRadii gives the page's radii. A replay through clampDragTarget
+ * reproduces the page's drag targets bit for bit. */
+const CONTACT_JOINTS = ["LeftHand", "RightHand", "LeftFoot", "RightFoot", "LeftForeArm", "RightForeArm", "LeftLeg", "RightLeg", "Hips", "Head", "LeftArm", "RightArm", "LeftUpLeg", "RightUpLeg", "Spine", "Neck"];
+function fixtureRig({ parent, radii, nodes }) {
+	const holder = new THREE.Object3D();
+	holder.matrixAutoUpdate = false;
+	holder.matrix.fromArray(parent);
+	const made = nodes.map(([name, , p, q, s], i) => {
+		const node = i === 0 ? new THREE.Object3D() : new THREE.Bone();
+		node.name = name;
+		node.position.fromArray(p); node.quaternion.fromArray(q); node.scale.fromArray(s);
+		return node;
+	});
+	nodes.forEach(([, parentIndex], i) => (parentIndex < 0 ? holder : made[parentIndex]).add(made[i]));
+	const rig = made[0];
+	holder.updateMatrixWorld(true);
+	const bones = CONTACT_JOINTS.map((name) => rig.getObjectByName(`mixamorig${name}`));
+	const position = [], skinIndex = [], skinWeight = [];
+	bones.forEach((bone, i) => {
+		const a = bone.getWorldPosition(v(0, 0, 0));
+		const child = /(Hips|Head)$/.test(bone.name) ? null : bone.children.find((n) => n.isBone);
+		const axis = (child ? child.getWorldPosition(v(0, 0, 0)) : a.clone()).sub(a);
+		let perp = v(1, 0, 0).cross(axis);
+		if (perp.lengthSq() < 1e-12) perp = axis.lengthSq() > 1e-12 ? v(0, 1, 0).cross(axis) : v(1, 0, 0);
+		const point = rig.worldToLocal(a.addScaledVector(axis, 0.5).addScaledVector(perp.normalize(), radii[CONTACT_JOINTS[i]]));
+		position.push(point.x, point.y, point.z); skinIndex.push(i, 0, 0, 0); skinWeight.push(1, 0, 0, 0);
+	});
+	const geometry = new THREE.BufferGeometry();
+	geometry.setAttribute("position", new THREE.Float32BufferAttribute(position, 3));
+	geometry.setAttribute("skinIndex", new THREE.Uint16BufferAttribute(skinIndex, 4));
+	geometry.setAttribute("skinWeight", new THREE.Float32BufferAttribute(skinWeight, 4));
+	const mesh = new THREE.SkinnedMesh(geometry);
+	rig.add(mesh);
+	rig.updateMatrixWorld(true);
+	mesh.bind(new THREE.Skeleton(bones));
+	return rig;
+}
+
+// 7. front-camera crossing (demo finding): the studio drag, its camera in front
+// of A, walks A's right hand up to B's left forearm in 16 events, then one 30 cm
+// event crosses it. The plain drag solve does not land the hand on its target in
+// one call (the hand trailed the last clean target by ~7 cm), so re-solving that
+// target from the displayed pose moved the arm on into B's upper arm: the sweep
+// read its start as "in contact", a start in contact may leave, and the hand
+// ended on the far side with no stop and no toast.
+{
+	const fixture = JSON.parse(readFileSync(new URL("../fixtures/ik-contact-front-cross.json", import.meta.url), "utf8"));
+	const rigs = Object.fromEntries(Object.entries(fixture.rigs).map(([id, rig]) => [id, fixtureRig(rig)]));
+	const chains = resolveIkRig(rigs[fixture.active]).chains, chain = chains.get("rightHand");
+	const theirs = characterBlockers(rigs, fixture.active);
+	const side = (p) => fixture.cross.u.reduce((s, u, i) => s + u * (p.getComponent(i) - fixture.cross.x[i]), 0);
+	const start = chain.bones.map((b) => b.quaternion.clone());
+	const hand = () => chain.bones[2].getWorldPosition(v(0, 0, 0));
+	const replay = (events) => {
+		chain.bones.forEach((b, i) => b.quaternion.copy(start[i])); chain.bones[0].updateMatrixWorld(true);
+		const record = { frame: 0, ids: new Set() };
+		const told = [];
+		const open = () => ({ rigs, activeId: fixture.active, notify: (text) => told.push(text) });
+		for (const event of events) {
+			const out = clampDragTarget({ kind: "chain", trackId: "rightHand", targetWorld: v(...event), bodyContact: false, chains, record, open });
+			solveDragTarget("chain", chain, out); // what ikSolve displays
+		}
+		return { record, told, hand: hand(), overlap: overlap(armCapsules(rigs[fixture.active]), theirs) };
+	};
+	const near = replay(fixture.events.slice(0, -1));
+	check("fixture: after the approach the arm is clear, on the near side", near.overlap < -0.01 && side(near.hand) < -0.1, `overlap ${mm(near.overlap)}, side ${side(near.hand).toFixed(4)}`);
+	const shown = chain.bones.map((b) => b.quaternion.clone());
+	const lastGood = near.record.contact.lastGood.clone();
+	solveDragTarget("chain", chain, lastGood);
+	const resolved = { moved: hand().distanceTo(near.hand), overlap: overlap(armCapsules(rigs[fixture.active]), theirs) };
+	chain.bones.forEach((b, i) => b.quaternion.copy(shown[i])); chain.bones[0].updateMatrixWorld(true);
+	console.log(`front crossing: arm clear by ${mm(-near.overlap)} as displayed; one more solve toward lastGood moves the hand ${mm(resolved.moved)} and the arm ${mm(resolved.overlap)} into B`);
+	check("fixture: re-solving the last clean target from the displayed pose moves the arm into B", resolved.moved > 0.01 && resolved.overlap > 0, `moved ${mm(resolved.moved)}, overlap ${mm(resolved.overlap)}`);
+	const crossed = replay(fixture.events);
+	console.log(`front crossing: hand side ${side(crossed.hand).toFixed(4)}, overlap ${mm(crossed.overlap)}, toasts ${crossed.told.length}`);
+	check("the 30 cm event stops on the near side of the forearm", side(crossed.hand) < 0, `side ${side(crossed.hand).toFixed(4)}`);
+	check("the stop is a contact the user is told about", crossed.told.length === 1, JSON.stringify(crossed.told));
+	check("the displayed arm is not inside B (overlap <= 5 mm)", crossed.overlap <= 0.005, mm(crossed.overlap));
+	check("the same drag replayed gives the same hand", replay(fixture.events).hand.equals(crossed.hand));
+}
+
+// 8. cost: 2 probes x 2 blockers, sweep + 4 passes per event, in node
 {
 	const target = v(0, 1.2, 1.95), n = 20000;
 	for (let i = 0; i < 2000; i++) projector.project(target, probe, FRONT);
