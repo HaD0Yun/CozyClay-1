@@ -13,6 +13,7 @@ import { vec, m3 } from "./fmt.js";
 import { moveHint } from "./hints-contact.js";
 import { kneeFoldHint, kneeWhy } from "./hints-knee.js";
 import { bodyMove } from "./hints-goal.js";
+import { ballisticArc, arcFrames } from "./ballistic.js";
 
 const LIMB = { Leg: ["UpLeg", "Leg", "Foot", "knee"], ForeArm: ["Arm", "ForeArm", "Hand", "elbow"] };
 const sideOf = s => (s.startsWith("Left") ? "l" : "r");
@@ -61,6 +62,30 @@ function probe(X, f, tries, measure) {
 		if (gain > 1e-6 && (!best || gain / unit > best.gain / best.unit)) best = { ch, value, gain, unit };
 	}
 	return { best, base, c0 };
+}
+
+/** The ballistic arc of a FLOAT group's run (its subject names f<a>-f<b>): the worst frame, the correction at any frame, the keys that follow it; null when none. */
+function floatArc(X, g) {
+	const f0 = X.out.f0 ?? 0, [, a = g.first, b = g.last] = / f(\d+)-f(\d+)/.exec(g.subject)?.map(Number) ?? [];
+	const y = X.out.frames.map(fr => fr.s.P[X.I.Hips][1]), arc = ballisticArc(y, a - f0, b - f0, 9.81 / (X.out.fps ?? 24) ** 2);
+	if (!arc) return null;
+	const dyAt = f => Math.round((arc.delta[f - f0 - arc.from - 1] ?? 0) * 1e4) / 1e4, at = q => ({ f: q + f0, dy: dyAt(q + f0) });
+	return { ...at(arc.worst), from: arc.from + f0, to: arc.to + f0, dyAt, keys: arcFrames(arc).map(at) };
+}
+
+/** Root keys moved up or down by the arc: the agent's root key within 2 frames moves by the arc at its own frame, else a key is added. */
+function arcOps(X, userSpec, arc) {
+	const ops = Array.isArray(userSpec.keys) ? [] : [{ op: "add", path: "/keys", value: [] }], used = new Set(), r4 = v => Math.round(v * 1e4) / 1e4;
+	for (const { f, dy } of arc.keys) {
+		const i = (userSpec.keys ?? []).findIndex(k => Array.isArray(k?.set?.root) && k.set.root.length === 3 && Math.abs(k.f - f) <= 2 && k.f > arc.from && k.f < arc.to);
+		if (i >= 0 && used.has(i)) continue;
+		const r = i >= 0 ? userSpec.keys[i].set.root : X.fr(f).c.root, d = i >= 0 ? arc.dyAt(userSpec.keys[i].f) : dy;
+		if (!Array.isArray(r)) continue;
+		if (i >= 0) used.add(i);
+		const value = [r4(r[0]), r4(r[1] + d), r4(r[2])];
+		ops.push(i >= 0 ? { op: "replace", path: `/keys/${i}/set/root`, value } : { op: "add", path: "/keys/-", value: { f, set: { root: value } } });
+	}
+	return ops;
 }
 
 const hipOrShoulder = (X, k, f, limb) => X.fr(f).s.P[X.I[`${k === "l" ? "Left" : "Right"}${LIMB[limb][0]}`]];
@@ -149,7 +174,14 @@ export const motionHints = {
 	SPEED: (X, g) => speedHint(X, g, 1),
 	POP: (X, g) => speedHint(X, g, 0.5),
 	ACC: (X, g) => speedHint(X, g, 0.5),
-	FLOAT: (X, g) => ({ cause: X.cause("root", g.worstFrame), hint: `over f${g.first}-f${g.last} lower the root or key foot_l/foot_r back onto the ground, the floor or the top of an object under the foot (the ankle stands ${ankleY(X.sk)} m above it); a jump needs the hips to rise and fall; a seat or ledge the hips rest on goes in checks.supports (a foot on an object's top needs none)` }),
+	FLOAT(X, g) {
+		const base = `over f${g.first}-f${g.last} lower the root or key foot_l/foot_r back onto the ground, the floor or the top of an object under the foot (the ankle stands ${ankleY(X.sk)} m above it); a jump needs the hips to rise and fall; a seat or ledge the hips rest on goes in checks.supports (a foot on an object's top needs none)`;
+		const arc = floatArc(X, g);
+		if (!arc) return { cause: X.cause("root", g.worstFrame), hint: base };
+		const { f, dy } = arc;
+		return { cause: X.cause("root", f), hint: `hips should be ${Math.round(Math.abs(dy) * 100)} cm ${dy < 0 ? "lower" : "higher"} at f${f} (ballistic arc from f${arc.from} to f${arc.to}): root ${vec([0, dy, 0])} m there${arc.keys.length > 1 ? ` (keys at ${arc.keys.map(k => `f${k.f} ${vec([0, k.dy, 0])}`).join(", ")} follow the arc)` : ""}; or ${base}`,
+			fix: { channel: "root", f, delta: [0, dy, 0], ops: userSpec => arcOps(X, userSpec, arc) } };
+	},
 	LENGTH: () => ({ cause: "compiler", hint: "a bone changed length: report the spec, this is a compiler fault" }),
 	CONTACT(X, g) {
 		const ck = (X.spec.checks?.contacts ?? []).find(c => g.subject.startsWith(`${c.name}:`)), f = g.worstFrame, i = X.rel(f);
