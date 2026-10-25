@@ -1427,3 +1427,15 @@
 .v2-sequencer .objmo .sg { position: absolute; inset: 0; }
 .v2-sequencer .objmo .sg-head { padding: 3px 10px 2px; }
 .v2-sequencer .objmo .sg-body { min-height: 36px; margin: 0 0 6px; }
+
+/* The motion controls' Physics box (physics-toggle.jsx) */
+.v2-sequencer .tl-btn.physics {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	cursor: pointer;
+}
+
+.v2-sequencer .tl-btn.physics input {
+	margin: 0;
+}

@@ -17,8 +17,9 @@ import * as exporting from "./export.js";
 import * as ai from "./ai.js";
 import * as stage from "./stage.js";
 import * as kits from "./kits.js";
+import * as physics from "./physics.js";
 
-export const COMMAND_MODULES = Object.freeze({ shot, cast, motion, motion3, objects, kits, view, scene, project, export: exporting, ai, stage });
+export const COMMAND_MODULES = Object.freeze({ shot, cast, motion, motion3, physics, objects, kits, view, scene, project, export: exporting, ai, stage });
 
 export function commandDeclarations(modules = COMMAND_MODULES) {
 	return Object.values(modules).flatMap(module => module.declarations.map(declaration => ({

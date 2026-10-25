@@ -60,7 +60,7 @@ export function bodyCentre(sk, s) {
 const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
 
 /** Convex hull of 2D points [x, z], counter-clockwise in (x, z), collinear points dropped (monotone chain). */
-function convexHull(points) {
+export function convexHull(points) {
 	const p = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
 	if (p.length < 3) return p;
 	const half = list => {
@@ -103,19 +103,21 @@ export function supportMargin(c, points) {
  * Balance at frame index i of out (out.frames[i]): "air" with no foot on the ground, else
  * { margin, com, near, feet }: the centre of mass (bodyCentre), its margin against the support
  * polygon (supportMargin of its ground projection) and the polygon's nearest point near ([x, z]).
- * feet: the sole points [x, z] that made the polygon. Declared supports are style.js's.
+ * feet: the sole points [x, z] that made the polygon; ground: the ground height (groundSole) each
+ * of them was measured from, in the same order. Declared supports are style.js's.
  */
 export function balanceAt(out, i) {
 	const F = out.frames, P = F[i].s.P, I = out.ctx.sk.index;
 	const moving = i > 0 && i < F.length - 1 && Math.hypot(F[i + 1].s.P[I.Hips][0] - F[i - 1].s.P[I.Hips][0], F[i + 1].s.P[I.Hips][2] - F[i - 1].s.P[I.Hips][2]) / 2 > 0.006;
-	const feet = [];
+	const feet = [], ground = [];
 	for (const S of ["Left", "Right"]) {
 		const sp = groundSole(out, i, S);
-		if (moving || Math.min(sp.heel[1], sp.ball[1]) < 0.02) feet.push(...[sp.heel, sp.ball, sp.tip].map(p => [p[0], p[2]]));
+		if (!moving && Math.min(sp.heel[1], sp.ball[1]) >= 0.02) continue;
+		for (const key of ["heel", "ball", "tip"]) { feet.push([sp[key][0], sp[key][2]]); ground.push(sp.ground[key]); }
 	}
 	if (!feet.length) return "air";
 	const com = bodyCentre(out.ctx.sk, F[i].s), { margin, near } = supportMargin([com[0], com[2]], feet);
-	return { margin, com, near, feet, facing: facing(P, I) };
+	return { margin, com, near, feet, ground, facing: facing(P, I) };
 }
 
 /** The body's horizontal forward [x, z] from the hip axis (left hip minus right hip, turned a quarter about up). */
