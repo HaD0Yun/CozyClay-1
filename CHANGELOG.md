@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+## 3.1.5 - 2026-10-25
+
+The Studio tells you when a new release is out and installs it in one click, Claude models work in the agent panel again, IK edits stay on their own character, turns and walks look more natural, and anonymous analytics show where the Studio gets in the way.
+
+Agent
+
+- Agent turns on Claude models no longer fail with a 400 error about a
+  deferred placeholder tool.
+- When a turn is already running, the failure chip reads `busy` instead of
+  `upstream`. The message text is unchanged.
+
+Motion
+
+- The head turns first and leads the body into a turn, by about 5 frames at
+  24 fps, the way a person's does. `flow.headLead` sets the frames (0 to
+  12), and `false` turns it off. A keyed head look still wins.
+- Takes that walk report `observations.gait`: cadence, step length, speed,
+  stance and pelvis motion, with warnings outside a person's range. It is a
+  reading only and never changes the QA result.
+- Grasp QA reads each finger: `FINGER_ROM` (a joint past its range),
+  `FINGER_SELF` (two fingers inside each other) and `THUMB_OFF` (a held
+  object without the thumb on it).
+- A carried ball keeps the thumb on it. A finger that misses a held object
+  turns toward it at the knuckle, and the ring and little fingers curl
+  together. Stacked hand presets no longer over-curl.
+
 Studio
 
 - An npm studio shows a small **Update** chip in the top bar when a newer
@@ -11,6 +37,14 @@ Studio
   "run `npx cozyclay` again". **Update now** waits while an agent turn,
   an export or a recording runs. A failed install names the cause
   (permissions, network, Node version, npm missing) and keeps the command.
+- An IK edit stays with its own character. Selecting another character
+  mid-drag no longer poses it, and undo no longer reverts or deletes the
+  other character. Switching characters applies a pending IK edit and shows
+  a notice.
+- Ctrl+Z after an IK drag puts the pose back, with or without a take
+  loaded.
+- On a browser without WebGL, the unavailable notice appears one frame
+  after the Studio first draws instead of during it.
 
 CLI
 
@@ -20,11 +54,39 @@ CLI
 - A source checkout reports itself as `clone`, and a Windows global install
   is no longer mistaken for npx.
 
+Site
+
+- A redesigned cozyclay.org: a black first screen with a greybox-to-video
+  reel, how-it-works clips from the tutorial, and Try it opens the Studio.
+
 Analytics
 
-- `update:notice_shown`, `update:clicked` and `update:finished`: closed
-  values only (install kind, how far behind, the button, the outcome and
-  error class, a duration bucket). Never npm's output or a path.
+- The anonymous usage analytics now cover where the Studio gets in the way:
+  - the agent loop: refused commands, a summary per agent turn, each motion
+    draft and its QA result, and each prompt sent, so retry loops and
+    hesitation show
+  - model connect: the sign-in steps and where they stop, and model changes
+  - exports: retries, the stage a failed or stopped export reached, and
+    saved files. Storyboard PNG, render pass and OTIO exports are now
+    counted.
+  - clicks, shortcuts and search: repeated or dead clicks on the main
+    controls, shortcuts that did nothing, searches with no result, and
+    switching panels or orbiting the camera back and forth
+  - playback, boot and crashes: time to the first frame, playback runs and
+    late frames, the first-success guide, render crashes and lost WebGL
+  - the update notice: when it shows, which button was pressed, and whether
+    the install worked
+  - one friction summary per session
+- Every value is a closed bucket or a fixed id. No text, names, paths,
+  object ids, click coordinates or npm output are sent. Prompt text never
+  leaves the browser; only a length bucket and a similarity grade to the
+  last prompt do.
+- First-edit events count only your own edits, not the agent's, and report
+  `definition_version` 2.
+- Events that nothing sent any more are removed: the old motion-generation
+  events and `sample:played`.
+- The privacy page lists every event and property. `cclay telemetry off`
+  still turns it all off.
 
 ## 3.1.4 - 2026-10-24
 
