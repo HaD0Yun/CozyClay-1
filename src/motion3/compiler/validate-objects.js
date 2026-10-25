@@ -9,7 +9,8 @@
 // or from its release on. Fields: schema/fields.js OBJECT_FIELDS, OBJECT_KEY_FIELDS, FALL_FIELDS. See validate.js.
 import { isVec3, fmt, didYouMean, GRASPS } from "./vocab.js";
 import { objectOk } from "./validate-common.js";
-import { OBJECT_FIELDS, OBJECT_KEY_FIELDS, FALL_FIELDS } from "../schema/fields.js";
+import { OBJECT_FIELDS, OBJECT_KEY_FIELDS, FALL_FIELDS, SPRING_FIELDS } from "../schema/fields.js";
+import { SPRING } from "./spring.js";
 import { isSwitch, isFollow, movesRecord } from "../carried.js";
 import { isFree } from "../free-motion.js";
 import { checkRef } from "../refs.js";
@@ -99,6 +100,18 @@ function validateFalls(err, unknown, at, o, { frames, scene, carry }) {
 	});
 }
 
+/** objects.<id>.spring: { stiffness?, damping? }, each a number in its SPRING range (a larger stiffness would blow the fixed-step solver up). */
+function validateSpring(err, unknown, at, o) {
+	const sp = o.spring, SPR = "{ stiffness?, damping? }";
+	if (!sp || typeof sp !== "object" || Array.isArray(sp)) return err(`${at}.spring must be ${SPR}, got ${fmt(sp)}`);
+	for (const k of Object.keys(sp)) if (!SPRING_FIELDS.includes(k)) unknown(`${at}.spring has unknown field "${k}"${didYouMean(k, SPRING_FIELDS)}; a spring is ${SPR}`);
+	const what = { stiffness: "how fast it swings back, 1/s^2", damping: "how soon it settles, 1 = no overshoot" };
+	for (const k of SPRING_FIELDS) {
+		const v = sp[k], { min, max } = SPRING[k];
+		if (v !== undefined && !(Number.isFinite(v) && v >= min && v <= max)) err(`${at}.spring.${k} must be ${min}..${max} (${what[k]}), got ${fmt(v)}`);
+	}
+}
+
 /** A grasp that starts like the given one (4+ letters: "sphere" -> spherical), else the nearest by edit distance. */
 const prefixLen = (a, b) => { let i = 0; while (i < a.length && a[i] === b[i]) i += 1; return i; };
 function graspHint(given) {
@@ -122,7 +135,8 @@ export function validateObjects(spec, err, { sk, scene, frames = spec.frames, un
 		const at = `objects.${id}`, kind = o?.prop !== undefined ? "carry" : isFollow(o) ? "follow" : isFree(o) ? "free" : isSwitch(o) ? "switch" : "hinge", fields = OBJECT_FIELDS[kind];
 		// a switch and a follow take any record (a light, an effect); the others a body or a group
 		if ((kind !== "switch" && kind !== "follow") || !scene?.others?.[id]) objectOk(err, scene, at, id, { groups: true });
-		for (const f of Object.keys(o ?? {})) if (!fields.includes(f) && !(kind === "hinge" && (f === "keys" || f === "fall"))) unknown(`${at} (${kind}) has unknown field "${f}"${didYouMean(f, fields)}; fields: ${fields.join(", ")}`);
+		if (kind === "hinge" && o?.spring !== undefined) err(`${at}.spring: spring is not for hinged objects; a hinge turns only by its channel (give spring to a carry or a free entry)`);
+		for (const f of Object.keys(o ?? {})) if (!fields.includes(f) && !(kind === "hinge" && (f === "keys" || f === "fall" || f === "spring"))) unknown(`${at} (${kind}) has unknown field "${f}"${didYouMean(f, fields)}; fields: ${fields.join(", ")}`);
 		massOk(err, at, o);
 		if (kind === "follow") {
 			validateFollow(spec, err, { sk, scene }, at, o);
@@ -137,6 +151,7 @@ export function validateObjects(spec, err, { sk, scene, frames = spec.frames, un
 		if (kind === "free") {
 			if (o.keys !== undefined) validateKeys(err, unknown, at, o, frames, true);
 			if (o.fall !== undefined) validateFalls(err, unknown, at, o, { frames, scene, carry: false });
+			if (o.spring !== undefined) validateSpring(err, unknown, at, o);
 			channelsOk(err, at, o);
 			continue;
 		}
@@ -149,6 +164,7 @@ export function validateObjects(spec, err, { sk, scene, frames = spec.frames, un
 				&& o.grab !== undefined && o.release !== undefined && !(o.grab < o.release)) err(`${at}: grab (${o.grab}) must come before release (${o.release})`);
 			if (o.keys !== undefined) validateKeys(err, unknown, at, o, frames);
 			if (o.fall !== undefined) validateFalls(err, unknown, at, o, { frames, scene, carry: true });
+			if (o.spring !== undefined) validateSpring(err, unknown, at, o);
 			continue;
 		}
 		if (o?.keys !== undefined || o?.fall !== undefined) err(`${at}: a hinge turns by its channel "${o.channel}", keyed in spec.keys; keys and fall move an object with no pivot, axis or channel (C17), or a carried one (prop)`);

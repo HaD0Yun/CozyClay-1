@@ -116,6 +116,9 @@ Flow (`spec.flow`) also leads the head into a turn: `headLead` (default on, 5 fr
 - Fits move the wrist until an effector (a prop point or fingertips) sits exactly on an anchor while that anchor's weight is on.
 - Objects: `objects: { id: { pivot, axis, channel } }` hinges a scene object by a keyed angle channel. Use it for doors.
 - Carried objects: `objects: { id: { prop, at, along, visible } }` puts a scene object (a small cylinder, cone or box you placed) on a held prop every frame. `at` is its base along the palm axes [d, l, n] from the prop origin, `along` the palm direction its +Y takes, and `visible` a channel that shows it above 0.5 (step it on when the hand leaves the pocket). Carried objects are not obstacles for QA.
+- Spring: `spring: { stiffness, damping }` on a carried or free (keys/fall) object makes it swing a beat behind the hand's (or its keys') pushes and settle, e.g. `"bag": { prop: "bag", spring: { stiffness: 60, damping: 0.2 } }`.
+- `stiffness` (0..2000, default 80, about 1.4 swings a second) is how fast it swings back; `damping` (0..1, default 0.3; 1 settles with no overshoot) how soon it stops. It only turns the object about its base, up to 60 degrees; a still hand leaves it still.
+- The swing is computed once at compile time and baked into the take, so scrub, playback and export show the same frames. A hinge refuses it (`spring is not for hinged objects`).
 
 ## Grasp, weight, throw and catch (`fix.grasp`, on by default)
 
