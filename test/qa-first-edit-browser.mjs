@@ -269,7 +269,11 @@ async function navigationSession(surface) {
 	});
 	await expectEvents(surface, null, "Alt-left orbit emits no edit");
 	assertPose(await b.pose(), recordingCamera, "free navigation does not move the shot camera");
-	await b.change("window.__cozyclay.lookThroughShot", () => click('.vp-look-through'));
+	// Studio's glass shell enters shot-look from the Shot Camera card in the
+	// dock and hides the preview inset's button (#570); Playground keeps the
+	// inset button. Each surface uses the control its user sees.
+	const lookThrough = surface === "craft" ? ".dock-shot-card .dock-shot-look" : ".vp-look-through";
+	await b.change("window.__cozyclay.lookThroughShot", () => click(lookThrough));
 	await b.change("!window.__cozyclay.lookThroughShot", () => b.escape());
 	assert.deepEqual(await projectScene(), authored, "navigation and look-through leave authored scene state unchanged");
 	await expectEvents(surface, null, "look-through entry/exit emits no edit");

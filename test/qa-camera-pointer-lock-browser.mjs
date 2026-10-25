@@ -23,7 +23,8 @@ try {
 	assert.equal(await b.evaluate("window.__cozyclay.lookThroughShot"), false);
 	console.log("PASS free-camera right-drag acquires real pointer lock, turns the view, and releases without changing the shot");
 
-	await b.change("window.__cozyclay.lookThroughShot === true", () => b.click(".vp-look-through"));
+	// Studio enters shot-look from the dock Shot Camera card (#570 hides the inset button).
+	await b.change("window.__cozyclay.lookThroughShot === true", () => b.click(".dock-shot-card .dock-shot-look"));
 	const shotPoint = await b.centre(".stage canvas");
 	await b.mouse("mouseMoved", { ...shotPoint });
 	await b.change("document.pointerLockElement === document.querySelector('.stage canvas')", () =>

@@ -93,6 +93,11 @@ export async function cameraBrowser() {
 	const ready = async () => {
 		await arm("!!window.__cozyclay?.rigA && !!window.__cozyclay?.editorCam && !!document.querySelector('.stage canvas')");
 		await settled();
+		// A headless page can mount without document focus, and Chrome refuses
+		// pointer lock to an unfocused document, so every right-drag fly would
+		// time out. A user right-dragging the stage has the window focused.
+		await send("Page.bringToFront");
+		assert.equal(await evaluate("document.hasFocus()"), true, "QA page has document focus");
 	};
 	const centre = (selector) => evaluate(`(() => {
 		const element = document.querySelector(${JSON.stringify(selector)});
