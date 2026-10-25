@@ -46,7 +46,7 @@ Every group: `{ kind, subject, count, first, last, worst, worstFrame, limit, cau
   - `cig_vis: move the step from f454 to f460 (RightHand 0 m from rpocket there)`.
   - `elbow_r: key [+0.5, -1, +0.5] (body frame: +y up, +z forward) at f497`.
   - `walk path: root needs [+0.049, 0, +0.122] m at f315 (out of Car_Door_L); change that walk's heading/turnDistance/step (or give one a { range: [lo, hi] })`.
-- `FLOAT` (off the ground, the hips not falling) fits the ballistic arc between the frames just before takeoff and just after landing (gravity fixed): `hips should be 31 cm higher at f28 (ballistic arc from f22 to f34)`, and its patch moves the root keys at 1/4, 1/2 and 3/4 of the run onto it. A run that reaches the end of the take, or needs more than 0.5 m, gets the words only.
+- `FLOAT` (off the ground, the hips not falling) fits the ballistic arc between the frames just before takeoff and just after landing (gravity fixed): `hips should be 31 cm higher at f28 (ballistic arc from f22 to f34)`, and its patch moves the root keys at 1/4, 1/2 and 3/4 of the run onto it (and keys the root at its own height at takeoff and landing when no root key sits within 2 frames). A run that needs more than 0.5 m gets numbers instead of a patch: an N-frame flight peaks g (N / fps)^2 / 8 above takeoff, and the hips' own apex h fits fps sqrt(8 h / g) frames (`hips held 1.43 m below a ballistic arc over 27 frames (f22-f49): either raise the apex to 1.55 m above takeoff, or shorten the air run to 8 frames for this apex (0.12 m)`). A run that reaches the end of the take gets the words only.
 - Hints are local: they come from the worst frame. Apply one, compile, read again.
 
 ## Auto-fixes (`spec.fix`)

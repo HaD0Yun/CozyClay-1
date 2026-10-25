@@ -6,7 +6,8 @@
 //   y(f) = yA + v0 (f - A) - g/2 (f - A)^2,   v0 = (yB - yA) / T + g T / 2,   T = B - A.
 // The fix is that parabola minus the hips height, per frame, vertical only. No anchor (the run
 // touches either end of the take) or a correction past MAX_FIX (the run is too long for the
-// height it has: the arc would throw the body half a metre or more) means no fix.
+// height it has: the arc would throw the body half a metre or more) means no fix; past MAX_FIX
+// arcPrescription gives the apex the run needs, or the run the hips' own apex fits.
 // Pure: numbers in, numbers out.
 
 /** A correction past this (m) is not a fix: the run needs fewer frames, not a higher arc. */
@@ -50,4 +51,17 @@ export function arcFrames(arc) {
 		if (!out.includes(f)) out.push(f);
 	}
 	return out;
+}
+
+/**
+ * arcPrescription(y, a, b, g) -> { off, frames, apex, height, fits } | null: for an arc past MAX_FIX, the numbers that
+ * fix the run instead. A flight of N frames (anchor to anchor) peaks g N^2 / 8 above takeoff (apex, g per frame^2:
+ * 9.81 (N / fps)^2 / 8); the hips' own apex h above takeoff fits N = sqrt(8 h / g) frames (fits, rounded; 0 when the
+ * hips never rise). off = the arc minus the hips at the worst frame. Null when there is no anchor or the arc fits.
+ */
+export function arcPrescription(y, a, b, g) {
+	const arc = ballisticArc(y, a, b, g, Infinity);
+	if (!arc || Math.abs(arc.delta[arc.worst - a]) <= MAX_FIX) return null;
+	const frames = arc.to - arc.from, height = Math.max(...Array.from(arc.delta, (_, i) => y[a + i])) - y[arc.from];
+	return { off: arc.delta[arc.worst - a], frames, apex: g * frames * frames / 8, height, fits: height > 0 ? Math.round(Math.sqrt(8 * height / g)) : 0 };
 }

@@ -13,7 +13,7 @@ import { vec, m3 } from "./fmt.js";
 import { moveHint } from "./hints-contact.js";
 import { kneeFoldHint, kneeWhy } from "./hints-knee.js";
 import { bodyMove } from "./hints-goal.js";
-import { ballisticArc, arcFrames } from "./ballistic.js";
+import { ballisticArc, arcFrames, arcPrescription } from "./ballistic.js";
 
 const LIMB = { Leg: ["UpLeg", "Leg", "Foot", "knee"], ForeArm: ["Arm", "ForeArm", "Hand", "elbow"] };
 const sideOf = s => (s.startsWith("Left") ? "l" : "r");
@@ -64,11 +64,11 @@ function probe(X, f, tries, measure) {
 	return { best, base, c0 };
 }
 
-/** The ballistic arc of a FLOAT group's run (its subject names f<a>-f<b>): the worst frame, the correction at any frame, the keys that follow it; null when none. */
+/** The ballistic arc of a FLOAT group's run (its subject names f<a>-f<b>): the worst frame, the correction at any frame, the keys that follow it; { presc } past MAX_FIX; null without anchors. */
 function floatArc(X, g) {
 	const f0 = X.out.f0 ?? 0, [, a = g.first, b = g.last] = / f(\d+)-f(\d+)/.exec(g.subject)?.map(Number) ?? [];
-	const y = X.out.frames.map(fr => fr.s.P[X.I.Hips][1]), arc = ballisticArc(y, a - f0, b - f0, 9.81 / (X.out.fps ?? 24) ** 2);
-	if (!arc) return null;
+	const y = X.out.frames.map(fr => fr.s.P[X.I.Hips][1]), G = 9.81 / (X.out.fps ?? 24) ** 2, arc = ballisticArc(y, a - f0, b - f0, G);
+	if (!arc) { const p = arcPrescription(y, a - f0, b - f0, G); return p && { presc: { ...p, from: a - 1, to: b + 1 } }; }
 	const dyAt = f => Math.round((arc.delta[f - f0 - arc.from - 1] ?? 0) * 1e4) / 1e4, at = q => ({ f: q + f0, dy: dyAt(q + f0) });
 	return { ...at(arc.worst), from: arc.from + f0, to: arc.to + f0, dyAt, keys: arcFrames(arc).map(at) };
 }
@@ -181,6 +181,8 @@ export const motionHints = {
 		const base = `over f${g.first}-f${g.last} lower the root or key foot_l/foot_r back onto the ground, the floor or the top of an object under the foot (the ankle stands ${ankleY(X.sk)} m above it); a jump needs the hips to rise and fall; a seat or ledge the hips rest on goes in checks.supports (a foot on an object's top needs none)`;
 		const arc = floatArc(X, g);
 		if (!arc) return { cause: X.cause("root", g.worstFrame), hint: base };
+		const p = arc.presc, m2 = v => (Math.round(v * 100) / 100).toFixed(2), other = p && p.fits >= 2 && p.fits !== p.frames;
+		if (p) return { cause: X.cause("root", g.worstFrame), hint: `hips held ${m2(Math.abs(p.off))} m ${p.off > 0 ? "below" : "above"} a ballistic arc over ${p.frames} frames (f${p.from}-f${p.to}): either ${p.apex > p.height ? "raise" : "lower"} the apex to ${m2(p.apex)} m above takeoff${other ? `, or ${p.fits < p.frames ? "shorten" : "lengthen"} the air run to ${p.fits} frames for this apex (${m2(p.height)} m)` : ""}; or ${base}` };
 		const { f, dy } = arc;
 		return { cause: X.cause("root", f), hint: `hips should be ${Math.round(Math.abs(dy) * 100)} cm ${dy < 0 ? "lower" : "higher"} at f${f} (ballistic arc from f${arc.from} to f${arc.to}): root ${vec([0, dy, 0])} m there${arc.keys.length > 1 ? ` (keys at ${arc.keys.map(k => `f${k.f} ${vec([0, k.dy, 0])}`).join(", ")} follow the arc)` : ""}; or ${base}`,
 			fix: { channel: "root", f, delta: [0, dy, 0], ops: userSpec => arcOps(X, userSpec, arc) } };

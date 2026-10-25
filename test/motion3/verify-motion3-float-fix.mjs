@@ -4,7 +4,8 @@
 // The arc itself (zero on a true parabola, the closed-form apex on a held run, refused without anchors or past
 // 0.5 m); on a compiled hop held flat the hint names the amount, the patch lifts the root keys by the arc, the
 // patched spec has no FLOAT and repair keeps it; the same spec gives the same hint and take; a run that touches
-// the end of the take gets the hint's words and no patch; a hop keyed by the feet only gets root keys at both anchors too.
+// the end of the take gets the hint's words and no patch; a hop keyed by the feet only gets root keys at both anchors too;
+// a flight too long for its apex gets the apex it needs and the run its apex fits, no patch.
 import { compileSpec } from "../../src/motion3/pipeline.js";
 import { motionScene } from "../../src/motion3/scene.js";
 import { skeletonFor } from "../../src/motion3/rigs/index.js";
@@ -68,6 +69,16 @@ for (const model of ["x-bot-tpose", "y-bot-tpose"]) {
 	expect(`${model}: foot keys only: the patch keys the root at both anchors, REACH does not grow, the FLOAT run is no longer, the hips after landing stay where they were`,
 		gb?.patch?.some(o => o.value?.f === gb.first - 1) && gb.patch.some(o => o.value?.f === gb.last + 1) && count(bp, "REACH") <= count(b, "REACH") && runOf(bp) <= gb.last - gb.first + 1
 			&& [land, land + 5, 59].every(f => near(hipsY(bp, f), hipsY(b, f), 1e-4)), JSON.stringify({ patch: gb?.patch, after: bp.qa.groups.map(x => `${x.kind} ${x.subject}`) }));
+	// 6. a long tuck the hips barely rise over: past 0.5 m, no patch, the hint gives the apex the run needs and the run the hips' apex fits
+	const lift = up(root, 0.12), tuck = { foot_l: up(fl, 0.3), foot_r: up(fr, 0.3) };
+	const long = compile({ schema: SPEC, fps: 24, frames: 70, use: [stand], keys: [{ f: 20, set: { root, foot_l: fl, foot_r: fr } }, { f: 22, set: { root, foot_l: fl, foot_r: fr } },
+		{ f: 27, set: { root, ...tuck } }, { f: 33, set: { root: lift, ...tuck } }, { f: 37, set: { root: lift, ...tuck } }, { f: 44, set: { root, ...tuck } },
+		{ f: 49, set: { root, foot_l: fl, foot_r: fr } }, { f: 56, set: { root, foot_l: fl, foot_r: fr } }] });
+	const g6 = long.qa.groups.find(x => x.kind === "FLOAT"), N = g6 ? g6.last - g6.first + 2 : 0, ys = long.out.frames.map(q => q.s.P[sk.index.Hips][1]);
+	const h = g6 ? Math.max(...ys.slice(g6.first, g6.last + 1)) - ys[g6.first - 1] : 0, fits = Math.round(24 * Math.sqrt(8 * h / 9.81));
+	const m6 = / over (\d+) frames \(f\d+-f\d+\): either raise the apex to ([\d.]+) m above takeoff, or shorten the air run to (\d+) frames for this apex/.exec(g6?.hint ?? "");
+	expect(`${model}: a ${N}-frame flight with a ${Math.round(h * 100)} cm apex: no patch; raise the apex to g (N / fps)^2 / 8, or shorten to round(fps sqrt(8 h / g)) = ${fits} frames`,
+		g6 && !g6.patch && m6 && +m6[1] === N && near(+m6[2], 9.81 * (N / 24) ** 2 / 8, 0.006) && +m6[3] === fits && fits < N, g6?.hint);
 }
 
 if (failures) { console.log(`\n${failures} FAILED`); process.exit(1); }
