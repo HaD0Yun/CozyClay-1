@@ -4,7 +4,8 @@
 //              the support polygon than the balance limit (checks.limits.balance, else QA_LIMITS.balance: what
 //              BALANCE reports), "inside" otherwise, "air" with no foot on the ground, "supported" where a declared
 //              support carries the body (qa/style.js balanceFrames)
-//   supportAt  the convex hull of the sole points on the ground (qa/com.js balanceAt feet), on the ground
+//   supportAt  the convex hull of the sole points on the ground (qa/com.js balanceAt feet), each corner on
+//              the ground QA measured that sole point from (balanceAt ground)
 //   airArcs    per air run of 4 frames or more (qa/style.js airRuns, the runs floatChecks judges): the hips path
 //              from the frame before takeoff to the frame after landing, and the gravity parabola through the same
 //              two anchors (qa/ballistic.js); float marks the runs QA calls FLOAT
@@ -44,12 +45,15 @@ export function comAt(view, frame) {
 	return { frame: f, p, ground: groundY(view.out, f, p), state, margin: measured ? b.margin : null };
 }
 
-/** The support polygon at `frame`: its corners [x, y, z] counter-clockwise in (x, z), y the ground under each; [] with no foot down. */
+/**
+ * The support polygon at `frame`: its corners [x, y, z] counter-clockwise in (x, z), y the ground QA measured that
+ * sole point from (balanceAt ground); [] with no foot down. convexHull keeps the feet's own points, so each corner
+ * finds its ground by identity.
+ */
 export function supportAt(view, frame) {
 	const f = viewFrame(view, frame), b = balanceOf(view)[f] ?? balanceAt(view.out, f);
 	if (b === "air") return [];
-	const hipsY = view.out.frames[f].s.P[view.out.ctx.sk.index.Hips][1];
-	return convexHull(b.feet).map(([x, z]) => [x, groundY(view.out, f, [x, hipsY, z]), z]);
+	return convexHull(b.feet).map(p => [p[0], b.ground[b.feet.indexOf(p)], p[1]]);
 }
 
 /**

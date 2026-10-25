@@ -12,6 +12,7 @@ import { buildKit } from "../../src/kits/index.js";
 import { styleChecks, floatChecks } from "../../src/motion3/qa/style.js";
 import { QA_LIMITS } from "../../src/motion3/qa/checks.js";
 import { ballisticArc } from "../../src/motion3/qa/ballistic.js";
+import { groundSole, groundY } from "../../src/motion3/qa/ground.js";
 import { physicsView, comAt, supportAt, airArcs } from "../../src/motion3/physics-view.js";
 import { tipTrails, TRAIL_FRAMES } from "../../src/motion3/physics-trail.js";
 import { createStudioAppActions } from "../../src/commands/index.js";
@@ -95,6 +96,20 @@ const close = (a, b, tol) => a.length === b.length && a.every((p, i) => p.every(
 	expect("the tip travels while the hand sweeps the ball", moved, json(trail[0].points.slice(0, 3)));
 	expect("an object without a spring has no trail, nor does a still scene box", tipTrails(plain.view, 40).length === 0 && !trail.some(t => t.id === "crate"));
 	expect("determinism: the trail of the same take read twice is the same", json(tipTrails(sprung.view, 60)) === json(tipTrails(build(sk, spec({ spring: { stiffness: 80, damping: 0.3 } }), records).view, 60)));
+}
+
+// 3b. support heights: soles on the floor under a box whose top (y 0.4) overhangs them below the hips (review on #950).
+// The take is compiled without the box and read with it, so the box's top lies over every sole point; the polygon's
+// corners stay on the floor QA measured the soles from, not on the box top above them.
+{
+	const sk = skeletonFor("x-bot-tpose"), spec = { schema: SPEC, fps: 24, frames: 20, use: [{ skill: "standIdle", f0: 0, args: { at: [0, 0] } }] };
+	const shelf = { id: "shelf", name: "shelf", renderer: "cube", x: 0, y: 0, z: 0.08, rot: 0, rotX: 0, rotZ: 0, scaleX: 0.4, scaleY: 0.4, scaleZ: 0.4, footprint: { width: 1, depth: 1 }, height: 1 };
+	const take = build(sk, spec).take, view = physicsView(take, [shelf]), out = view.out, f = 10;
+	const hipsY = out.frames[f].s.P[out.ctx.sk.index.Hips][1], poly = supportAt(view, f);
+	const soles = ["Left", "Right"].flatMap(S => { const sp = groundSole(out, f, S); return ["heel", "ball", "tip"].map(k => [sp[k][0], sp.ground[k], sp[k][2]]); });
+	expect("the box top (0.4 m) lies over every corner, below the hips", poly.length >= 3 && poly.every(([x, , z]) => Math.abs(groundY(out, f, [x, hipsY, z]) - 0.4) < 1e-9) && hipsY > 0.4, json({ hipsY, poly }));
+	expect("every support polygon corner is on the floor", poly.every(p => p[1] === 0), json(poly));
+	expect("each corner is at the ground height QA measured that sole point from (groundSole)", poly.every(p => soles.some(q => q[0] === p[0] && q[2] === p[2] && q[1] === p[1])), json({ poly, soles }));
 }
 
 // 4. motion.physicsOverlay: off by default, all / named parts, session-only (no undo entry, no affected id)
