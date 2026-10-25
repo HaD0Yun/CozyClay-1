@@ -39,8 +39,11 @@ function exitDistance(w, dir, reach) {
  *   lookup (null = 0) for an intended touch (spec.checks.allow person entries)
  * @param {number} [options.margin]  how far outside the surface a pushed target lands
  * @param {number} [options.passes] fixed number of probe/push passes
+ * @param {number} [options.maxSteps] cap on the sweep's substeps per event
  */
-export function createContactProjector({ blockers = [], allow = 0, margin = 0.004, passes = 4 } = {}) {
+export function createContactProjector({ blockers = [], allow = 0, margin = 0.004, passes = 4, maxSteps = 32 } = {}) {
+	// sweep spacing: no substep longer than the thinnest blocker's radius
+	const thinnest = Math.max(0.005, Math.min(...blockers.map((b) => b.radius)));
 	const allowed = typeof allow === "function" ? (p, b) => Math.max(0, allow(p, b) ?? 0) : () => Math.max(0, allow ?? 0);
 	const onProbe = new THREE.Vector3(), onBlocker = new THREE.Vector3(), w = new THREE.Vector3(), dir = new THREE.Vector3(), side = new THREE.Vector3();
 	const best = { depth: 0, reach: 0, probe: new THREE.Vector3(), blocker: new THREE.Vector3() };
@@ -71,17 +74,46 @@ export function createContactProjector({ blockers = [], allow = 0, margin = 0.00
 	 * @returns {{ target: THREE.Vector3, contact: boolean, depth: number }}
 	 *   `contact` = a push happened; `depth` = what is left after the last pass (0 = clean)
 	 */
+	/**
+	 * SWEEP. A clean endpoint is not enough: one pointer event can carry the
+	 * limb clean across a thin blocker (a forearm, a hand). Walk lastGood ->
+	 * target in equal substeps no longer than the thinnest blocker's radius
+	 * (at most `maxSteps`; a longer jump gets longer substeps) and stop at the
+	 * first substep that touches after a clean one. Returns that substep (the
+	 * keep-the-side push then runs there, with the clean substep before it as
+	 * the side), `{ at: null }` when the target is clean and so was the way
+	 * there, or null when the path never got clean (it starts in contact, the
+	 * drag opened touching, and a start in contact only stops once clean).
+	 */
+	function firstTouch(target, probe, lastGood) {
+		const steps = Math.min(maxSteps, Math.max(1, Math.ceil(lastGood.distanceTo(target) / thinnest)));
+		let wasClean = !deepest(probe(lastGood));
+		const clean = lastGood.clone();
+		for (let k = 1; k <= steps; k++) {
+			const at = k === steps ? target.clone() : lastGood.clone().lerp(target, k / steps);
+			if (!deepest(probe(at))) {
+				wasClean = true;
+				clean.copy(at);
+			} else if (wasClean) return { at, clean };
+		}
+		return wasClean ? { at: null, clean } : null;
+	}
+
 	function project(target, probe, lastGood = null) {
-		const out = target.clone();
+		let out = target.clone();
 		let contact = false;
 		if (!blockers.length) return { target: out, contact, depth: 0 };
+		const hit = lastGood ? firstTouch(out, probe, lastGood) : null;
+		if (hit && !hit.at) return { target: out, contact, depth: 0 };
+		if (hit) out = hit.at;
+		const keep = hit?.clean ?? lastGood;
 		for (let pass = 0; pass < passes; pass++) {
 			if (!deepest(probe(out))) return { target: out, contact, depth: 0 };
 			contact = true;
 			w.subVectors(best.probe, best.blocker);
 			dir.copy(w);
-			if (lastGood) {
-				side.subVectors(lastGood, best.blocker);
+			if (keep) {
+				side.subVectors(keep, best.blocker);
 				// a normal pointing away from the side the hand came from is the
 				// far side of the body: escape toward lastGood instead
 				if (side.lengthSq() > EPS && (dir.lengthSq() <= EPS || dir.dot(side) < 0)) dir.copy(side);
@@ -91,6 +123,9 @@ export function createContactProjector({ blockers = [], allow = 0, margin = 0.00
 			out.addScaledVector(dir, exitDistance(w, dir, best.reach + margin));
 		}
 		const left = deepest(probe(out)) ? best.depth : 0;
+		// the passes did not get the probed (displayed) limb out: fall back to
+		// the last clean substep of the sweep, on the near side
+		if (left > 0 && hit) return { target: hit.clean.clone(), contact: true, depth: 0 };
 		return { target: out, contact, depth: left };
 	}
 

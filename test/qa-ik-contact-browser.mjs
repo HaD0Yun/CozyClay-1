@@ -91,7 +91,7 @@ await evaluate(`(async () => {
 	const THREE = await import("/node_modules/.vite/deps/three.js");
 	const caps = (rig) => [...buildCollisionCapsules(rig).values()].filter((c) => !c.def.handId && !c.def.optional);
 	window.__qaContact = {
-		THREE,
+		THREE, caps,
 		// deepest overlap (m) of the active right arm into the other body; negative = clear by that much
 		depth() {
 			const mine = caps(window.__cozyclay.rigs[${JSON.stringify(ACTIVE)}]).filter((c) => c.def.movable?.chain === "rightHand");
@@ -186,6 +186,152 @@ const cost = await evaluate(`(async () => {
 })()`);
 console.log(`projection cost per drag event: ${cost.perEvent.toFixed(3)} ms (floor clamp alone ${cost.floorOnly.toFixed(4)} ms; contact built once at drag open: ${cost.openMs.toFixed(2)} ms)`);
 expect("per-event projection stays within the 2 ms budget", cost.perEvent < 2, JSON.stringify(cost));
+
+// 5. one fast pointer event (30 cm) across the other character's forearm: the
+// endpoint is clear of the body, the way there is not. The hand moves in the
+// drag plane (camera-facing, through the hand at the press), so the other
+// character is placed for one of its forearms to cross that plane within the
+// arm's reach; the crossing is then picked from the live capsules.
+await backToStart("fast");
+await evaluate(`(async () => {
+	const { solveDragTarget } = await import("/src/motion/ik-drag.js");
+	const { applyPose } = await import("/src/poses.js");
+	const { THREE, caps } = window.__qaContact, at = (b) => b.getWorldPosition(new THREE.Vector3());
+	const chain = window.__cozyclay.ikChains.get("rightHand"), hand = new THREE.Vector3(...window.__qaContact.hand()), shoulder = at(chain.bones[0]);
+	const reach = shoulder.distanceTo(at(chain.bones[1])) + at(chain.bones[1]).distanceTo(at(chain.bones[2]));
+	// the drag plane's normal: the null direction of __ikProject's Jacobian at the hand
+	const p = (w) => window.__ikProject(w), h = 0.01, base = p(hand);
+	const col = (x, y, z) => { const q = p(hand.clone().add(new THREE.Vector3(x, y, z).multiplyScalar(h))); return [(q.x - base.x) / h, (q.y - base.y) / h]; };
+	const [jx, jy, jz] = [col(1, 0, 0), col(0, 1, 0), col(0, 0, 1)];
+	const n = new THREE.Vector3(jx[0], jy[0], jz[0]).cross(new THREE.Vector3(jx[1], jy[1], jz[1])).normalize();
+	const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(n, hand);
+	const e1 = new THREE.Vector3().crossVectors(n, new THREE.Vector3(0, 1, 0)).normalize(), e2 = new THREE.Vector3().crossVectors(n, e1);
+	const inReach = (point) => point.distanceTo(shoulder) < 0.85 * reach;
+	const rigB = () => window.__cozyclay.rigs[${JSON.stringify(OTHER)}];
+	window.__qaCross = {
+		// the other character with its arms held straight out (rest = T-pose), so a
+		// forearm is a thin blocker away from its torso
+		armsOut() { applyPose(rigB(), { lArm: [0, 0, 0], rArm: [0, 0, 0], lForeArm: [0, 0, 0], rForeArm: [0, 0, 0] }); rigB().updateMatrixWorld(true); return true; },
+		armsAreOut: () => caps(rigB()).filter((c) => /ForeArm$/.test(c.def.id)).every((c) => Math.abs(c.a.y - c.b.y) < 0.03),
+		// the middle of forearm \`id\` as the other character stands now
+		armPoint: (id) => { const arm = caps(rigB()).find((c) => c.def.id === id); return arm.a.clone().lerp(arm.b, 0.5).toArray(); },
+		// where a forearm at height \`y\` should cross: in the drag plane, 0.2 m out to the arm's side of the shoulder
+		spotAt(y) {
+			const spot = new THREE.Vector3(shoulder.x, y, shoulder.z).addScaledVector(e1, e1.x < 0 ? 0.2 : -0.2);
+			const across = new THREE.Vector3(n.x, 0, n.z).normalize();
+			return spot.addScaledVector(across, -plane.distanceToPoint(spot) / n.dot(across)).toArray();
+		},
+		// the best 30 cm in-plane crossing of forearm \`id\`: scored by the hand's
+		// clearance at both ends and along the approach (larger is better)
+		search(id) {
+			const arm = caps(window.__cozyclay.rigs[${JSON.stringify(OTHER)}]).find((c) => c.def.id === id);
+			// how clear the whole right arm is with the handle at \`point\`: the drag's own solve
+			// from the press pose, the same capsules depth() reads, then the pose put back
+			const pose = chain.bones.map((b) => b.quaternion.clone());
+			const clearance = (point) => {
+				solveDragTarget("chain", chain, point);
+				const { worst } = window.__qaContact.depth();
+				chain.bones.forEach((b, i) => b.quaternion.copy(pose[i]));
+				chain.bones[0].updateMatrixWorld(true);
+				return -worst;
+			};
+			let best = null;
+			for (let t = 0.1; t <= 0.91; t += 0.1) {
+				const axis = arm.a.clone().lerp(arm.b, t), x = plane.projectPoint(axis, new THREE.Vector3());
+				if (axis.distanceTo(x) > 0.02 || !inReach(x)) continue;
+				for (let k = 0; k < 16; k++) {
+					const u = e1.clone().multiplyScalar(Math.cos((k * Math.PI) / 8)).addScaledVector(e2, Math.sin((k * Math.PI) / 8));
+					const near = x.clone().addScaledVector(u, -0.12), far = x.clone().addScaledVector(u, 0.18);
+					if (!inReach(near) || !inReach(far)) continue;
+					let score = Math.min(clearance(near), clearance(far));
+					for (let i = 0; i < 10; i++) score = Math.min(score, clearance(hand.clone().lerp(near, i / 10)));
+					if (!best || score > best.score) best = { id, t, score, x: x.toArray(), u: u.toArray(), near: near.toArray(), far: far.toArray(), nearXY: p(near), farXY: p(far) };
+				}
+			}
+			return best;
+		},
+	};
+	return true;
+})()`);
+const moveOther = async (x, z, rot) => {
+	await evaluate(`window.__cozyclay.runStudioAction("character.move", { characterId: ${JSON.stringify(OTHER)}, x: ${x}, z: ${z}, rot: ${rot} })`);
+	await waitFor(`(() => { const c = window.__qaContact.chest(); return Math.hypot(c.x - ${x}, c.z - ${z}) < 0.08; })()`, 3000);
+	await sleep(150);
+	await evaluate("window.__qaCross.armsOut()");
+};
+// every yaw (30 degree steps) x both forearms; the best-scored placement wins
+let cross = null;
+const PARK = { x: -1.5, z: 0 };
+for (let rot = 0; rot < 360; rot += 30) {
+	for (const id of ["rightForeArm", "leftForeArm"]) {
+		await moveOther(PARK.x, PARK.z, rot);
+		const arm = await evaluate(`window.__qaCross.armPoint(${JSON.stringify(id)})`), spot = await evaluate(`window.__qaCross.spotAt(${arm[1]})`);
+		const x = PARK.x + spot[0] - arm[0], z = PARK.z + spot[2] - arm[2];
+		await moveOther(x, z, rot);
+		const found = await evaluate(`window.__qaCross.search(${JSON.stringify(id)})`);
+		if (found && (!cross || found.score > cross.score)) cross = { ...found, placement: { x, z, rot } };
+	}
+}
+if (cross) {
+	await moveOther(cross.placement.x, cross.placement.z, cross.placement.rot);
+	cross.handXY = await evaluate("window.__ikControlScreenPositions().rightHand");
+	await sleep(300);
+	expect("the other character holds its arms out", await evaluate("window.__qaCross.armsAreOut()"));
+}
+console.log("fast crossing", JSON.stringify(cross));
+expect("a 30 cm crossing of the other's forearm is found within reach (hand clear by >= 1.5 cm along the way)", !!cross && cross.score >= 0.015, JSON.stringify(cross));
+expect("the hand still starts clear of the placed character", (await evaluate("window.__qaContact.depth()")).worst < 0, JSON.stringify(await evaluate("window.__qaContact.depth()")));
+if (cross && cross.score >= 0.015) {
+	/** press on the handle, walk to the near side, then ONE pointer event to the far side */
+	const fastDrag = async (modifiers = 0) => {
+		await mouse("mousePressed", cross.handXY.x, cross.handXY.y, modifiers);
+		for (let i = 1; i <= STEPS; i++) {
+			await mouse("mouseMoved", cross.handXY.x + ((cross.nearXY.x - cross.handXY.x) * i) / STEPS, cross.handXY.y + ((cross.nearXY.y - cross.handXY.y) * i) / STEPS, modifiers);
+			await sleep(16);
+		}
+		await sleep(100);
+		const read = async () => {
+			const hand = await evaluate("window.__qaContact.hand()");
+			return { hand, side: cross.u.reduce((s, ui, i) => s + ui * (hand[i] - cross.x[i]), 0), depth: await evaluate("window.__qaContact.depth()") };
+		};
+		const before = await read();
+		await mouse("mouseMoved", cross.farXY.x, cross.farXY.y, modifiers);
+		await sleep(16);
+		await mouse("mouseReleased", cross.farXY.x, cross.farXY.y, modifiers);
+		await sleep(200);
+		return { before, ...(await read()) };
+	};
+	const fast = await fastDrag();
+	console.log("fast drag", JSON.stringify(fast));
+	expect("before the fast event the arm is clear, on the near side", fast.before.depth.worst < -0.01 && fast.before.side < -0.1, JSON.stringify(fast.before));
+	expect("the fast event moves the hand on toward the forearm", fast.side - fast.before.side > 0.02, JSON.stringify(fast));
+	expect("and stops on the near side of it", fast.side < 0, JSON.stringify(fast));
+	expect("touching the forearm (or its hand), not some other part", /x (left|right)(ForeArm|Hand)$/.test(fast.depth.pair) && fast.depth.worst > -0.02, JSON.stringify(fast.depth));
+	expect("with the arm not inside the other body (overlap <= 5 mm)", fast.depth.worst <= 0.005, JSON.stringify(fast.depth));
+	await undo();
+	await sleep(300);
+	const through = await fastDrag(ALT);
+	console.log("fast Alt drag", JSON.stringify(through));
+	expect("control: the same pointer path with Alt ends past the forearm", through.side > 0.05, JSON.stringify(through));
+	expect("control: and there the arm is clear (only the way crosses the body)", through.depth.worst < 0, JSON.stringify(through.depth));
+
+	// the crossing event's cost: a full sweep from the near side every time
+	const sweep = await evaluate(`(async () => {
+		const { clampDragTarget } = await import("/src/motion/ik-drag.js");
+		const THREE = window.__qaContact.THREE, chains = window.__cozyclay.ikChains;
+		const open = () => ({ rigs: window.__cozyclay.rigs, activeId: ${JSON.stringify(ACTIVE)}, cast: window.__cozyclay.characters });
+		const near = new THREE.Vector3(...${JSON.stringify(cross.near)}), far = new THREE.Vector3(...${JSON.stringify(cross.far)});
+		const record = {}; clampDragTarget({ kind: "chain", trackId: "rightHand", targetWorld: near, bodyContact: true, chains, record, open });
+		const n = 200, t0 = performance.now();
+		for (let i = 0; i < n; i++) {
+			record.contact.lastGood = near.clone();
+			clampDragTarget({ kind: "chain", trackId: "rightHand", targetWorld: far, bodyContact: true, chains, record, open });
+		}
+		return (performance.now() - t0) / n;
+	})()`);
+	console.log(`crossing event cost (30 cm sweep + passes): ${sweep.toFixed(3)} ms`);
+	expect("the crossing event stays within the 2 ms budget", sweep < 2, String(sweep));
+}
 
 expect("browser run has no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
 ws.close();

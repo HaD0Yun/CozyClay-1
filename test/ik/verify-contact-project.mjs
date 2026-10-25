@@ -122,7 +122,34 @@ function overlap(mine, theirs) {
 	check("blockers are never moved", TORSO.a.equals(v(0, 0.95, 2.0)) && TORSO.b.equals(v(0, 1.4, 2.0)) && HEAD.a.equals(v(0, 1.5, 2.0)));
 }
 
-// 5. the probe checks the pose the drag DISPLAYS (review finding: the probe ran
+// 5. sweep (review finding): one event that carries the hand clean across a
+// thin blocker must stop on the near side, not jump through because the
+// endpoint is clear. Hand sphere r 0.05 from x -0.15 to +0.15 across a
+// stationary r 0.05 sphere at the origin.
+{
+	const knob = [{ id: "char:char-b:rightHand", a: v(0, 0, 0), b: v(0, 0, 0), radius: 0.05 }];
+	const hand = (c) => [{ id: "rightHand", a: c.clone(), b: c.clone(), radius: 0.05 }];
+	const thin = createContactProjector({ blockers: knob });
+	const from = v(-0.15, 0, 0), to = v(0.15, 0, 0);
+	const { target: out, contact, depth } = thin.project(to, hand, from);
+	check("a step across a thin blocker is caught (contact)", contact && depth === 0, JSON.stringify({ contact, depth }));
+	check("it stops on the near side, on the surface", out.x < 0 && out.length() >= 0.1 - 1e-9 && out.length() <= 0.1 + MARGIN + 1e-6, `out ${out.toArray().map((x) => x.toFixed(4))}`);
+	check("the input target is not mutated by the sweep", to.equals(v(0.15, 0, 0)));
+	const noSide = thin.project(to, hand, null);
+	check("negative control: without lastGood the endpoint alone is clear", !noSide.contact && noSide.target.equals(to));
+	// off-axis, the same: a step past the blocker 3 cm above its centre
+	const grazing = thin.project(v(0.15, 0.03, 0), hand, v(-0.15, 0.03, 0));
+	check("an off-centre crossing also stops on the near side", grazing.contact && grazing.target.x < 0 && grazing.target.length() >= 0.1 - 1e-9, `out ${grazing.target.toArray().map((x) => x.toFixed(4))}`);
+	// a path that clears the blocker is untouched, and so is a drag leaving a start in contact
+	const clear = thin.project(v(0.15, 0.2, 0), hand, v(-0.15, 0.2, 0));
+	check("a step that passes the blocker by is left alone", !clear.contact && clear.target.equals(v(0.15, 0.2, 0)));
+	const leaving = thin.project(v(-0.3, 0, 0), hand, v(-0.06, 0, 0));
+	check("a drag that starts in contact may leave it", !leaving.contact && leaving.target.equals(v(-0.3, 0, 0)));
+	const again = thin.project(to, hand, from);
+	check("the swept stop is deterministic", again.target.equals(out));
+}
+
+// 6. the probe checks the pose the drag DISPLAYS (review finding: the probe ran
 // an exactHinge solve, the drag a plain one; from a bent arm they put the elbow
 // and hand centimetres apart, so a target the probe passed could leave the
 // displayed limb inside the other body). Synthetic Mixamo rigs (verify-ik.mjs
@@ -171,7 +198,7 @@ function overlap(mine, theirs) {
 	check("the same drag from the same pose gives the same target", (() => { record.contact = undefined; return drag().equals(out); })());
 }
 
-// 6. cost: 2 probes x 2 blockers x 4 passes per event, in node
+// 7. cost: 2 probes x 2 blockers, sweep + 4 passes per event, in node
 {
 	const target = v(0, 1.2, 1.95), n = 20000;
 	for (let i = 0; i < 2000; i++) projector.project(target, probe, FRONT);
