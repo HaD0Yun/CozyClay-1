@@ -52,20 +52,32 @@ export function compareVersions(a, b) {
 	return 0;
 }
 
+// A registry answer whose cache write failed (a read-only home), by cache file.
+// The write is best effort, so a good fetch must not depend on it.
+const fetchedInProcess = new Map();
+
+// The newer of the cache file and this process's own last fetch.
 function readCache(cacheFile) {
+	let disk = null;
 	try {
-		return JSON.parse(readFileSync(cacheFile, "utf8"));
+		disk = JSON.parse(readFileSync(cacheFile, "utf8"));
 	} catch {
-		return null;
+		/* missing or unreadable: the in-process answer, if any, stands */
 	}
+	const memory = fetchedInProcess.get(cacheFile) ?? null;
+	if (!disk) return memory;
+	return memory && !(memory.checkedAt <= disk.checkedAt) ? memory : disk;
 }
 
 function writeCache(cacheFile, cacheDir, latest) {
+	const entry = { latest, checkedAt: Date.now() };
 	try {
 		mkdirSync(cacheDir, { recursive: true });
-		writeFileSync(cacheFile, JSON.stringify({ latest, checkedAt: Date.now() }, null, "\t"));
+		writeFileSync(cacheFile, JSON.stringify(entry, null, "\t"));
+		fetchedInProcess.delete(cacheFile);
 	} catch {
-		/* a read-only home is not a reason to fail a local dev server */
+		// A read-only home is not a reason to fail a local dev server, nor to forget the answer.
+		fetchedInProcess.set(cacheFile, entry);
 	}
 }
 
@@ -134,11 +146,47 @@ export function readUpdateStatus(currentVersion, stateDir) {
 	}
 }
 
+// `--no-update-check`, COZYCLAY_NO_UPDATE_CHECK and CI each turn the notice,
+// the Studio chip and the one-click install off.
+export function updateChecksOn(flag, env = process.env) {
+	return Boolean(flag && !env.CI && !env.COZYCLAY_NO_UPDATE_CHECK);
+}
+
+/**
+ * The registry's latest x.y.z with this launch's status: the shape behind
+ * GET /__cozyclay/update and `cclay update --check`. The cache rules are
+ * checkForUpdate's; `fresh` asks the registry even inside the TTL, and a dead
+ * registry still falls back to the cached answer.
+ */
+export async function lookupLatest(currentVersion, stateDir, { fresh = false } = {}) {
+	const cacheFile = join(stateDir, "update-check.json");
+	if (fresh) {
+		const fetched = await fetchLatest();
+		if (fetched) writeCache(cacheFile, stateDir, fetched);
+	} else {
+		await checkForUpdate(currentVersion, stateDir);
+	}
+	const latest = readCache(cacheFile)?.latest;
+	const known = typeof latest === "string" && /^\d+\.\d+\.\d+/.test(latest);
+	return { latest: known ? latest : null, status: readUpdateStatus(currentVersion, stateDir) };
+}
+
+/**
+ * `cclay update --check`: print, install nothing, and exit 0 when this is the
+ * newest release, 10 when a newer one exists, 11 when the registry could not
+ * answer and nothing is cached. Scripts and agents branch on the code.
+ */
+export async function runUpdateCheck({ currentVersion, kind, stateDir }) {
+	const { latest, status } = await lookupLatest(currentVersion, stateDir, { fresh: true });
+	console.log(`current: ${currentVersion}\nlatest: ${latest ?? "unknown"}\nkind: ${kind}\nstatus: ${status}`);
+	return { latest: 0, outdated: 10 }[status] ?? 11;
+}
+
 // npx/bunx runs from a temp dir, so there is no local install to upgrade in
 // place; `npm install -g` is the one command that is right either way.
 export function runUpdate() {
 	const npm = process.platform === "win32" ? "npm.cmd" : "npm";
-	const child = spawn(npm, ["install", "-g", "cozyclay@latest"], { stdio: "inherit", shell: process.platform === "win32" });
+	const child = spawn(npm, ["install", "-g", "cozyclay@latest", "--engine-strict"], { stdio: "inherit", shell: process.platform === "win32" });
 	child.on("error", (err) => {
 		console.error(`cozyclay: could not run npm: ${err.message}`);
 		process.exit(1);
