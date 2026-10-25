@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 3.1.6 - 2026-10-25
+
+The npm package ships the MCP module the live tools need, so the Studio's live tools and `cozyclay mcp` work on a fresh install.
+
+Studio
+
+- A 3.1.5 global install shows the **Update** chip in the top bar for the
+  first time, since this is the first release after the chip shipped.
+  **Update now**, or the command it offers to copy, installs 3.1.6; then
+  restart `cclay`.
+
 MCP
 
 - The npm package now ships `mcp/project-camera.mjs`, so the Studio's live
