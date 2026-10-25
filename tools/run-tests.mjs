@@ -28,7 +28,7 @@ const NODE_FILES = [
 	"test/ardy/verify-timeline-coordinates.mjs",
 	"test/verify-tokens.mjs", "test/verify-lens-scrub.mjs",
 	"test/demo/verify-api-routes.mjs",
-	"test/ik/verify-collision-capsules.mjs", "test/ik/verify-ik-pick.mjs",
+	"test/ik/verify-collision-capsules.mjs", "test/ik/verify-ik-pick.mjs", "test/ik/verify-contact-project.mjs",
 	"test/ik/verify-ground.mjs",
 	"test/ik/verify-physics-review.mjs",
 	"test/ik/verify-physics-support.mjs",
@@ -210,7 +210,7 @@ const NODE_FILES = [
 
 const BROWSER_FILES = [
 	"test/qa-proxy-entry-browser.mjs",
-	"test/qa-previs-start-browser.mjs", "test/qa-shortcut-friction-browser.mjs",
+	"test/qa-previs-start-browser.mjs", "test/qa-shortcut-friction-browser.mjs", "test/qa-ik-contact-browser.mjs",
 	"test/qa-storyboard-board-browser.mjs",
 	"test/qa-storyboard-export-browser.mjs", "test/qa-playback-guide-browser.mjs",
 	"test/qa-proxy-figure-browser.mjs", "test/qa-click-friction-browser.mjs", "test/qa-update-notice-browser.mjs",
@@ -258,7 +258,7 @@ const EXTRA_INVENTORY = ["test/ik/translation-step.mjs", "test/qa-scenes-v5-migr
 
 EXTRA_INVENTORY.push("test/qa-proxy-figure-browser.mjs", "test/qa-click-friction-browser.mjs", "test/qa-update-notice-browser.mjs");
 EXTRA_INVENTORY.push("test/qa-proxy-entry-browser.mjs");
-EXTRA_INVENTORY.push("test/qa-previs-start-browser.mjs", "test/qa-shortcut-friction-browser.mjs");
+EXTRA_INVENTORY.push("test/qa-previs-start-browser.mjs", "test/qa-shortcut-friction-browser.mjs", "test/qa-ik-contact-browser.mjs");
 EXTRA_INVENTORY.push("test/qa-storyboard-board-browser.mjs");
 EXTRA_INVENTORY.push("test/qa-storyboard-export-browser.mjs", "test/qa-playback-guide-browser.mjs");
 
