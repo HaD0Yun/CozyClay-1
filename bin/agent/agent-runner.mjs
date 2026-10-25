@@ -414,7 +414,8 @@ export function createAgentRunner({ models: suppliedModels, sessionStore, tools 
 					initialState: { systemPrompt: activePrompt, model: selected.model, thinkingLevel: thinkingLevel ?? "off", tools: await adapters(input), messages: restored?.history ?? [] },
 					streamFn: createRetryingStream({ ai: pi.ai, models: registry, refreshAuth, onAttempt: (message) => { countAttempt(message); emitQuota(state.active?.queue, state.lastInput); } }),
 					transformContext: studioView,
-					onPayload: (payload, model) => (model?.api === "anthropic-messages" ? withAnthropicCacheBreakpoints(payload, model) : undefined),
+					// keeps the output limit this request really sent, for a turn that runs out of it (finish)
+					onPayload: (payload, model) => { if (state.active) state.active.maxTokens = payload?.max_tokens ?? payload?.max_completion_tokens ?? payload?.max_output_tokens; return model?.api === "anthropic-messages" ? withAnthropicCacheBreakpoints(payload, model) : undefined; },
 					onResponse: (response) => { if (state.active && response?.headers) state.active.lastResponseHeaders = response.headers; },
 					sessionId,
 					// pi-agent-core's Agent attributes requests to pi (OpenRouter, NVIDIA NIM and OpenCode headers); these are
@@ -480,7 +481,11 @@ export function createAgentRunner({ models: suppliedModels, sessionStore, tools 
 				// The run's outcome is its last assistant message: the Agent ends a
 				// failed or cancelled request there (stopReason error/aborted).
 				const last = event.messages.findLast((message) => message.role === "assistant");
-				const status = last?.stopReason === "aborted" ? "aborted" : last?.stopReason === "error" ? "error" : "completed";
+				// #947: a request that hit its output limit before any answer or tool call (reasoning alone can use it up)
+				// is a failure, not an empty success; with some text or a tool call it completes as before.
+				const outOfTokens = last?.stopReason === "length" && !last.content?.some((part) => part?.type === "toolCall" || (part?.type === "text" && part.text))
+					? `The model used all ${state.active?.maxTokens ?? state.currentModel?.maxTokens} output tokens before answering. Lower the reasoning effort or raise the output limit.` : null;
+				const status = last?.stopReason === "aborted" ? "aborted" : last?.stopReason === "error" || outOfTokens ? "error" : "completed";
 				// #379 / 16q: an acknowledged Studio Stop whose held tool already settled
 				// with a real structured outcome (tool.done above) calls `abort(reason,
 				// { quiet: true })` purely to stop the model from being prompted again —
@@ -493,10 +498,10 @@ export function createAgentRunner({ models: suppliedModels, sessionStore, tools 
 					const rawMessage = last?.errorMessage || (status === "aborted" ? "The turn was aborted." : "The model or live editor could not complete this turn.");
 					const truncated = /ended before a terminal response event/i.test(rawMessage);
 					const classified = status === "aborted" ? { code: "aborted", status: undefined } : classifyError({ message: rawMessage });
-					const code = status === "aborted" ? "aborted" : truncated ? "truncated" : classified.code;
+					const code = status === "aborted" ? "aborted" : truncated || outOfTokens ? "truncated" : classified.code;
 					const detail = sanitizeUpstreamDetail(JSON.stringify({ message: rawMessage }));
 					const fallback = code === "aborted" ? "The turn was aborted." : code === "truncated" ? "The model stream ended before a terminal response event." : "The model or live editor could not complete this turn.";
-					queue.push({ type: "error", code, message: detail || fallback, ...(classified.status ? { status: classified.status } : {}) });
+					queue.push({ type: "error", code, message: outOfTokens || detail || fallback, ...(classified.status ? { status: classified.status } : {}) });
 				}
 				queue.push({ type: "done", usage: { ...state.active.usage }, ...(state.lastInput?.reportCost ? { cost: state.active.cost ?? 0 } : {}) });
 				queue.close();
