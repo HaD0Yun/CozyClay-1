@@ -9,7 +9,8 @@
 //   { ops: userSpec => [{ op, path, value }] }                 the operations for the agent's spec (a second hand: load.js)
 // Each becomes g.patch = [{ op, path, value }] against opts.userSpec (the spec as the agent sent
 // it, use[] not expanded): a user key that sets the channel within f +-2 -> replace
-// /keys/<i>/set/<ch>; a standIdle stance moved sideways -> /use/<i>/args/at; otherwise add
+// /keys/<i>/set/<ch> (a delta: with the agent's keys next to it that hold the same value, so a held
+// pose moves whole instead of sliding from one end to the other); a standIdle stance moved sideways -> /use/<i>/args/at; otherwise add
 // /keys/- with the frame's value moved. A path fix replaces the value, or adds it when only the
 // last step is missing (or the top-level /fix object). A hold fix moves what placed the body
 // at f by the delta's x and z: a standIdle args.at, a walkTo's length (firstStep with 2 steps,
@@ -48,6 +49,27 @@ function userKey(userSpec, ch, f) {
 		if (best < 0 || Math.abs(k.f - f) < Math.abs(userSpec.keys[best].f - f)) best = i;
 	});
 	return best;
+}
+
+/** a and b the same channel value (a number or a vector) within 1e-6. */
+const same = (a, b) => (isNum(a) && isNum(b) ? Math.abs(a - b) <= 1e-6
+	: Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((x, j) => isNum(x) && isNum(b[j]) && Math.abs(x - b[j]) <= 1e-6));
+
+/**
+ * User key i and the agent's keys next to it in frame order (no other source's key of ch between) that set
+ * ch to the same value: the hold a delta moves. The order is X.keys(ch) when the context has it, else the
+ * agent's own keys by frame.
+ */
+function heldSpan(X, userSpec, ch, i) {
+	const keys = userSpec.keys, held = j => j >= 0 && same(keys[j]?.set?.[ch], keys[i].set[ch]);
+	const order = X?.keys ? X.keys(ch).map(k => Number(/^keys\[(\d+)\]$/.exec(k.src)?.[1] ?? -1))
+		: keys.map((k, j) => j).filter(j => keys[j]?.set && Object.hasOwn(keys[j].set, ch) && isNum(keys[j].f)).sort((a, b) => keys[a].f - keys[b].f);
+	const at = order.indexOf(i);
+	if (at < 0) return [i];
+	let a = at, b = at;
+	while (a > 0 && held(order[a - 1])) a -= 1;
+	while (b < order.length - 1 && held(order[b + 1])) b += 1;
+	return order.slice(a, b + 1);
 }
 
 /** A standIdle stance moved by the root's sideways delta: /use/<i>/args/at. */
@@ -105,8 +127,11 @@ function channelPatch(X, userSpec, fix) {
 	const to = v => (fix.value !== undefined ? fix.value : moved(v, fix.delta));
 	const i = userKey(userSpec, ch, f);
 	if (i >= 0) {
-		const value = to(userSpec.keys[i].set[ch]);
-		return value === undefined ? null : [{ op: "replace", path: pointer(["keys", i, "set", ch]), value: round4(value) }];
+		const ops = (fix.delta !== undefined ? heldSpan(X, userSpec, ch, i) : [i]).map(j => {
+			const value = to(userSpec.keys[j].set[ch]);
+			return value === undefined ? null : { op: "replace", path: pointer(["keys", j, "set", ch]), value: round4(value) };
+		});
+		return ops.includes(null) ? null : ops;
 	}
 	if (!X?.fr) return null;
 	const { prev, next } = X.bracket(ch, f);
