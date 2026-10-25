@@ -32,7 +32,7 @@ import { groupsOf } from "./scene.js";
 import { solveFrame } from "./compiler/compile.js";
 import { channelsAt } from "./compiler/channels.js";
 import { resolveBone } from "./bones.js";
-import { isFree, freePoseAt, beforeGrab, afterRelease, fallsAfter, corners, topOf, under, TOUCH } from "./free-motion.js";
+import { isFree, freePoseAt, freeSwungAt, beforeGrab, afterRelease, fallsAfter, corners, topOf, under, TOUCH } from "./free-motion.js";
 import { add } from "./compiler/math.js";
 import { springRest, springStep, swingOf, swungPose, springLength, SPRING } from "./compiler/spring.js";
 
@@ -162,14 +162,16 @@ function carriedAt(out, id, o, f) {
  * solved frame, so the carrying hand must already be solved (compiler/anchors.js).
  */
 export function rootPoseAt(out, id, f, now = null) {
-	const pose = basePoseAt(out, id, f, now), o = out.ctx.spec.objects?.[id];
-	return o?.spring && pose && (isCarried(o) || isFree(o)) ? swungPose(pose, springAt(out, id, o, f, now ? pose : null)) : pose;
+	const o = out.ctx.spec.objects?.[id];
+	if (o?.spring && isFree(o)) return freeSwungAt(freeCtx(out), id, f);
+	const pose = basePoseAt(out, id, f, now);
+	return o?.spring && pose && isCarried(o) ? swungPose(pose, springAt(out, id, o, f, now ? pose : null)) : pose;
 }
 
 const springs = new WeakMap();
 
 /**
- * The swing [tx, tz] of spring entry `id` at absolute f (compiler/spring.js): the solver walks frames 0..f of the
+ * The swing [tx, tz] of spring carry `id` at absolute f (compiler/spring.js): the solver walks frames 0..f of the
  * record's unswung pose (its anchor). Each frame's state is cached with the solved frame it was read on, and reused
  * while frames 0..k are still those frames (a fix that re-solves a frame starts the walk again there). `nowPose`: the
  * unswung pose of frame f while it is being solved (not cached).

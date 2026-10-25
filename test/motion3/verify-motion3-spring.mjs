@@ -79,6 +79,17 @@ const swings = (with_, without, id, frames) => Array.from({ length: frames }, (_
 	expect("frames read out of order (a scrub) give the frames read in order", [95, 40, 20].every((f, i) => turnDeg(scrub[i], rootPoseAt(fresh, id, f).R) === 0 || turnDeg(scrub[i], rootPoseAt(fresh, id, f).R) < 1e-9));
 }
 
+// a tall keyed box with spring {} stopped dead: the obstacle box QA and fixes read (out.objectsAt) tilts as drawn
+{
+	const scene = motionScene([{ id: "post", name: "post", renderer: "cube", x: 1.5, y: 0, z: 1.5, rot: 0, rotX: 0, rotZ: 0, scaleX: 0.2, scaleY: 1.2, scaleZ: 0.2, footprint: { width: 1, depth: 1 }, height: 1 }]);
+	const keys = [{ f: 4, pos: [1.5, 0, 1.5] }, { f: 12, pos: [2.5, 0, 1.5] }];
+	const { out } = compileSpec(spec(60, { post: { keys, spring: {} } }), { sk, scene });
+	const tilt = Array.from({ length: 60 }, (_, f) => turnDeg(out.objectsAt(f).post.R, scene.objects.post.R)), drawn = Array.from({ length: 60 }, (_, f) => turnDeg(rootPoseAt(out, "post", f).R, scene.objects.post.R));
+	const off = Math.max(...tilt.map((v, f) => Math.abs(v - drawn[f]))), peak = Math.max(...tilt.slice(12));
+	console.log(`  free box obstacle: peak tilt ${peak.toFixed(2)} deg after the stop, largest gap to the drawn pose ${off.toExponential(1)} deg`);
+	expect("the obstacle box of a free spring object tilts as drawn (out.objectsAt R = rootPoseAt R, peak > 1 deg)", peak > 1 && off < 1e-6, `${peak} ${off}`);
+}
+
 // a carried ball: the hand still (standIdle) leaves it flat and the take as without spring; the hand moving makes it swing
 {
 	const props = { ballGrip: { hand: "r", origin: ["RightHandIndex2", "RightHandMiddle2"], points: {} } };
