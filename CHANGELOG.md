@@ -2,6 +2,64 @@
 
 ## Unreleased
 
+## 3.2.0 - 2026-10-26
+
+Motion gets physics you can see and trust: props swing and settle after the hand stops, balance and jumps are judged by real mass and gravity and the Studio draws why, and characters no longer pass through each other when you drag or compile.
+
+Studio
+
+- **Physics overlay.** Tick **Physics** in the motion controls, or call
+  `motion.physicsOverlay`, to draw the centre of mass (green inside the feet,
+  red outside, grey in the air), the support polygon under the feet, each
+  jump's actual hips path next to its gravity arc, and a short trail behind
+  swinging props. It shows in scrub, playback and video export, and red
+  frames are exactly the ones QA calls BALANCE. (#950)
+- Dragging a hand or foot IK handle into another character now stops at that
+  character's body instead of passing through, even on a fast drag across a
+  thin forearm. Hold **Alt** while dragging to pass through on purpose; a
+  one-time notice says so. The other character never moves. (#949)
+
+Motion3
+
+- **Prop spring.** `objects.<id>.spring = { length, stiffness, damping }`
+  makes a carried or free prop (a bag, a lantern, a club) swing a beat behind
+  the hand and settle. `length` is the string or rod length; stiffness
+  defaults to gravity over length and damping to 0.5, so `spring: { length: 0.5 }`
+  already swings naturally. Put the prop's base at the hand with `at`/`along`,
+  because the swing pivots at the base; QA notes a base that sits far from the
+  hand. The swing is computed once at compile time, stops when a dropped prop
+  lands, and never pushes the prop into the floor. (#945)
+- **BALANCE** now uses a mass-weighted centre of mass against the support
+  polygon of the grounded feet, instead of a four-point average and a box. Its
+  hint gives the distance and direction (for example 0.10 m ahead of the feet),
+  and a lean that changes direction stays one issue. A hint that moves the
+  root now moves every key that holds the pose, so the body does not slide
+  between them. (#944, #937)
+- **FLOAT** issues come with a fix: the root keyed onto the gravity arc between
+  takeoff and landing, returning to the original motion at both ends. When the
+  correction would be too large, the hint gives the apex height or the air time
+  that would fit instead. (#943)
+- **`fix.person`** (on by default) moves a character's arms out of another
+  character's body at compile time, keeps contact you allowed in
+  `checks.allow`, and gives the same take after saving and reopening. (#948)
+
+Agent
+
+- Kimi K3 models (`kimi-k3*` on the Moonshot hosts) work on the
+  OpenAI-compatible provider with their reasoning efforts and full output
+  limit. A turn that spends every output token before answering now says so
+  and suggests a lower reasoning effort, instead of failing with no output.
+  (#951, #947)
+
+Package and tests
+
+- `jpeg-js`, which the MCP image tools import, is a root dev dependency, so a
+  development checkout runs the MCP tests without a separate install. The test
+  runner now skips the MCP suites with a clear message when `mcp/node_modules`
+  is missing. (#946, #936)
+- The Studio camera QA enters look-through from the dock's Shot Camera card,
+  where the Studio shows it. (#952, #925)
+
 ## 3.1.6 - 2026-10-25
 
 The npm package ships the MCP module the live tools need, so the Studio's live tools and `cozyclay mcp` work on a fresh install.
