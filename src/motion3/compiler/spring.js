@@ -2,20 +2,21 @@
 // pendulum hung on the object's anchor lags the anchor's horizontal acceleration, swings and settles. Computed once at
 // compile time (object-pose.js rootPoseAt); playback, scrub and export read the baked track only.
 //
-// Determinism: a fixed step dt = 1 / fps from frame 0 on, semi-implicit (symplectic) Euler, and the solver update uses
+// Determinism: a fixed step dt = 1 / fps from frame 0 on, semi-implicit Euler, and the solver update uses
 // only + - * / and Math.sqrt, so every engine computes the same bits. Only the last step, the swing angles to a turn,
 // goes through the quaternion helpers (quat.js), as every other baked rotation does.
 //
 // State: two swing angles th = [tx, tz] (rad), how far the object's far end swings toward world +X and +Z, and their
 // rates w. Per frame f: a = (p[f] - 2 p[f-1] + p[f-2]) * fps^2 (0 on frames 0 and 1), then
-//   w += (-k th - 2 d sqrt(k) w - a_h / L) dt ;  th += w dt
-// with k the stiffness (1/s^2), d the damping ratio (0..1, 1 critical) and L the pendulum length (m). Stable while
-// sqrt(k) dt < 2: the schema caps k at SPRING.stiffness.max (2000), safe from 24 fps up.
+//   w = (w + (-k th - a_h / L) dt) / (1 + c dt) ;  th += w dt ;  c = 2 d sqrt(k)
+// with k the stiffness (1/s^2), d the damping ratio (0..1, 1 critical) and L the pendulum length (m). The damping is
+// implicit, so no damping ratio makes it ring up (an explicit c dt > 1 diverged); the stiffness step stays stable while
+// sqrt(k) dt < 2, and the schema caps k at SPRING.stiffness.max (500) so that sqrt(k) dt <= 1 from 24 fps up.
 import { qexp, qmul, qnorm } from "./quat.js";
 import { quatFromMat, matFromQuat } from "./math.js";
 
 /** The schema's ranges and defaults (schema/types.js reads them; validate-objects.js checks them). */
-export const SPRING = { stiffness: { min: 0, max: 2000, default: 80 }, damping: { min: 0, max: 1, default: 0.3 } };
+export const SPRING = { stiffness: { min: 0, max: 500, default: 80 }, damping: { min: 0, max: 1, default: 0.3 } };
 /** The largest swing drawn, rad (60 degrees). */
 const SPRING_MAX = Math.PI / 3;
 /** The shortest pendulum, m: a tiny prop swings as if it were this long. */
@@ -38,8 +39,8 @@ export function springStep(state, p, { fps, stiffness, damping, length }) {
 		ax = (p[0] - 2 * state.p1[0] + state.p2[0]) * f2;
 		az = (p[2] - 2 * state.p1[2] + state.p2[2]) * f2;
 	}
-	const wx = state.w[0] + (-k * state.th[0] - c * state.w[0] - ax / L) * dt;
-	const wz = state.w[1] + (-k * state.th[1] - c * state.w[1] - az / L) * dt;
+	const wx = (state.w[0] + (-k * state.th[0] - ax / L) * dt) / (1 + c * dt);
+	const wz = (state.w[1] + (-k * state.th[1] - az / L) * dt) / (1 + c * dt);
 	return { th: [state.th[0] + wx * dt, state.th[1] + wz * dt], w: [wx, wz], p1: [p[0], p[1], p[2]], p2: state.p1 };
 }
 

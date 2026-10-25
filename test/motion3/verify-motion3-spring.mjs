@@ -10,7 +10,7 @@ import { skeletonFor } from "../../src/motion3/rigs/index.js";
 import { buildKit } from "../../src/kits/index.js";
 import { bakeTake } from "../../src/motion3/take.js";
 import { validateSpec } from "../../src/motion3/compiler/validate.js";
-import { springAngles } from "../../src/motion3/compiler/spring.js";
+import { springAngles, SPRING } from "../../src/motion3/compiler/spring.js";
 import { mul, T } from "../../src/motion3/compiler/math.js";
 import { takeHash } from "./fixtures/take-hash.mjs";
 import { rootPoseAt } from "../../src/motion3/object-pose.js";
@@ -40,6 +40,24 @@ const swings = (with_, without, id, frames) => Array.from({ length: frames }, (_
 	const tail = a => Math.max(...a.slice(13 + 24).map(Math.abs)), lo = tail(run(0.1)), hi = tail(run(0.9));
 	expect("(c) damping 0.9 settles sooner than 0.1 (largest swing 1 s after the stop)", hi < lo, `${hi} vs ${lo}`);
 	expect("the swing is clamped to 60 deg", springAngles({ anchors: anchors.map(p => [p[0] * 40, 1, 0]), fps: FPS, stiffness: 10, damping: 0, length: 0.05 }).every(([a]) => Math.abs(a) <= Math.PI / 3 + 1e-12));
+}
+
+// stability over the allowed range: a 1 mm anchor move at frame 2, then still for 1000 frames. Every point stays finite
+// and its 50-frame swing peaks never grow; a damped spring (stiffness and damping above 0) settles under 0.01 deg.
+// (stiffness 0 has nothing to swing back; damping 0 rings on undamped, so they are only held bounded.)
+{
+	const bad = [];
+	for (const stiffness of [0, 80, SPRING.stiffness.max]) for (const damping of [0, 0.5, 1]) for (const fps of [24, 30, 60]) {
+		const anchors = Array.from({ length: 1000 }, (_, f) => [f >= 2 ? 0.001 : 0, 1, 0]);
+		const th = springAngles({ anchors, fps, stiffness, damping, length: 0.2 }).map(([a]) => Math.abs(a) * DEG);
+		const peaks = Array.from({ length: 20 }, (_, i) => Math.max(...th.slice(i * 50, i * 50 + 50)));
+		const finite = th.every(Number.isFinite), shrinking = peaks.slice(1).every((v, i) => v <= peaks[i] * (damping ? 1 : 1.01) + 1e-12);
+		const settled = !(stiffness && damping) || th.at(-1) < 0.01;
+		if (!(finite && shrinking && settled)) bad.push(`k ${stiffness} d ${damping} fps ${fps}: last ${th.at(-1)} peaks ${peaks.slice(0, 4).map(v => v.toFixed(3))}`);
+	}
+	expect(`(g) a 1 mm nudge stays finite, never rings up and settles over stiffness {0, 80, ${SPRING.stiffness.max}} x damping {0, 0.5, 1} x fps {24, 30, 60}`, bad.length === 0, bad.join("; "));
+	const big = springAngles({ anchors: Array.from({ length: 1000 }, (_, f) => [f >= 2 ? 0.001 : 0, 1, 0]), fps: 24, stiffness: 2000, damping: 0.3, length: 0.2 });
+	expect("the implicit damping keeps even stiffness 2000, damping 0.3 at 24 fps finite and settled (it diverged before)", big.every(([a]) => Number.isFinite(a)) && Math.abs(big.at(-1)[0]) * DEG < 0.01, String(big.at(-1)));
 }
 
 // a free ball keyed on every frame: still to frame 6, across 1 m at 2 m/s by frame 18, then still for 3 s
@@ -89,7 +107,7 @@ const swings = (with_, without, id, frames) => Array.from({ length: frames }, (_
 	const refused = objects => { try { validateSpec(spec(24, objects), { sk, scene }); return ""; } catch (error) { return error.message; } };
 	const keys = [{ f: 0, pos: [0.5, 1, 0.5], rot: [0, 0, 0, 1] }];
 	const stiff = refused({ [id]: { keys, spring: { stiffness: 5000 } } });
-	expect("(e) stiffness 5000 is refused with its range", /spring\.stiffness must be 0\.\.2000/.test(stiff), stiff);
+	expect("(e) stiffness 5000 is refused with its range", /spring\.stiffness must be 0\.\.500/.test(stiff), stiff);
 	expect("damping 1.5 is refused", /spring\.damping must be 0\.\.1/.test(refused({ [id]: { keys, spring: { damping: 1.5 } } })));
 	expect("an unknown spring field is refused by name", /spring has unknown field "stifness"/.test(refused({ [id]: { keys, spring: { stifness: 50 } } })));
 	const hinge = refused({ [id]: { pivot: [0, 0, 0], channel: "door", spring: { stiffness: 50 } } });
