@@ -3,7 +3,7 @@
 // its anchor's acceleration and settles. A still anchor never swings and a spec without spring bakes as before; a stop
 // rings a swing that decays under 1 degree; more damping settles sooner; the same spec bakes the same take twice; a
 // stiffness past the stable range and a spring on a hinge are refused; every allowed setting stays finite and settles;
-// a free spring's obstacle box tilts as drawn; a free spring that lands stops swinging, every corner on the floor; a keyed carry swings without a false REACH; the solver uses no
+// a free spring's obstacle box tilts as drawn; a free spring that lands, and a carried one let go that falls and lands, stops swinging, every corner on the floor; a keyed carry swings without a false REACH; the solver uses no
 // transcendental functions. Defaults: a length without stiffness is k = 9.81 / L, damping 0.5; the research's V2 bag
 // swings within its targets, and a base far from the hand is a SPRING_PIVOT observation.
 import { readFileSync } from "node:fs";
@@ -16,7 +16,7 @@ import { validateSpec } from "../../src/motion3/compiler/validate.js";
 import { springAngles, springOpts, SPRING } from "../../src/motion3/compiler/spring.js";
 import { mul, T } from "../../src/motion3/compiler/math.js";
 import { takeHash } from "./fixtures/take-hash.mjs";
-import { rootPoseAt, basePoseAt } from "../../src/motion3/object-pose.js";
+import { rootPoseAt, basePoseAt, objectBoxesAt } from "../../src/motion3/object-pose.js";
 import { corners, fallPlans } from "../../src/motion3/free-motion.js";
 import { SCENE_OBJECTS as BAT_SCENE, SWING_SPEC, SWING_KEYS, BAT } from "./fixtures/bat-swing.mjs";
 
@@ -177,6 +177,22 @@ const swings = (with_, without, id, frames) => Array.from({ length: frames }, (_
 	const far = compileSpec(bag({ at: [0.3, 0, 0], along: [-1, 0, 0] }, {}), { sk: xsk, scene }).observations.spring ?? [];
 	console.log(`  far end: ${far.join("; ")}`);
 	expect("a base 0.30 m from the hand is a SPRING_PIVOT observation", far.length === 1 && /^SPRING_PIVOT cube: base is 0\.30 m from the hand; the swing pivots there, so put the base at the hand with at\/along$/.test(far[0]), far.join());
+	// a 0.5 m rod carried by its base the same way, let go 2 frames after the walk stops (f58) while still swinging: it falls
+	// (tumbling and lying down, or straight down) and, landed, hangs from nothing, so no corner of the drawn pose or the
+	// obstacle box QA reads goes into the floor
+	const rscene = motionScene([{ id: "rod", name: "Rod", renderer: "cube", x: 1.5, y: 0, z: 1.5, rot: 0, rotX: 0, rotZ: 0, scaleX: 0.06, scaleY: 0.5, scaleZ: 0.06, footprint: { width: 1, depth: 1 }, height: 1 }]);
+	const rodSpec = fall => ({ ...bag({}, { armSwing: 0 }), frames: 120, objects: { rod: { prop: "bagGrip", at: [0.03, 0, 0], along: [1, 0, 0], spring: {}, release: 60, fall: { at: 60, ...fall } } } });
+	const half = rscene.objects.rod.half, low = p => Math.min(...corners({ ...p, half }).map(c => c[1])), place = { position: [0, 0, 0], yaw: 0 };
+	for (const fall of [{}, { tumble: false, bounce: 0 }]) {
+		const rod = compileSpec(rodSpec(fall), { sk: xsk, scene: rscene }).out, land = rod.frames.findIndex((_, f) => f > 60 && low(basePoseAt(rod, "rod", f)) < 0.001);
+		const lowest = Math.min(...rod.frames.slice(land).map((_, i) => Math.min(low(rootPoseAt(rod, "rod", land + i)), ...objectBoxesAt(rod, "rod", land + i).flatMap(corners).map(c => c[1]))));
+		const before = turnDeg(rootPoseAt(rod, "rod", land - 1).R, basePoseAt(rod, "rod", land - 1).R), name = JSON.stringify(fall);
+		console.log(`  released rod ${name}: swing ${before.toFixed(2)} deg the frame before landing (f${land}), lowest corner after ${lowest.toFixed(4)} m`);
+		expect(`a carried spring rod let go still swinging (fall ${name}) keeps every corner on the floor (>= -1 mm on every frame after landing)`, land > 60 && before > 1 && lowest >= -0.001, `${land} ${before} ${lowest}`);
+		if (fall.tumble === false) continue;
+		const h1 = takeHash(bakeTake(xsk, rod, place));
+		expect(`the released spring rod bakes the same take twice (${h1})`, h1 === takeHash(bakeTake(xsk, compileSpec(rodSpec(fall), { sk: xsk, scene: rscene }).out, place)));
+	}
 }
 
 // validation: the stable range, unknown fields, hinges

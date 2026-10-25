@@ -139,24 +139,28 @@ function eventsOf(o, map, from = -Infinity, to = Infinity) {
 	return events;
 }
 
-/** The pose events give at mapped frame f, starting from pose `start`; `keep` caches each fall's plan on its event. */
-function walk(events, f, start, plan, keep = true) {
-	let pose = start;
+/**
+ * The pose events give at mapped frame f, starting from pose `start`, and whether f is on or past a fall's landing with no
+ * key lifting it since (landed: it rests and hangs from nothing): { pose, landed }. `keep` caches each fall's plan on its event.
+ */
+function walkLanded(events, f, start, plan, keep = true) {
+	let pose = start, landed = false;
 	for (const e of events) {
 		if (e.run) {
 			const { t } = e.curve;
-			if (f < t[0]) return pose;
-			if (f <= t[t.length - 1]) return keyedPose(e.curve, f);
-			pose = keyedPose(e.curve, t[t.length - 1]);
+			if (f < t[0]) return { pose, landed };
+			if (f <= t[t.length - 1]) return { pose: keyedPose(e.curve, f), landed: false };
+			pose = keyedPose(e.curve, t[t.length - 1]); landed = false;
 		} else {
-			if (f < e.fall.t) return pose;
+			if (f < e.fall.t) return { pose, landed };
 			const p = keep ? (e.plan ??= plan(pose, e.fall)) : plan(pose, e.fall);
-			if (f < p.end) return p.at(f);
-			pose = p.rest;
+			if (f < p.end) return { pose: p.at(f), landed: f >= p.land };
+			pose = p.rest; landed = true;
 		}
 	}
-	return pose;
+	return { pose, landed };
 }
+const walk = (events, f, start, plan, keep = true) => walkLanded(events, f, start, plan, keep).pose;
 
 const timelines = new WeakMap();
 /** The events of entry o under time map `map`, cached per scene, entry and span (key curves built once). */
@@ -205,14 +209,10 @@ export function freeSwungAt(ctx, id, f) {
 	return swungPose(pose, swingOf(c.states[f]));
 }
 
-/** True when free entry `id` at absolute f is on or past a fall's landing and no key has lifted it since; freePoseAt at f planned its falls. */
+/** True when free entry `id` at absolute f is on or past a fall's landing and no key has lifted it since (walkLanded). */
 function landedAt(ctx, id, f) {
-	let landed = false;
-	for (const e of timelineOf(ctx, id, ctx.spec.objects[id], ctx.timeMap, "all")) {
-		if (e.run) { if (f < e.curve.t[0]) return landed; if (f <= e.curve.t.at(-1)) return false; landed = false; }
-		else { if (f < e.fall.t) return landed; if (f < e.plan.land) return false; landed = true; }
-	}
-	return landed;
+	const rest = restOf(ctx.scene, id);
+	return walkLanded(timelineOf(ctx, id, ctx.spec.objects[id], ctx.timeMap, "all"), f, { pos: rest.pos, R: rest.R }, planner(ctx, id)).landed;
 }
 
 /** Where carry `id` (entry o) is before its grab at absolute f: its scene pose, or where a fall before grab left it. */
@@ -227,10 +227,15 @@ export function beforeGrab(ctx, id, o, f, grab) {
  * `beforePose` (a frame before the release) gives the spin it is let go with to a fall that starts right at the release.
  */
 export function afterRelease(ctx, id, o, f, release, releasePose, beforePose = null) {
+	return releaseFall(ctx, id, o, f, release, releasePose, beforePose)?.pose ?? null;
+}
+
+/** afterRelease and whether f is on or past a landing of those falls (walkLanded): { pose, landed }, or null as afterRelease. */
+export function releaseFall(ctx, id, o, f, release, releasePose, beforePose = null) {
 	const events = fallsOf(o).length ? timelineOf({ ...ctx, release }, id, o, ctx.timeMap, "after") : [];
 	// the release pose comes from the solved body, which a rebake changes: plan these falls afresh
 	const plan = (start, fall) => fallPlan(ctx.spec, ctx.scene, id, start, fall.t, fall, ctx.spec.fps ?? 30, fall.t <= release + 1 ? beforePose : null);
-	return events.length ? walk(events, f, releasePose, plan, false) : null;
+	return events.length ? walkLanded(events, f, releasePose, plan, false) : null;
 }
 
 /** True when carry entry o falls at or after its release (absolute frame; afterRelease then moves it). */

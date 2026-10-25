@@ -32,7 +32,7 @@ import { groupsOf } from "./scene.js";
 import { solveFrame } from "./compiler/compile.js";
 import { channelsAt } from "./compiler/channels.js";
 import { resolveBone } from "./bones.js";
-import { isFree, freePoseAt, freeSwungAt, beforeGrab, afterRelease, fallsAfter, corners, topOf, under, TOUCH } from "./free-motion.js";
+import { isFree, freePoseAt, freeSwungAt, beforeGrab, afterRelease, releaseFall, fallsAfter, corners, topOf, under, TOUCH } from "./free-motion.js";
 import { add } from "./compiler/math.js";
 import { springRest, springStep, swingOf, swungPose, springLength, springOpts } from "./compiler/spring.js";
 
@@ -180,18 +180,26 @@ function springAt(out, id, o, f, nowPose) {
 	if (!springs.has(out)) springs.set(out, new Map());
 	const cache = springs.get(out), f0 = out.f0 ?? 0, fps = out.fps ?? out.ctx.spec.fps ?? 30, { scene } = out.ctx;
 	if (!cache.has(id)) cache.set(id, { states: [], keys: [], length: springLength(partsOf(scene, id).flatMap(p => corners(scene.objects[p]))) });
-	const c = cache.get(id), opts = springOpts(o.spring, fps, c.length);
+	const c = cache.get(id), opts = springOpts(o.spring, fps, c.length), release = spanOf(out, o)[1];
 	const end = nowPose ? f - 1 : f;
 	let k = 0;
 	while (k <= end && k < c.states.length && c.keys[k] === (out.frames[k - f0] ?? null)) k += 1;
 	c.states.length = k; c.keys.length = k;
+	// let go and fallen (free-motion.js releaseFall): from its landing it rests and hangs from nothing, no swing carried on
+	const step = (prev, j, pose) => {
+		const fell = j > release ? releaseFall(...releaseArgs(out, id, o, j, release)) : null, s = springStep(prev, (pose ?? fell?.pose ?? basePoseAt(out, id, j)).pos, opts);
+		return fell?.landed ? { ...s, th: [0, 0], w: [0, 0] } : s;
+	};
 	for (; k <= end; k++) {
-		c.states[k] = springStep(k ? c.states[k - 1] : springRest(), basePoseAt(out, id, k).pos, opts);
+		c.states[k] = step(k ? c.states[k - 1] : springRest(), k, null);
 		c.keys[k] = out.frames[k - f0] ?? null;
 	}
 	const last = end >= 0 ? c.states[end] : springRest();
-	return swingOf(nowPose ? springStep(last, nowPose.pos, opts) : last);
+	return swingOf(nowPose ? step(last, f, nowPose) : last);
 }
+
+/** The arguments of free-motion.js afterRelease / releaseFall for carry `id` (entry o) at f past its release frame. */
+const releaseArgs = (out, id, o, f, release) => [freeCtx(out), id, o, f, release, carriedAt(out, id, o, release), release > 0 ? carriedAt(out, id, o, release - 1) : null];
 
 /** rootPoseAt before a spring swings it: where the keys and the hand put it (qa/key-checks.js measures the keys on it). */
 export function basePoseAt(out, id, f, now = null) {
@@ -200,7 +208,7 @@ export function basePoseAt(out, id, f, now = null) {
 	if (isCarried(o) && (rest || !keepsOffset(scene, id, o))) {
 		const [grab, release] = spanOf(out, o), g = Math.max(grab, Math.min(f, release));
 		if (f < grab && rest) return restingAt(out, id, f);
-		const after = f > release ? afterRelease(freeCtx(out), id, o, f, release, carriedAt(out, id, o, release), release > 0 ? carriedAt(out, id, o, release - 1) : null) : null;
+		const after = f > release ? afterRelease(...releaseArgs(out, id, o, f, release)) : null;
 		if (after) return after;
 		const by = f > release ? riderOf(out, id) : null;
 		if (by) { const at = carriedAt(out, id, o, release); return compose(rootPoseAt(out, by, f), relative(rootPoseAt(out, by, release), at)); }
