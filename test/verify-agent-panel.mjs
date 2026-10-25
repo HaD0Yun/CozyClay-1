@@ -143,7 +143,7 @@ const controls = [
 	["Wait & retry", "Wait &amp; retry"],
 	["Switch model", "Switch model"],
 	["error Retry", ">Retry<"],
-	["step list Retry", "onRetry={() => runTurn(chat.lastPrompt)} />"],
+	["step list Retry", "onRetry={() => runTurn(chat.lastPrompt, \"retry_button\")} />"],
 ];
 for (const [name, needle] of controls) expect(`composer/transcript exposes the ${name}`, panel.includes(needle), needle);
 
@@ -1168,11 +1168,21 @@ expect("no timer drives the auth transition", !/set(Interval|Timeout)\([^)]*(sig
 		// ChatGPT's sign-in leaves the panel and settles with the agent panel's auth state.
 		connectStarted("openai-codex", "chatgpt");
 		connectPanelClosed();
-		connectAuthState("signing-in");
-		connectAuthState("ready");
-		connectStarted("openai-codex", "chatgpt"); connectAuthState("signing-in"); connectAuthState("signed-out");
+		connectAuthState("signing-in", { signedIn: false, pending: false });
+		connectAuthState("ready", { signedIn: true });
+		connectStarted("openai-codex", "chatgpt"); connectAuthState("signing-in", { signedIn: false }); connectAuthState("signed-out", { signedIn: false, pending: false });
 		const chatgpt = sent.splice(0).filter((row) => row.event === "agent:connect_finished").map((row) => `${row.props.outcome}:${row.props.step}`);
-		expect("connect: a ChatGPT sign-in survives the panel closing; ready is ok, back to signed-out is abandoned", JSON.stringify(chatgpt) === JSON.stringify(["ok:done", "abandoned:waiting"]), JSON.stringify(chatgpt));
+		expect("connect: a ChatGPT sign-in survives the panel closing; ChatGPT signed in is ok, back to signed-out is abandoned", JSON.stringify(chatgpt) === JSON.stringify(["ok:done", "abandoned:waiting"]), JSON.stringify(chatgpt));
+		// #929 review: another provider's key makes the panel ready while ChatGPT is still pending; that is not ok.
+		connectStarted("openai-codex", "chatgpt"); connectAuthState("signing-in", { signedIn: false });
+		connectAuthState("ready", { signedIn: false, pending: true, providersConfigured: 1 });
+		const stillOpen = sent.filter((row) => row.event === "agent:connect_finished").length;
+		connectAuthState("ready", { signedIn: true, providersConfigured: 1 });
+		connectStarted("openai-codex", "chatgpt"); connectAuthState("signing-in", { signedIn: false });
+		connectAuthState("ready", { signedIn: false, pending: true, providersConfigured: 1 }); connectAuthState("ready", { signedIn: false, pending: false, providersConfigured: 1 });
+		const keyed = sent.splice(0).filter((row) => row.event === "agent:connect_finished").map((row) => `${row.props.outcome}:${row.props.step}`);
+		expect("connect: with another provider ready, a pending ChatGPT sign-in stays open; ok waits for ChatGPT itself, an ended unsigned one is abandoned",
+			stillOpen === 0 && JSON.stringify(keyed) === JSON.stringify(["ok:done", "abandoned:waiting"]), JSON.stringify({ stillOpen, keyed }));
 		// Caps: connect_opened 5, model_changed 10 per session; after_failure follows the last turn.
 		for (let i = 0; i < 9; i += 1) connectOpened("menu");
 		noteTurnOutcome("failed"); modelChanged("anthropic/claude-x");
@@ -1184,8 +1194,11 @@ expect("no timer drives the auth transition", !/set(Interval|Timeout)\([^)]*(sig
 		expect("connect: every payload passes the closed schema", [...rows, ...capped].every(({ event, props }) => JSON.stringify(sanitizeProps(event, props)) === JSON.stringify(props)));
 		// The wiring: LoginPanel starts api-key/oauth attempts, AgentPanel the ChatGPT one and the openers.
 		const panelSource = readFileSync(new URL("../src/workflow/AgentPanel.jsx", import.meta.url), "utf8");
+		expect("prompt_sent: every send path names its via, the chip and the draft are noted, and the panel stages before it sends",
+			["\"retry_button\")", "\"regenerate\")", "\"supervisor\")"].every((via) => panelSource.includes(via)) && panelSource.includes("noteChipDraft(); store.setDraft(chip)")
+			&& panelSource.includes("noteDraftInput(); store.setDraft(event.target.value)") && /stagePrompt\(text, [^\n]*\n\s*return store\.send\(text/.test(panelSource));
 		expect("connect: the four openers and the ChatGPT attempt are wired", login.includes("connectStarted(provider.id, method.type)") && login.includes('connectFinished("cancelled")') && login.includes('connectFinished("abandoned")')
-			&& panelSource.includes('connectOpened("menu")') && panelSource.includes('openProviderKeys("signed_out")') && panelSource.includes('openProviderKeys("failure_card")') && panelSource.includes('connectStarted("openai-codex", "chatgpt")'));
+			&& panelSource.includes('connectOpened("menu")') && panelSource.includes('openProviderKeys("signed_out")') && panelSource.includes('openProviderKeys("failure_card")') && panelSource.includes('connectStarted("openai-codex", "chatgpt")') && panelSource.includes("connectAuthState(authState, account)") && panelSource.includes("if (result.ok) noteDraftConsumed();"));
 	} finally {
 		restore(); friction.reset();
 		if (saved) Object.defineProperty(globalThis, "localStorage", saved); else delete globalThis.localStorage;
