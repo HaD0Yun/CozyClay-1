@@ -1,5 +1,9 @@
 import * as THREE from "three";
 import { createContactProjector } from "../../src/motion/contact-project.js";
+import { clampDragTarget, solveDragTarget } from "../../src/motion/ik-drag.js";
+import { resolveIkRig, solveIk } from "../../src/motion/ik.js";
+import { buildCollisionCapsules, closestPointsSegmentSegment } from "../../src/motion/fix-collisions.js";
+import { characterBlockers } from "../../src/motion/collision-blockers.js";
 
 /* The Studio drag's contact projection (src/motion/contact-project.js): a hand
  * dragged into another character's torso stops on the surface, on the side it
@@ -28,6 +32,37 @@ const axisDistance = (p) => Math.hypot(p.x - 0, p.z - 2.0);
 const FRONT = v(0, 1.2, 1.6);
 
 const projector = createContactProjector({ blockers });
+
+/* Synthetic Mixamo-spelled rig in a T-pose (test/ik/verify-ik.mjs layout):
+ * arms along ±X, legs along -Y, toes +Z, scaled 0.01 (cm -> m). */
+function makeRig() {
+	const rig = new THREE.Object3D();
+	rig.scale.setScalar(0.01);
+	const mk = (name, parent, x, y, z) => { const b = new THREE.Bone(); b.name = name; b.position.set(x, y, z); parent.add(b); return b; };
+	const hips = mk("mixamorigHips", rig, 0, 100, 0), spine = mk("mixamorigSpine", hips, 0, 15, 0), chest = mk("mixamorigSpine1", spine, 0, 15, 0);
+	mk("mixamorigSpine2", chest, 0, 15, 0);
+	const neck = mk("mixamorigNeck", chest, 0, 30, 0), head = mk("mixamorigHead", neck, 0, 15, 0);
+	mk("mixamorigHeadTop_End", head, 0, 20, 0);
+	for (const [side, s] of [["Left", 1], ["Right", -1]]) {
+		const shoulder = mk(`mixamorig${side}Shoulder`, chest, 10 * s, 25, 0), arm = mk(`mixamorig${side}Arm`, shoulder, 10 * s, -10, 0);
+		mk(`mixamorig${side}Hand`, mk(`mixamorig${side}ForeArm`, arm, 30 * s, 0, 0), 30 * s, 0, 0);
+		const up = mk(`mixamorig${side}UpLeg`, hips, 10 * s, 0, 0), leg = mk(`mixamorig${side}Leg`, up, 0, -45, 0);
+		mk(`mixamorig${side}ToeBase`, mk(`mixamorig${side}Foot`, leg, 0, -45, 0), 0, -5, 12);
+	}
+	rig.updateMatrixWorld(true);
+	return rig;
+}
+// the right arm's capsules as the drag probe reads them (same filter, same order)
+const armCapsules = (rig) => [...buildCollisionCapsules(rig).values()]
+	.filter((c) => c.def.movable?.chain === "rightHand" && !c.def.handId && !c.def.optional)
+	.map((c) => ({ a: c.a.clone(), b: c.b.clone(), radius: c.radius }));
+// deepest overlap of `mine` into `theirs` (m); <= 0 means clear
+function overlap(mine, theirs) {
+	const p = v(0, 0, 0), q = v(0, 0, 0);
+	let worst = -Infinity;
+	for (const m of mine) for (const t of theirs) worst = Math.max(worst, m.radius + t.radius - Math.sqrt(closestPointsSegmentSegment(m.a, m.b, t.a, t.b, p, q)));
+	return worst;
+}
 
 // 1. surface stop: a target 5 cm inside the front lands on the surface (+ margin)
 {
@@ -87,7 +122,56 @@ const projector = createContactProjector({ blockers });
 	check("blockers are never moved", TORSO.a.equals(v(0, 0.95, 2.0)) && TORSO.b.equals(v(0, 1.4, 2.0)) && HEAD.a.equals(v(0, 1.5, 2.0)));
 }
 
-// 5. cost: 2 probes x 2 blockers x 4 passes per event, in node
+// 5. the probe checks the pose the drag DISPLAYS (review finding: the probe ran
+// an exactHinge solve, the drag a plain one; from a bent arm they put the elbow
+// and hand centimetres apart, so a target the probe passed could leave the
+// displayed limb inside the other body). Synthetic Mixamo rigs (verify-ik.mjs
+// layout, 1 cm proxy radii): A's right arm bent, B placed so its left forearm
+// runs through where the plain solve puts A's hand, clear of the exact-hinge arm.
+{
+	const rigA = makeRig(), chain = resolveIkRig(rigA).chains.get("rightHand");
+	chain.bones[0].quaternion.setFromAxisAngle(v(0, 0, 1), 0.9);
+	chain.bones[1].quaternion.setFromAxisAngle(v(0, 1, 0), -1.1);
+	rigA.updateMatrixWorld(true);
+	const start = chain.bones.map((b) => b.quaternion.clone());
+	const reset = () => { chain.bones.forEach((b, i) => b.quaternion.copy(start[i])); chain.bones[0].updateMatrixWorld(true); };
+	const at = (bone) => bone.getWorldPosition(v(0, 0, 0));
+	const target = at(chain.bones[2]).add(v(0.1, -0.1, 0.25));
+	solveIk(chain, target, { exactHinge: true });
+	const exactHand = at(chain.bones[2]);
+	const exactArm = armCapsules(rigA);
+	reset();
+	solveDragTarget("chain", chain, target);
+	const plainHand = at(chain.bones[2]);
+	reset();
+	const rigB = makeRig();
+	const forearm = buildCollisionCapsules(rigB).get("leftForeArm");
+	rigB.position.copy(plainHand).sub(forearm.a.clone().add(forearm.b).multiplyScalar(0.5));
+	rigB.updateMatrixWorld(true);
+	const rigs = { a: rigA, b: rigB };
+	const theirs = characterBlockers(rigs, "a");
+	check("fixture: the exact-hinge and the plain solve put the hand > 5 cm apart", exactHand.distanceTo(plainHand) > 0.05, mm(exactHand.distanceTo(plainHand)));
+	check("fixture: the exact-hinge arm at the target is clear of B (the old probe accepted it)", overlap(exactArm, theirs) <= 0, mm(overlap(exactArm, theirs)));
+	solveDragTarget("chain", chain, target);
+	check("fixture: the displayed (plain-solve) arm at the raw target is inside B", overlap(armCapsules(rigA), theirs) > 0.005, mm(overlap(armCapsules(rigA), theirs)));
+	reset();
+
+	const record = { frame: 0, ids: new Set() };
+	const drag = () => clampDragTarget({ kind: "chain", trackId: "rightHand", targetWorld: target, bodyContact: false, chains: new Map([["rightHand", chain]]), record, open: () => ({ rigs, activeId: "a" }) });
+	const out = drag();
+	const probed = record.contact.probe(out).map((r) => [r.a.clone(), r.b.clone()]);
+	reset();
+	solveDragTarget("chain", chain, out); // what ikSolve displays
+	const shown = armCapsules(rigA);
+	const gap = Math.max(...probed.map(([a, b], i) => Math.max(a.distanceTo(shown[i].a), b.distanceTo(shown[i].b))));
+	check("the probe's pose and the displayed pose agree within 1e-6 m", gap < 1e-6, `gap ${gap}`);
+	check("the drag stopped short of the raw target", out.distanceTo(target) > 0.01, mm(out.distanceTo(target)));
+	check("the displayed arm after the drag is clear of B", overlap(shown, theirs) <= 1e-9, mm(overlap(shown, theirs)));
+	reset();
+	check("the same drag from the same pose gives the same target", (() => { record.contact = undefined; return drag().equals(out); })());
+}
+
+// 6. cost: 2 probes x 2 blockers x 4 passes per event, in node
 {
 	const target = v(0, 1.2, 1.95), n = 20000;
 	for (let i = 0; i < 2000; i++) projector.project(target, probe, FRONT);

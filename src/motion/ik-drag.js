@@ -41,17 +41,36 @@ function openDragContact(kind, chain, { rigs, activeId, cast = null, allow = nul
 	const capsules = [...own.values()].filter((c) => c.def.movable?.chain === chain.track.id && !c.def.handId && !c.def.optional);
 	const allowFor = (probeId, blockerId) => allowance(allow, qaPart(probeId), `person:${blockerCharacterId(blockerId)}`);
 	const reads = capsules.map((c) => ({ id: c.def.id, start: c.bones[0], end: c.bones[1] ?? c.bones[0], radius: c.radius, a: c.a.clone(), b: c.b.clone() }));
-	return {
+	const contact = {
 		projector: createContactProjector({ blockers, allow: allowFor }),
-		// the limb's capsules with its handle exactly at `candidate`: solve there, read the bones
+		pose: null, // this event's starting locals, set by clampDragTarget
+		// the limb's capsules as the drag will DISPLAY them with its handle at
+		// `candidate`: the drag's own solve, from this event's starting pose
 		probe: (candidate) => {
-			if (kind === "mid") solveMidJoint(chain, candidate); else solveIk(chain, candidate, { exactHinge: true });
+			restorePose(chain, contact.pose);
+			solveDragTarget(kind, chain, candidate);
 			for (const read of reads) { read.start.getWorldPosition(read.a); read.end.getWorldPosition(read.b); }
 			return reads;
 		},
 		lastGood: chain.bones[kind === "mid" ? 1 : 2].getWorldPosition(new THREE.Vector3()),
 		notify,
 	};
+	return contact;
+}
+
+function restorePose(chain, pose) {
+	chain.bones.forEach((bone, i) => bone.quaternion.copy(pose[i]));
+	chain.bones[0].updateMatrixWorld(true);
+}
+
+/** The solve a chain or mid drag applies toward its handle (domains/motion.js
+ * ikSolve). The contact probe runs this same call from the same starting pose,
+ * so the pose it checks is exactly the pose the drag displays. (A probe on a
+ * different solve, e.g. exactHinge, lands the elbow and hand elsewhere from a
+ * bent pose and passed targets whose displayed limb sat inside the other body.) */
+export function solveDragTarget(kind, chain, target) {
+	if (kind === "mid") solveMidJoint(chain, target);
+	else solveIk(chain, target);
 }
 
 /**
@@ -69,11 +88,11 @@ export function clampDragTarget({ kind, trackId, targetWorld, bodyContact, chain
 	if (record.contact === undefined) record.contact = openDragContact(kind, chain, open());
 	const contact = record.contact;
 	if (!contact || bypass) return floored;
-	// probing poses the limb; put it back so the caller's own solve starts from this event's pose
-	const pose = chain.bones.map((bone) => bone.quaternion.clone());
+	// every probe starts from this event's pose, and the limb goes back to it
+	// so the caller's solveDragTarget starts there too
+	contact.pose = chain.bones.map((bone) => bone.quaternion.clone());
 	const { target, depth } = contact.projector.project(floored, contact.probe, contact.lastGood);
-	chain.bones.forEach((bone, i) => bone.quaternion.copy(pose[i]));
-	chain.bones[0].updateMatrixWorld(true);
+	restorePose(chain, contact.pose);
 	if (depth === 0) contact.lastGood = target.clone();
 	if (!target.equals(floored) && !contact.told) {
 		contact.told = true;

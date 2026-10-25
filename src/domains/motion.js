@@ -12,9 +12,7 @@ import {
 	ikKeyframes,
 	ikRemoveKeyframe,
 	ikSeedTargets,
-	solveIk,
 	MID_TRACKS,
-	solveMidJoint,
 	solveEffectorSwing,
 	ikPlantFeet,
 	solveHipsTranslateToFloor,
@@ -34,7 +32,7 @@ import { ko } from "../locale.js";
 import { isProxyFigure } from "../scenes.js";
 import { refuseRigOnly } from "../character-kind.js";
 import { DEFAULT_POSE, restoreBindPositions, applyPose, applyHipsOffset } from "../poses.js";
-import { bakeIkDragKey, bakeIkDragRange, chainsChangedBy, clampDragTarget, ikDragRecord, ikDragTouch } from "../motion/ik-drag.js";
+import { bakeIkDragKey, bakeIkDragRange, chainsChangedBy, clampDragTarget, ikDragRecord, ikDragTouch, solveDragTarget } from "../motion/ik-drag.js";
 import { ikKeyJson, ikTrackKeyFromJson } from "../motion/ik-key-json.js";
 import { chooseIkEntryPose } from "../ik-camera.js";
 import { applyRangePin, captureRangePinTarget, normalizeRangePin, rangePinTargetWorld, rangePinTracks, removeRangePinKeys } from "../motion/range-pin.js";
@@ -769,7 +767,7 @@ export function useMotion(appContext) {
 			touch(trackId);
 			const clampedTarget = clamp();
 			appContext.shared.ikStateRef.current.targets.set(trackId, clampedTarget.clone());
-			solveIk(chain, clampedTarget);
+			solveDragTarget(kind, chain, clampedTarget);
 			return;
 		}
 		if (kind === "mid") {
@@ -778,7 +776,7 @@ export function useMotion(appContext) {
 			const chain = midDef ? appContext.shared.ikStateRef.current.chains?.get(midDef.chain) : null;
 			if (!chain) return;
 			touch(chain.track.id);
-			solveMidJoint(chain, clamp());
+			solveDragTarget(kind, chain, clamp());
 			return;
 		}
 		// Effector swing: the rotation ring on a focused hand/foot. Rotates
