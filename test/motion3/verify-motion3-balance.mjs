@@ -9,6 +9,8 @@ import { skeletonFor } from "../../src/motion3/rigs/index.js";
 import { bakeTake } from "../../src/motion3/take.js";
 import { centerOfMass, bodyCentre, supportMargin, balanceAt, offsetWords, SEGMENT_FRACTIONS } from "../../src/motion3/qa/com.js";
 import { takeHash } from "./fixtures/take-hash.mjs";
+import { applyPatch } from "../../src/motion3/json-patch.js";
+import { attachPatches } from "../../src/motion3/qa/patch.js";
 
 let failures = 0;
 function expect(name, condition, detail = "") {
@@ -45,6 +47,22 @@ const fix = bal[0]?.fix;
 expect("the hint moves the root back (-Z) and says why in numbers", fix?.channel === "root" && fix.delta[2] < -0.01 && Math.abs(fix.delta[0]) < 0.01 && fix.delta[1] === 0
 	&& /root: move \[.*\] m at f\d+ \(centre of mass \d+\.\d\d m ahead of the feet \(toward \+Z\)/.test(bal[0].hint), json({ hint: bal[0]?.hint, fix }));
 expect("the fix leaves the centre of mass 1 cm inside the limit: delta = worst - (limit - 0.01)", Math.abs(-fix.delta[2] - (bal[0].worst - 0.07)) < 0.005, json({ fix, worst: bal[0].worst }));
+
+// (b1) the hint's patch, applied and compiled: the bend is held by two keys (f0, f39). The patch moves both
+// (qa/patch.js: a delta moves the hold), so the root does not slide from f0 to f39 and BALANCE is gone,
+// whether the two keys share one object (structuredClone keeps the sharing) or are separate copies
+for (const [name, keys] of [["two separate keys", [{ f: 0, set: structuredClone(bend) }, { f: 39, set: structuredClone(bend) }]], ["one shared key object", [{ f: 0, set: bend }, { f: 39, set: bend }]]]) {
+	const spec = stand({ fix: { reach: false }, keys }), g = balance(compile(spec))[0];
+	const paths = (g?.patch ?? []).map(op => op.path), after = balance(compile(applyPatch(spec, g?.patch ?? [])));
+	expect(`${name}: the BALANCE patch moves the root of both keys that hold the bend, and the patched spec compiles with no BALANCE`,
+		json(paths) === json(["/keys/0/set/root", "/keys/1/set/root"]) && after.length === 0, json({ patch: g?.patch, after: after.map(x => [x.subject, x.count, x.first, x.last]) }));
+}
+// a hold ends at a key with another value: f0 and f20 hold A, f30 sets B, f40 A again -> only keys 0 and 1 move
+{
+	const A = [0, 1, 0.2], B = [0, 1, 0.5], spec = { keys: [{ f: 0, set: { root: [...A] } }, { f: 20, set: { root: [...A] } }, { f: 30, set: { root: B } }, { f: 40, set: { root: [...A] } }] };
+	const [g] = attachPatches([{ fix: { channel: "root", f: 0, delta: [0, 0, -0.1] } }], { userSpec: spec });
+	expect("a delta moves the keys that hold the same value up to the first key with another value", json((g.patch ?? []).map(op => [op.path, op.value])) === json([["/keys/0/set/root", [0, 1, 0.1]], ["/keys/1/set/root", [0, 1, 0.1]]]), json(g.patch));
+}
 
 // (b2) a lean that swings from ahead to left: still one "outside the feet" group (the direction is not in
 // the subject), the hint at the worst frame says left
