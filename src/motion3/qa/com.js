@@ -60,7 +60,7 @@ export function bodyCentre(sk, s) {
 const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
 
 /** Convex hull of 2D points [x, z], counter-clockwise in (x, z), collinear points dropped (monotone chain). */
-function convexHull(points) {
+export function convexHull(points) {
 	const p = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
 	if (p.length < 3) return p;
 	const half = list => {

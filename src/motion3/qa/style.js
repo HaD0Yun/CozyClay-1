@@ -87,7 +87,7 @@ function supported(out, f, supports) {
  * centre of mass sits inside the support polygon of the feet on the ground, the floor or an
  * object's top (ground.js; < 0: outside it).
  */
-const balanceFrames = (out, supports = []) => out.frames.map((_, f) => (supported(out, f, supports) ? null : balanceAt(out, f)));
+export const balanceFrames = (out, supports = []) => out.frames.map((_, f) => (supported(out, f, supports) ? null : balanceAt(out, f)));
 
 /** True when a hand rests on the ground at frame f: its wrist or knuckles within HAND_DOWN of the ground under them. */
 const HAND_DOWN = 0.06;
@@ -97,7 +97,7 @@ function handDown(out, f) {
 }
 
 /** Runs [a, b] (indexes of out.frames) with both soles 2 cm or more above the ground (ground.js), no hand on it and no declared support. */
-function airRuns(out, supports = []) {
+export function airRuns(out, supports = []) {
 	const n = out.frames.length, runs = [];
 	const air = out.frames.map((_, f) => !supported(out, f, supports)
 		&& ["Left", "Right"].every(S => { const sp = groundSole(out, f, S); return Math.min(sp.heel[1], sp.ball[1]) >= 0.02; }) && !handDown(out, f));
