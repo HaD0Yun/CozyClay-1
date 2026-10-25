@@ -2,7 +2,8 @@
 // other limb. Each answers a world move (direction x amount) for whatever drives that part.
 import { add, sub, scale, norm, dot, len, clamp, apply, ry, T } from "../compiler/math.js";
 import { bonePoint } from "../compiler/skeleton.js";
-import { CAPSULES, segPoints, sdBox, boxNormal, headDepth, segDist, solePoints, ankleY } from "./geometry.js";
+import { CAPSULES, segPoints, sdBox, boxNormal, headDepth, segDist, ankleY } from "./geometry.js";
+import { balanceAt, offsetWords } from "./com.js";
 import { vec, m3 } from "./fmt.js";
 import { kneeFoldHint, kneeWhy } from "./hints-knee.js";
 import { objectFrame } from "../compiler/anchors.js";
@@ -184,12 +185,13 @@ export const contactHints = {
 			fix: { channel: ch, f: g.worstFrame, value: clean } };
 	},
 	BALANCE(X, g) {
-		const f = g.worstFrame, { s } = X.fr(f), P = s.P, I = X.I;
+		const f = g.worstFrame;
 		if (g.subject === "no foot on the ground") return { cause: X.cause("root", f), hint: `at f${f} lower foot_l or foot_r onto the ground, the floor or the top of an object under it (the ankle stands ${ankleY(X.sk)} m above it), or declare checks.supports for the seat the hips rest on` };
-		const com = scale(["Hips", "Spine1", "Spine2", "Head"].reduce((acc, j) => add(acc, P[I[j]]), [0, 0, 0]), 0.25);
-		const feet = ["Left", "Right"].flatMap(S => Object.values(solePoints(X.sk, s, S)));
-		const xs = feet.map(p => p[0]), zs = feet.map(p => p[2]), mg = 0.08 - 0.01;
-		const to = [clamp(com[0], Math.min(...xs) - mg, Math.max(...xs) + mg), com[1], clamp(com[2], Math.min(...zs) - mg, Math.max(...zs) + mg)];
-		return { cause: X.cause("root", f), hint: `root: move ${vec(sub(to, com))} m at f${f} (centre of mass over the feet), or step a foot under it`, fix: { channel: "root", f, delta: sub(to, com) } };
+		// the mass-weighted centre of mass toward the support polygon's nearest point, to within limit - 1 cm of it (com.js)
+		const b = balanceAt(X.out, Math.max(0, Math.min(X.out.frames.length - 1, f - (X.out.f0 ?? 0))));
+		if (b === "air" || b.margin >= 0) return null;
+		const d = -b.margin, keep = Math.min(d, Math.max(0, (g.limit ?? 0.08) - 0.01)), t = (d - keep) / d;
+		const delta = [(b.near[0] - b.com[0]) * t, 0, (b.near[1] - b.com[2]) * t];
+		return { cause: X.cause("root", f), hint: `root: move ${vec(delta)} m at f${f} (centre of mass ${offsetWords(b)}, toward the nearest edge of the support polygon), or step a foot under it`, fix: { channel: "root", f, delta } };
 	},
 };

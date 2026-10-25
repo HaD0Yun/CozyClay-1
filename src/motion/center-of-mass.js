@@ -1,20 +1,14 @@
 import * as THREE from "three";
 import { findBone } from "./ik.js";
+import { SEGMENT_FRACTIONS } from "../motion3/qa/com.js";
 
 // Body segment masses and the centre of mass of a posed Mixamo rig. Read-only:
 // motion verification and the support diagnostics measure with it.
 
 /**
- * Segment mass fractions of total body mass, from Dempster's cadaver study
- * (Dempster, W.T., "Space Requirements of the Seated Operator", WADC TR
- * 55-159, 1955), in the tabulation popularised by Winter, "Biomechanics and
- * Motor Control of Human Movement". The trunk (0.497) is split into pelvis
- * (0.142) and thorax+abdomen (0.355); distal pairs are merged because their
- * combined centroid still lands near the segment midpoint and Mixamo's hand
- * and toe bones are too short to place reliably:
- *
- *   head+neck 0.081 · trunk 0.497 · upper arm 0.028 · forearm 0.016 +
- *   hand 0.006 = 0.022 · thigh 0.100 · shank 0.0465 + foot 0.0145 = 0.061
+ * Segment mass fractions of total body mass (Dempster, via Winter), on Mixamo
+ * bone names. The table itself lives with motion3 QA (motion3/qa/com.js
+ * SEGMENT_FRACTIONS), which measures balance on the same segments.
  *
  * Each entry names the two Mixamo bones whose MIDPOINT carries the fraction.
  * Dempster's true centres of mass sit ~43% down each segment rather than at
@@ -24,19 +18,7 @@ import { findBone } from "./ik.js";
  *
  * The fractions sum to 1, so the weighted average below is a true CoM.
  */
-export const SEGMENT_MASSES = [
-	{ id: "pelvis", start: "mixamorigHips", end: "mixamorigSpine1", mass: 0.142 },
-	{ id: "torso", start: "mixamorigSpine1", end: "mixamorigNeck", mass: 0.355 },
-	{ id: "head", start: "mixamorigNeck", end: "mixamorigHead", mass: 0.081 },
-	{ id: "leftUpperArm", start: "mixamorigLeftArm", end: "mixamorigLeftForeArm", mass: 0.028 },
-	{ id: "leftForeArmHand", start: "mixamorigLeftForeArm", end: "mixamorigLeftHand", mass: 0.022 },
-	{ id: "rightUpperArm", start: "mixamorigRightArm", end: "mixamorigRightForeArm", mass: 0.028 },
-	{ id: "rightForeArmHand", start: "mixamorigRightForeArm", end: "mixamorigRightHand", mass: 0.022 },
-	{ id: "leftThigh", start: "mixamorigLeftUpLeg", end: "mixamorigLeftLeg", mass: 0.100 },
-	{ id: "leftShankFoot", start: "mixamorigLeftLeg", end: "mixamorigLeftFoot", mass: 0.061 },
-	{ id: "rightThigh", start: "mixamorigRightUpLeg", end: "mixamorigRightLeg", mass: 0.100 },
-	{ id: "rightShankFoot", start: "mixamorigRightLeg", end: "mixamorigRightFoot", mass: 0.061 },
-];
+export const SEGMENT_MASSES = SEGMENT_FRACTIONS.map(({ id, start, end, mass }) => ({ id, start: `mixamorig${start}`, end: `mixamorig${end}`, mass }));
 
 /**
  * World-space centre of mass of the rig's CURRENT pose: the mass-weighted
