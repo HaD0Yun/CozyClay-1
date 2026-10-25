@@ -34,7 +34,7 @@ import { channelsAt } from "./compiler/channels.js";
 import { resolveBone } from "./bones.js";
 import { isFree, freePoseAt, freeSwungAt, beforeGrab, afterRelease, fallsAfter, corners, topOf, under, TOUCH } from "./free-motion.js";
 import { add } from "./compiler/math.js";
-import { springRest, springStep, swingOf, swungPose, springLength, SPRING } from "./compiler/spring.js";
+import { springRest, springStep, swingOf, swungPose, springLength, springOpts } from "./compiler/spring.js";
 
 /**
  * Body ids that make up `id` in a motionScene: [id] for a body (plus any bodies parented under
@@ -180,7 +180,7 @@ function springAt(out, id, o, f, nowPose) {
 	if (!springs.has(out)) springs.set(out, new Map());
 	const cache = springs.get(out), f0 = out.f0 ?? 0, fps = out.fps ?? out.ctx.spec.fps ?? 30, { scene } = out.ctx;
 	if (!cache.has(id)) cache.set(id, { states: [], keys: [], length: springLength(partsOf(scene, id).flatMap(p => corners(scene.objects[p]))) });
-	const c = cache.get(id), opts = { fps, stiffness: o.spring.stiffness ?? SPRING.stiffness.default, damping: o.spring.damping ?? SPRING.damping.default, length: c.length };
+	const c = cache.get(id), opts = springOpts(o.spring, fps, c.length);
 	const end = nowPose ? f - 1 : f;
 	let k = 0;
 	while (k <= end && k < c.states.length && c.keys[k] === (out.frames[k - f0] ?? null)) k += 1;

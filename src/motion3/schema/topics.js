@@ -72,9 +72,9 @@ export const NOTES = {
 		"A fit on a scene body also turns the hand about the forearm into a grip: a thin body (a can, a bar, a handle, a neck) across the palm, else thumb up; never past a comfortable forearm turn. A wrist you turn (wtwist/wflex) wins; fit.orient: false (reachGrip args.orient: false) turns it off.",
 		"reachGrip adds props.<anchor>Grip and its fit. Carry a scene object with objects.<id>.prop (topic objects).",
 		"Do not pin a carried thing on a knuckle point: without at/along it rests in the palm and the fingers close on it (fix.grasp). objects.<id>.grasp names how: power, pinch, hook, palm, spherical (a ball). objects.<id>.mass (kg) weighs on the arm; past one hand QA says LOAD and patches in the other hand.",
-		"objects.<id>.spring { stiffness, damping } (a carry, keyed included, or a free entry) swings it a beat behind the hand or its keys, then settles: a bag, a lantern. "
-			+ "stiffness (1/s^2; 80: 1.4 swings/s) is how fast it swings back, damping how soon it stops (1: no overshoot); { stiffness: 60, damping: 0.2 } a loose bag. "
-			+ "It turns, at most 60 deg about its base, never moves; a still hand leaves it still."],
+		"objects.<id>.spring { length, stiffness, damping } (a carry, keyed included, or a free entry) swings it a beat behind the hand or its keys, then settles: a bag, a lantern. "
+			+ "length (m, default half its longest side) is the string or rod; stiffness (1/s^2) defaults to 9.81 / length, a real pendulum; damping (default 0.5; 1: no overshoot) how soon it stops. "
+			+ "A natural swing: length 0.4..0.6, damping 0.5..0.7. It turns, at most 60 deg about its base, never moves: put the base at the hand with at/along; a still hand leaves it still."],
 	objects: ["A hinge turns the object (a body or a group) about pivot/axis by the angle channel your keys set.",
 		"A carry follows the prop's hand: before grab the scene pose, grab..release in the hand, after release where it was let go, riding a body under it that keys or a hinge move.",
 		"No at/along: it rests in the palm, fingers closed on it.",
@@ -91,7 +91,7 @@ export const NOTES = {
 			+ "to rest on a stable face, one small bounce (0: none). A carry falls before grab or after release.",
 		"A follow { follow: <ref>, offset?, aim?, visible?, level? } puts any record (an effect, a light, a part) on a body point every frame: "
 			+ "aim sets its +Y (an effect emits along it): up (default), face (forward), a direction or a ref (toward it); offset is metres along its axes after aim. It is no obstacle.",
-		"The editor's motion.keyObject writes one key from a drag (a hinge: its channel key)."],
+		"The editor's motion.keyObject keys a drag (a hinge: its channel)."],
 	checks: ["Each entry adds QA groups: contacts CONTACT, orient ORIENT, below BELOW, clearance CLEARANCE, appear APPEAR; supports mark where a part rests on an object (no FLOAT, no balance there); a foot on an object's top is on the ground without one.",
 		"when: a weight channel (active above 0.99) or [f0, f1]; clearance uses frames.", "Check points take joint:, prop: and anchor: only; goals and probes take every ref (topic refs).",
 		"allow excuses a body part inside an object up to depth; limits override the QA limits. Unnamed entries are named by place, contacts[0].",

@@ -25,7 +25,7 @@ import { curveOf, keyedPose } from "./object-keys.js";
 import { add, apply, sub, T, quatFromMat, I3 } from "./compiler/math.js";
 import { shapeOf, airPath, settlePath, settledAt, spinOf, spinEnergy, TIP } from "./settle.js";
 import { fallVelocity, moves, flightTime, drift, landingWith } from "./flight.js";
-import { springRest, springStep, swingOf, swungPose, springLength, SPRING } from "./compiler/spring.js";
+import { springRest, springStep, swingOf, swungPose, springLength, springOpts } from "./compiler/spring.js";
 
 /** Gravity, m/s^2. */
 export const G = 9.8;
@@ -196,7 +196,7 @@ export function freeSwungAt(ctx, id, f) {
 	const cache = swings.get(ctx.spec);
 	let c = cache.get(id);
 	if (!c || c.map !== ctx.timeMap || c.o !== o) cache.set(id, c = { map: ctx.timeMap, o, states: [], length: springLength(partsIn(ctx.scene, id).flatMap(p => corners(ctx.scene.objects[p]))) });
-	const opts = { fps: ctx.spec.fps ?? 30, stiffness: o.spring.stiffness ?? SPRING.stiffness.default, damping: o.spring.damping ?? SPRING.damping.default, length: c.length };
+	const opts = springOpts(o.spring, ctx.spec.fps ?? 30, c.length);
 	for (let k = c.states.length; k <= f; k++) c.states[k] = springStep(k ? c.states[k - 1] : springRest(), (k === f ? pose : freePoseAt(ctx, id, k)).pos, opts);
 	return swungPose(pose, swingOf(c.states[f]));
 }

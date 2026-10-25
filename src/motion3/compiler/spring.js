@@ -1,4 +1,4 @@
-// Spring secondary motion for a carried or free object (spec.objects[id].spring = { stiffness, damping }): a damped
+// Spring secondary motion for a carried or free object (spec.objects[id].spring = { length, stiffness, damping }): a damped
 // pendulum hung on the object's anchor lags the anchor's horizontal acceleration, swings and settles. Computed once at
 // compile time (object-pose.js rootPoseAt); playback, scrub and export read the baked track only.
 //
@@ -9,14 +9,17 @@
 // State: two swing angles th = [tx, tz] (rad), how far the object's far end swings toward world +X and +Z, and their
 // rates w. Per frame f: a = (p[f] - 2 p[f-1] + p[f-2]) * fps^2 (0 on frames 0 and 1), then
 //   w = (w + (-k th - a_h / L) dt) / (1 + c dt) ;  th += w dt ;  c = 2 d sqrt(k)
-// with k the stiffness (1/s^2), d the damping ratio (0..1, 1 critical) and L the pendulum length (m). The damping is
+// with k the stiffness (1/s^2), d the damping ratio (0..1, 1 critical) and L the pendulum length (m): spring.length, else
+// half the object's longest side (springLength). Without a stiffness k = G / L, a real pendulum's sqrt(g / L). The damping is
 // implicit, so no damping ratio makes it ring up (an explicit c dt > 1 diverged); the stiffness step stays stable while
 // sqrt(k) dt < 2, and the schema caps k at SPRING.stiffness.max (500) so that sqrt(k) dt <= 1 from 24 fps up.
 import { qexp, qmul, qnorm } from "./quat.js";
 import { quatFromMat, matFromQuat } from "./math.js";
 
-/** The schema's ranges and defaults (schema/types.js reads them; validate-objects.js checks them). */
-export const SPRING = { stiffness: { min: 0, max: 500, default: 80 }, damping: { min: 0, max: 1, default: 0.3 } };
+/** The schema's ranges and defaults (schema/types.js reads them; validate-objects.js checks them). No stiffness default: G / length. */
+export const SPRING = { length: { min: 0.05, max: 2 }, stiffness: { min: 0, max: 500 }, damping: { min: 0, max: 1, default: 0.5 } };
+/** Gravity, m/s^2 (qa/style.js and skills/impact.js use the same value). */
+const G = 9.81;
 /** The largest swing drawn, rad (60 degrees). */
 const SPRING_MAX = Math.PI / 3;
 /** The shortest pendulum, m: a tiny prop swings as if it were this long. */
@@ -45,11 +48,20 @@ export function springStep(state, p, { fps, stiffness, damping, length }) {
 }
 
 /**
- * The swing of every frame for anchor positions `anchors` (one world [x, y, z] per frame from frame 0):
- * [[tx, tz], ...] rad, each clamped to +-60 degrees. A still anchor gives 0 on every frame.
+ * The solver options for spring entry `spring` ({ length?, stiffness?, damping? }) at `fps`: the length given, else
+ * `fallback` (springLength of the object); the stiffness given, else G / length; the damping given, else 0.5.
  */
-export function springAngles({ anchors, fps, stiffness = SPRING.stiffness.default, damping = SPRING.damping.default, length = SPRING_MIN_LENGTH }) {
-	const opts = { fps, stiffness, damping, length }, out = [];
+export function springOpts(spring, fps, fallback = SPRING_MIN_LENGTH) {
+	const length = Math.max(SPRING_MIN_LENGTH, spring?.length ?? fallback);
+	return { fps, stiffness: spring?.stiffness ?? G / length, damping: spring?.damping ?? SPRING.damping.default, length };
+}
+
+/**
+ * The swing of every frame for anchor positions `anchors` (one world [x, y, z] per frame from frame 0):
+ * [[tx, tz], ...] rad, each clamped to +-60 degrees. A still anchor gives 0 on every frame. Defaults as springOpts.
+ */
+export function springAngles({ anchors, fps, stiffness, damping, length }) {
+	const opts = springOpts({ stiffness, damping, length }, fps), out = [];
 	let state = springRest();
 	for (const p of anchors) {
 		state = springStep(state, p, opts);
