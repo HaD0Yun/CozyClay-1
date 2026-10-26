@@ -8,9 +8,10 @@
 // QA error, and so is a FLOAT: the body off the ground without falling (floatChecks). A pop is a
 // spike, not a large value: a hard but continuous acceleration (a swing's launch) is style.
 // See docs/motion-api-v3.1.md C13.
-import { add, sub, scale, len, dot, angle } from "../compiler/math.js";
+import { sub, len, dot, angle } from "../compiler/math.js";
 import { CAPSULES, segPoints, sdBox } from "./geometry.js";
 import { groundSole, groundY } from "./ground.js";
+import { balanceAt } from "./com.js";
 
 const SPEED_JOINTS = ["Hips", "Head", "LeftHand", "RightHand", "LeftFoot", "RightFoot", "LeftLeg", "RightLeg", "LeftForeArm", "RightForeArm"];
 const CORE = new Set(["Hips", "Head"]);
@@ -81,28 +82,12 @@ function supported(out, f, supports) {
 }
 
 /**
- * Per frame: null where a declared support carries the body, "air" with no foot on the ground,
- * else the balance margin in metres: how far the centre of mass (hips, spine, head) sits inside
- * the box of the feet on the ground, the floor or an object's top (ground.js; < 0: outside it).
- * While the hips travel every foot counts.
+ * Per frame: null where a declared support carries the body, else balanceAt (com.js): "air" with
+ * no foot on the ground, or { margin, ... } with margin in metres: how far the mass-weighted
+ * centre of mass sits inside the support polygon of the feet on the ground, the floor or an
+ * object's top (ground.js; < 0: outside it).
  */
-function balanceMargins(out, supports = []) {
-	const sk = out.ctx.sk, I = sk.index, F = out.frames;
-	return F.map(({ s }, f) => {
-		if (supported(out, f, supports)) return null;
-		const { P } = s;
-		const moving = f > 0 && f < F.length - 1 && Math.hypot(F[f + 1].s.P[I.Hips][0] - F[f - 1].s.P[I.Hips][0], F[f + 1].s.P[I.Hips][2] - F[f - 1].s.P[I.Hips][2]) / 2 > 0.006;
-		const feet = [];
-		for (const S of ["Left", "Right"]) {
-			const sp = groundSole(out, f, S);
-			if (moving || Math.min(sp.heel[1], sp.ball[1]) < 0.02) feet.push(sp.heel, sp.ball, sp.tip);
-		}
-		if (!feet.length) return "air";
-		const com = scale(["Hips", "Spine1", "Spine2", "Head"].reduce((acc, j) => add(acc, P[I[j]]), [0, 0, 0]), 0.25);
-		const xs = feet.map(p => p[0]), zs = feet.map(p => p[2]);
-		return Math.min(com[0] - Math.min(...xs), Math.max(...xs) - com[0], com[2] - Math.min(...zs), Math.max(...zs) - com[2]);
-	});
-}
+export const balanceFrames = (out, supports = []) => out.frames.map((_, f) => (supported(out, f, supports) ? null : balanceAt(out, f)));
 
 /** True when a hand rests on the ground at frame f: its wrist or knuckles within HAND_DOWN of the ground under them. */
 const HAND_DOWN = 0.06;
@@ -112,7 +97,7 @@ function handDown(out, f) {
 }
 
 /** Runs [a, b] (indexes of out.frames) with both soles 2 cm or more above the ground (ground.js), no hand on it and no declared support. */
-function airRuns(out, supports = []) {
+export function airRuns(out, supports = []) {
 	const n = out.frames.length, runs = [];
 	const air = out.frames.map((_, f) => !supported(out, f, supports)
 		&& ["Left", "Right"].every(S => { const sp = groundSole(out, f, S); return Math.min(sp.heel[1], sp.ball[1]) >= 0.02; }) && !handDown(out, f));
@@ -169,12 +154,10 @@ export function styleChecks(sk, out, checks, L) {
 			if (deg > L.knee) push("KNEE", `${bend[0] === "knee_l" ? "Left" : "Right"} knee bent ${deg.toFixed(0)}deg`, f, deg, L.knee);
 		}
 	});
-	if (on("balance")) balanceMargins(out, checks.supports).forEach((m, f) => {
-		if (m === "air") push("BALANCE", "no foot on the ground", f, 0, 0);
-		else if (m !== null && -m > L.balance) {
-			const com = scale(["Hips", "Spine1", "Spine2", "Head"].reduce((acc, j) => add(acc, out.frames[f].s.P[sk.index[j]]), [0, 0, 0]), 0.25);
-			push("BALANCE", `centre of mass ${com[0].toFixed(2)},${com[2].toFixed(2)} outside the feet`, f, -m, L.balance);
-		}
+	if (on("balance")) balanceFrames(out, checks.supports).forEach((b, f) => {
+		if (b === "air") push("BALANCE", "no foot on the ground", f, 0, 0);
+		// one subject whatever the direction: a lean that swings from ahead to left stays one group; the hint says how far and which way
+		else if (b && -b.margin > L.balance) push("BALANCE", "centre of mass outside the feet", f, -b.margin, L.balance);
 	});
 	return issues;
 }
@@ -192,7 +175,7 @@ export function observeMotion(sk, out, checks = {}) {
 		return [Math.round(arr[at] * k * 100) / 100, at + f0];
 	};
 	const peaks = Object.fromEntries(kinematics(sk, out).map(({ j, v, a }) => [j, { speed: peak(v, fps), accel: peak(a, fps * fps) }]).filter(([, p]) => p.speed[0] >= STILL));
-	const margins = balanceMargins(out, checks.supports), span = test => {
+	const margins = balanceFrames(out, checks.supports).map(b => (b && b !== "air" ? b.margin : b)), span = test => {
 		const fs = margins.map((m, f) => (test(m) ? f + f0 : -1)).filter(f => f >= 0);
 		return fs.length ? [fs[0], fs[fs.length - 1]] : null;
 	}, air = airRuns(out, checks.supports).slice(0, 4).map(([a, b]) => [a + f0, b + f0]);

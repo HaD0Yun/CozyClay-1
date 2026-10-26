@@ -5,6 +5,7 @@
 import { REF_KINDS, OBJECT_KEY_FIELDS } from "./fields.js";
 import { CONVENTIONS, GRASPS } from "../compiler/vocab.js";
 import { QA_LIMITS } from "../qa/checks.js";
+import { SPRING } from "../compiler/spring.js";
 import { CAPSULES } from "../qa/geometry.js";
 
 const def = (d, extra) => ({ ...extra, ...(d ? { description: d } : {}) });
@@ -83,23 +84,25 @@ export const FIT_TYPES = {
 	offset: ref("vec3", "world offset, m"), orient: { type: "boolean", description: "false: no grip turn" },
 };
 
-const OBJECT_KEY_TYPES = { f: int(), pos: ref("vec3"), rot: { type: "array", items: { type: "number" }, minItems: 4, maxItems: 4, description: "quat x, y, z, w" },
+const OBJECT_KEY_TYPES = { f: int(), pos: ref("vec3"), rot: { type: "array", items: { type: "number" }, minItems: 4, maxItems: 4, description: "quat xyzw" },
 	aim: ref("vec3", "or rot: +Y dir"), roll: num("deg about aim"), lean: num("aim tilt", { minimum: 0, maximum: 45 }) };
 
 const FALL = { type: "object", properties: { at: int(), onto: str(), bounce: num(null, { default: 0.25, minimum: 0, maximum: 0.6 }), tumble: { type: "boolean" },
 	v: { oneOf: [{ $ref: "#/$defs/vec3" }, { const: "hand" }], description: "m/s" } }, required: ["at"], additionalProperties: false };
 /** A free entry's keys and fall (C17) are a carry's, at any frame: said once, not twice. */
-const AS_CARRY = { description: "as carry; keys at any frame" };
-export const FREE_TYPES = { keys: AS_CARRY, fall: AS_CARRY };
+const AS_CARRY = { description: "as carry, any frame" };
+export const FREE_TYPES = { keys: AS_CARRY, fall: AS_CARRY, spring: AS_CARRY };
+const SPRING_TYPE = { type: "object", properties: Object.fromEntries(Object.entries(SPRING).map(([k, r]) => [k, num(null, { default: r.default, minimum: r.min, maximum: r.max })])),
+	additionalProperties: false };
 
 export const OBJECT_TYPES = {
-	pivot: ref("vec3", "world hinge point"), axis: ref("vec3", "default +Y"), channel: str("angle channel, deg"),
-	prop: str("spec.props name: it rides that hand"), at: ref("vec3", "palm offset [d, l, n]"), along: ref("vec3", "+Y on the palm, fixed"),
-	visible: str("channel: shown > 0.5"), level: str("channel: strength 0..4"), grab: int("hand takes it", { default: 0 }), release: int("let go (else end)"),
+	pivot: ref("vec3", "world"), axis: ref("vec3", "default +Y"), channel: str("angle, deg"),
+	prop: str("spec.props name"), at: ref("vec3", "palm offset [d, l, n]"), along: ref("vec3", "+Y on palm"),
+	visible: str("channel: shown > 0.5"), level: str("channel: 0..4"), grab: int("hand takes it", { default: 0 }), release: int("let go, else end"),
 	keys: { type: "array", items: { type: "object", properties: Object.fromEntries(OBJECT_KEY_FIELDS.map(f => [f, OBJECT_KEY_TYPES[f]])), required: ["f", "pos"], additionalProperties: false },
-		description: "world pose at f; hand follows" },
-	fall: { ...FALL, description: "or a list; topic objects" },
-	grasp: { enum: GRASPS }, mass: num("kg", { minimum: 0.01, maximum: 60 }),
+		description: "world pose; hand follows" },
+	fall: { ...FALL, description: "or a list" },
+	grasp: { enum: GRASPS }, mass: num("kg", { minimum: 0.01, maximum: 60 }), spring: SPRING_TYPE,
 	follow: ref("ref"), offset: ref("vec3"), aim: { oneOf: [{ enum: ["face", "up"] }, { $ref: "#/$defs/vec3" }, { $ref: "#/$defs/ref" }], default: "up" },
 };
 
@@ -144,6 +147,7 @@ export const FIX_TYPES = {
 	retime: bool("speed spikes borrow frames from the neighbouring keys", { default: false }),
 	stance: bool("a standIdle stance in a scene body slides out of it (observations.placed)", { default: true }),
 	grasp: bool("fingers close on what the hand holds; it rests in the hand", { default: true }),
+	person: bool("arms kept out of the other characters (QA PERSON)", { default: true }),
 };
 
 export const REF_DOCS = {

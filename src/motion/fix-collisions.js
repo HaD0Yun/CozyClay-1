@@ -287,7 +287,7 @@ function restPairOverlaps(rig, radii = null) {
 /** Closest points between two segments (Ericson, Real-Time Collision
  * Detection — the textbook segment/segment distance). Writes into outA/outB
  * and returns the squared distance. */
-function closestPointsSegmentSegment(p1, q1, p2, q2, outA, outB) {
+export function closestPointsSegmentSegment(p1, q1, p2, q2, outA, outB) {
 	const d1 = q1.clone().sub(p1);
 	const d2 = q2.clone().sub(p2);
 	const r = p1.clone().sub(p2);

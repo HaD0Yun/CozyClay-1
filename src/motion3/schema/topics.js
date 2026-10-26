@@ -55,7 +55,7 @@ const CARRY = { props: EXAMPLES.objects.props, objects: { cup: EXAMPLES.objects.
 export const NOTES = {
 	essentials: ["types: ? optional, =v default, a..b range, A | B one of, [key]: T map, a|b?: T both, x_l|r each side, (text) meaning.",
 		`A carried object: ${literal(CARRY)}. ${NO_JUMP}`,
-		"motion.describe { topic } or { topic: 'skills', name }: the rest."],
+		"motion.describe { topic } or { topic: 'skills', name }: more."],
 	spec: [UNITS,
 		"frames: an integer, or \"auto\" (the last skill end, generator end or key f, plus 1); the stored spec keeps the number.",
 		"Any number may be { range: [lo, hi] } (int: true for frames): the compiler searches it, QA 0 first, at most search.budget compiles.",
@@ -71,15 +71,18 @@ export const NOTES = {
 		"fits: the hand target moves so the effector (a prop point or the mean of joints), not the wrist, lands on the anchor.",
 		"A fit on a scene body also turns the hand about the forearm into a grip: a thin body (a can, a bar, a handle, a neck) across the palm, else thumb up; never past a comfortable forearm turn. A wrist you turn (wtwist/wflex) wins; fit.orient: false (reachGrip args.orient: false) turns it off.",
 		"reachGrip adds props.<anchor>Grip and its fit. Carry a scene object with objects.<id>.prop (topic objects).",
-		"Do not pin a carried thing on a knuckle point: without at/along it rests in the palm and the fingers close on it (fix.grasp). objects.<id>.grasp names how: power, pinch, hook, palm, spherical (a ball). objects.<id>.mass (kg) weighs on the arm; past one hand QA says LOAD and patches in the other hand."],
-	objects: ["A hinge turns the object (a body or a group) about pivot/axis by the angle channel your keys set (degrees).",
+		"Do not pin a carried thing on a knuckle point: without at/along it rests in the palm and the fingers close on it (fix.grasp). objects.<id>.grasp names how: power, pinch, hook, palm, spherical (a ball). objects.<id>.mass (kg) weighs on the arm; past one hand QA says LOAD and patches in the other hand.",
+		"objects.<id>.spring { length, stiffness, damping } (a carry, keyed included, or a free entry) swings it a beat behind the hand or its keys, then settles: a bag, a lantern. "
+			+ "length (m, default half its longest side) is the string or rod; stiffness (1/s^2) defaults to 9.81 / length, a real pendulum; damping (default 0.5; 1: no overshoot) how soon it stops. "
+			+ "A natural swing: length 0.4..0.6, damping 0.5..0.7. It turns, at most 60 deg about its base, never moves: put the base at the hand with at/along; a still hand leaves it still."],
+	objects: ["A hinge turns the object (a body or a group) about pivot/axis by the angle channel your keys set.",
 		"A carry follows the prop's hand: before grab the scene pose, grab..release in the hand, after release where it was let go, riding a body under it that keys or a hinge move.",
-		"No grab: in hand from frame 0; no release: to the end. No at/along: it rests in the palm, fingers closed on it.",
+		"No at/along: it rests in the palm, fingers closed on it.",
 		"A group (Empty) id moves all its parts; at/along pin a group's root to the palm too (an object.createKit kit). A carried object is an obstacle for the body and the scene.",
-		"A switch { visible?, level? } (no prop, no hinge field) moves nothing: it shows or hides any record (a part, a light, an effect) and sets its level, 0..4 light, glow and effect strength "
+		"A switch { visible?, level? } moves nothing: it shows or hides any record (a part, a light, an effect) and sets its level, 0..4 light, glow and effect strength "
 			+ "(an unkeyed level reads 1). Hiding a group hides its parts. A carry takes level too.",
-		"keys pose a carried object in the world while in hand: pos its base (a group: its root), rot a quaternion [x, y, z, w], "
-			+ "or aim [x, y, z] where its +Y points (a bat's barrel) plus roll degrees about it (none: the roll the arm holds most easily). "
+		"keys pose a carried object in the world while in hand: pos its base (a group: its root), rot a quaternion, "
+			+ "or aim [x, y, z] where its +Y points (a bat's barrel) plus roll degrees about it (none: the easiest roll). "
 			+ `The object leads and the arm follows (elbow, forearm, then the wrist within ${Object.entries(WRIST_LIMITS).map(([k, [lo, hi]]) => `${k} ${lo}..${hi}`).join(", ")} deg; dev + toward the thumb); `
 			+ "a left hand on a prop anchor of it turns with it; "
 			+ `the hand eases in and out over ${KEY_BLEND} frames. REACH "<id>: n cm off its keys" is what the hand could not reach; `
@@ -88,12 +91,12 @@ export const NOTES = {
 			+ "to rest on a stable face, one small bounce (0: none). A carry falls before grab or after release.",
 		"A follow { follow: <ref>, offset?, aim?, visible?, level? } puts any record (an effect, a light, a part) on a body point every frame: "
 			+ "aim sets its +Y (an effect emits along it): up (default), face (forward), a direction or a ref (toward it); offset is metres along its axes after aim. It is no obstacle.",
-		"The editor's motion.keyObject writes one key from a drag (a hinge: its channel key)."],
+		"The editor's motion.keyObject keys a drag (a hinge: its channel)."],
 	checks: ["Each entry adds QA groups: contacts CONTACT, orient ORIENT, below BELOW, clearance CLEARANCE, appear APPEAR; supports mark where a part rests on an object (no FLOAT, no balance there); a foot on an object's top is on the ground without one.",
 		"when: a weight channel (active above 0.99) or [f0, f1]; clearance uses frames.", "Check points take joint:, prop: and anchor: only; goals and probes take every ref (topic refs).",
 		"allow excuses a body part inside an object up to depth; limits override the QA limits. Unnamed entries are named by place, contacts[0].",
 		"Other characters with an installed take are bodies too: PERSON \"<part> x person:<id>\" is a part inside that person; a touch you mean (a push, a hug) is allow { part, object: \"person:<id>\", depth }.",
-		"Speed, acceleration, knee bend and balance are style: measured in output.observations, not judged. Naming speedCore/speedLimb, accCore/accLimb, knee or balance in limits makes it a check (SPEED, ACC, KNEE, BALANCE). observations.near: each hand's and foot's nearest object and gap (< 0 inside), measured, not judged.",
+		"Speed, acceleration, knee bend and balance are style (output.observations), not judged. Naming one in limits checks it: SPEED, ACC, KNEE, BALANCE (mass-weighted centre of mass outside the support polygon of the feet, +8 cm margin). observations.near: each hand's and foot's nearest object and gap (< 0 inside), measured, not judged.",
 		"motion.qa { checks } replaces every check for a re-measure."],
 	goals: ["Exactly one of near (distance <= tol), above (a.y - b.y >= by), moved (an object's base moved at least by from the scene pose; any other point ref, e.g. prop:bat.tip, at least by from where it is at at[0], at: [f0, f1]), still (stays within tol, default 0.01 m, of where moved measures from) or speed (the point reaches by m/s).",
 		"at is an absolute frame or [f0, f1]; mode all (every frame; the default) or any (one frame; speed's default). A failed goal is a GOAL group first in qa.groups and makes qa.ok false.",
@@ -111,7 +114,8 @@ export const NOTES = {
 		"object:<id> takes a body or a group (the box around its parts); in a distance a bare object:<id> means its surface.",
 		"Goals and probes take every kind; spec.checks keep joint:, prop: and anchor:."],
 	fix: [`spec.fix keys: ${FIX_KEYS.join(", ")}; false turns all off. output.fixed reports what each one changed.`,
-		"reach, slide, self and stance are on by default; penetration and retime are opt-in.",
+		"reach, slide, self, stance and person are on by default; penetration and retime are opt-in.",
 		"reach also brings the body to a hand on a world or scene-object anchor the straight arm misses: a lean, a hip shift, lower hips, the feet kept (fixed.reachBody lists each move); farther, place the body. retime is kept only when QA is no worse with it.",
-		"self keeps the arms out of the body on its fitted skin (QA BODY measures the same skin): wrist targets inside it go onto it, elbows turn about the shoulder-wrist line, a hand a little inside is pushed out. A fit's target (the mouth) is never moved; what is left is BODY, with checks.allow { part, object: <body part>, depth } for a contact meant to touch (a hand on a knee)."],
+		"self keeps the arms out of the body on its fitted skin (QA BODY measures the same skin): wrist targets inside it go onto it, elbows turn about the shoulder-wrist line, a hand a little inside is pushed out. A fit's target (the mouth) is never moved; what is left is BODY, with checks.allow { part, object: <body part>, depth } for a contact meant to touch (a hand on a knee).",
+		"person keeps the arms out of the other characters (QA PERSON): the wrist target moves out back the side the hand came from, however deep; an FK arm is left (fixed.person.skipped). A touch you mean: checks.allow { part, object: \"person:<id>\", depth }."],
 };

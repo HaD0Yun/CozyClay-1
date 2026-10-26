@@ -46,6 +46,7 @@ Every group: `{ kind, subject, count, first, last, worst, worstFrame, limit, cau
   - `cig_vis: move the step from f454 to f460 (RightHand 0 m from rpocket there)`.
   - `elbow_r: key [+0.5, -1, +0.5] (body frame: +y up, +z forward) at f497`.
   - `walk path: root needs [+0.049, 0, +0.122] m at f315 (out of Car_Door_L); change that walk's heading/turnDistance/step (or give one a { range: [lo, hi] })`.
+- `FLOAT` (off the ground, the hips not falling) fits the ballistic arc between the frames just before takeoff and just after landing (gravity fixed): `hips should be 31 cm higher at f28 (ballistic arc from f22 to f34)`, and its patch moves the root keys at 1/4, 1/2 and 3/4 of the run onto it (and keys the root at its own height at takeoff and landing when no root key sits within 2 frames). A run that needs more than 0.5 m gets numbers instead of a patch: an N-frame flight peaks g (N / fps)^2 / 8 above takeoff, and the hips' own apex h fits fps sqrt(8 h / g) frames (`hips held 1.43 m below a ballistic arc over 27 frames (f22-f49): either raise the apex to 1.55 m above takeoff, or shorten the air run to 8 frames for this apex (0.12 m)`). A run that reaches the end of the take gets the words only.
 - Hints are local: they come from the worst frame. Apply one, compile, read again.
 
 ## Auto-fixes (`spec.fix`)
@@ -57,6 +58,7 @@ The compiler fixes small mechanical errors itself and reports each fix in `outpu
 | `reach` | on | A wrist target up to 5 cm past the arm's reach goes onto it through a soft knee, so the arm never snaps straight. An ankle target up to 5 cm past the leg's reach lowers the hips just enough, eased over 6 frames. Farther misses stay for QA (`REACH`). |
 | `slide` | on | A sole point under the floor lifts its ankle onto the floor (`fixed.ground`), so a squat with the heels up stands on the balls of the feet. A planted heel or ball that drifts less than 1 cm stays where it landed. A foot that turns (`fyaw`, `fpitch`) on its planted ball with the heel up, or on its planted heel, pivots about that point whatever the drift (`fixed.slide.pivots`): a batter's back foot turns on its ball. |
 | `penetration` | off; `0.02` or `true` | A hand or forearm inside a scene box by at most this much past its allowance moves out along the box normal, eased. FK arms (`armw` 0) are counted as `skipped`. |
+| `person` | on | An upper arm, forearm or hand inside another character (QA `PERSON`, their installed take) moves its wrist target out by the depth plus 4 mm, eased, over 6 fixed passes. The escape keeps the side the hand came from, so a hand keyed deep into someone comes back out the front, not through their back. No depth limit. `checks.allow { part, object: "person:<id>", depth }` lets a meant touch go that deep. FK arms (`armw` 0) are counted as `skipped`. |
 | `retime` | off; `true` | Key intervals around a speed or acceleration spike get longer, borrowed from the neighbouring key intervals. The frame count stays. Frame-range checks follow. |
 
 `fix: false` turns everything off.
@@ -116,6 +118,11 @@ Flow (`spec.flow`) also leads the head into a turn: `headLead` (default on, 5 fr
 - Fits move the wrist until an effector (a prop point or fingertips) sits exactly on an anchor while that anchor's weight is on.
 - Objects: `objects: { id: { pivot, axis, channel } }` hinges a scene object by a keyed angle channel. Use it for doors.
 - Carried objects: `objects: { id: { prop, at, along, visible } }` puts a scene object (a small cylinder, cone or box you placed) on a held prop every frame. `at` is its base along the palm axes [d, l, n] from the prop origin, `along` the palm direction its +Y takes, and `visible` a channel that shows it above 0.5 (step it on when the hand leaves the pocket). Carried objects are not obstacles for QA.
+- Spring: `spring: { length, stiffness, damping }` on a carried (keyed included) or free (keys/fall) object makes it swing a beat behind the hand's (or its keys') pushes and settle, e.g. `"bag": { prop: "bag", at: [0.04, 0, 0], along: [1, 0, 0], spring: { length: 0.5, damping: 0.6 } }`.
+- `length` (0.05..2 m, default half the object's longest side) is the string or rod length. A natural swing is length 0.4-0.6 m with damping 0.5-0.7.
+- `stiffness` (0..500 1/s^2) is how fast it swings back; left out it is 9.81 / length, a real pendulum of that length. `damping` (0..1, default 0.5; 1 settles with no overshoot) is how soon it stops.
+- It only turns the object about its base, up to 60 degrees; a still hand leaves it still. The base is the pivot, so put a hanging object's base at the hand with `at`/`along`: a base 0.3 m from the hand swings it from there and every arm swing shakes it harder.
+- The swing is computed once at compile time and baked into the take, so scrub, playback and export show the same frames. A hinge refuses it (`spring is not for hinged objects`). On a keyed carry the hand follows the keys and the swing rides on top: REACH measures the hand, not the swing.
 
 ## Grasp, weight, throw and catch (`fix.grasp`, on by default)
 
@@ -134,6 +141,10 @@ Flow (`spec.flow`) also leads the head into a turn: `headLead` (default on, 5 fr
 
 Every take gets these checks: body capsules against scene boxes and ground contact, IK reach, planted-foot slide, bone length, speed and pops, knee and elbow flips, knee hyper-extension, hands and props entering the head or the torso, the two hands overlapping, hinged objects passing through other boxes, balance, and self contact.
 
+Balance is style (`observations.balance`, in metres inside the feet) until `checks.limits.balance` (0.08 m) makes it the BALANCE check: the mass-weighted centre of mass (segment fractions) against the support polygon, the convex hull of the heel, ball and tip of the feet on the ground. The subject is `centre of mass outside the feet`, one group however the lean turns; the hint says how far and which way at the worst frame, `centre of mass 0.12 m ahead of the feet (toward +Z)` (ahead, behind, left or right are the body's), and its fix moves `root` toward the polygon's nearest edge, to 1 cm inside the limit.
+
 A take with a walk also gets `observations.gait`, read over the walks only: steps, cadence `[steps/min, "100-115"]`, `stepLength` (m), `speed` (m/s), `stance` `[L, R]` (the share of each foot's stride on the ground), and the pelvis's `rotation` and `obliquity` (deg) and `vertical` and `lateral` (cm), peak to peak per stride. `warnings` lists the values outside a person's walk: cadence outside 80-140, stance outside 0.55-0.65, pelvis rotation outside 3.7-15.3 deg, obliquity outside 2.4-12.4 deg, and vertical outside 2.7-5 cm (provisional). They are warnings, not QA: `qa.ok` does not change. A walk of fewer than 4 steps reports only `steps`. The default `walkTo` is a slow stroll (about 74 steps/min); `period: 14, step: 0.6` walks about 104.
+
+Before a screenshot or an export that has to show why QA said BALANCE or FLOAT, run `motion.physicsOverlay { all: true }` (off: `{ all: false }`): the frame then carries the centre of mass (red past the balance limit, green inside, grey in the air), the support polygon, each air run's hips path (white, dashed) against its gravity parabola (orange) and the spring objects' tip trails.
 
 Declare the task-specific checks in `spec.checks` (skills add their own): `contacts`, `orient`, `below`, `clearance`, `appear`, `supports`, `allow`. Pass the QA numbers to the user as they are. QA proxies are capsules, boxes and an ellipsoid, not the skin.

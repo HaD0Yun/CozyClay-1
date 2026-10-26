@@ -7,7 +7,8 @@
 // heldReadings; each hand and foot against the nearest object, qa/near.js observeNear; each holding
 // wrist's bend, qa/wrist-obs.js observeWrist; how mechanical it reads against the agent's own
 // keys, qa/motion-life.js observeLife; a skill
-// paced to fit a short span: observations.paced; a skill whose release or
+// paced to fit a short span: observations.paced; a carried spring whose base is far from the hand:
+// qa/spring-pivot.js observations.spring; a skill whose release or
 // settle the last frame cut: observations.cut; what the spec asked against what it got, per skill,
 // contact and goal: qa/asked.js observeAsked), and the timeline and the
 // requested probes read the result.
@@ -33,6 +34,7 @@ import { observeWrist, WRIST_UNITS } from "./qa/wrist-obs.js";
 import { observeLoad, LOAD_UNITS } from "./load.js";
 import { observeLife, LIFE_UNITS } from "./qa/motion-life.js";
 import { observeGait, GAIT_UNITS } from "./qa/gait-observe.js";
+import { springPivots } from "./qa/spring-pivot.js";
 import { planWalks, applyWalkPlans } from "./walk-plan.js";
 import { relaxSpec } from "./lenient.js";
 import { observeAsked } from "./qa/asked.js";
@@ -140,6 +142,8 @@ function compilePrepared(prepared, { sk, scene }, opts, notes, refusals) {
 	const placed = used.filter(u => u.placed).map(u => `${u.skill} f${u.f0}: ${u.placed.why}: at [${u.placed.at.join(", ")}], heading ${u.placed.heading}`);
 	if (placed.length) observations.placed = placed;
 	if (plans.length) observations.planned = plans.map(p => p.note);
+	const pivots = springPivots(out);
+	if (pivots) observations.spring = pivots;
 	const got = observeAsked(out, { used, use: resolved?.use, checks: measured.checks, goals: measured.goals, results: qa.goals });
 	if (got) observations.asked = got;
 	const timeline = timelineOf(out, { used, spec: expanded }), probes = asked && runProbes(out, asked, { spec: expanded, sk, scene, notes });

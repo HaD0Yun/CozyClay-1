@@ -114,6 +114,7 @@ function validateChecks(spec, err, { sk, scene, frames, unknown = err, past = ""
 	if (fix !== undefined && fix !== false && (typeof fix !== "object" || fix === null)) err(`spec.fix must be false or { ${FIX_KEYS.join(", ")} }`);
 	else for (const k of Object.keys(fix || {})) if (!FIX_KEYS.includes(k)) unknown(`spec.fix.${k} is not a fix${didYouMean(k, FIX_KEYS)} (fixes: ${FIX_KEYS.join(", ")})`);
 	if (fix && fix.grasp !== undefined && typeof fix.grasp !== "boolean") err(`spec.fix.grasp must be true (fingers close on what a hand holds, the default) or false (the preset grip, the object at its grab-frame offset), got ${fmt(fix.grasp)}`);
+	if (fix && fix.person !== undefined && typeof fix.person !== "boolean") err(`spec.fix.person must be true (arms kept out of the other characters, the default) or false, got ${fmt(fix.person)}`);
 }
 
 /** opts = { sk, scene, frames, lenient, unknown: err for an unknown field (a no-op when lenient), past: the

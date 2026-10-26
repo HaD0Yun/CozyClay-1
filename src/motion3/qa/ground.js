@@ -52,9 +52,16 @@ export function groundY(out, i, p) {
 	return g;
 }
 
-/** solePoints of frame index i with y the height above the ground under each point (x, z are world). */
+/**
+ * solePoints of frame index i with y the height above the ground under each point (x, z are world);
+ * ground: { heel, ball, tip }, the ground heights those were measured from.
+ */
 export function groundSole(out, i, side) {
-	const sp = solePoints(out.ctx.sk, out.frames[i].s, side);
-	for (const key of ["heel", "ball", "tip"]) sp[key] = [sp[key][0], sp[key][1] - groundY(out, i, sp[key]), sp[key][2]];
+	const sp = solePoints(out.ctx.sk, out.frames[i].s, side), ground = {};
+	for (const key of ["heel", "ball", "tip"]) {
+		ground[key] = groundY(out, i, sp[key]);
+		sp[key] = [sp[key][0], sp[key][1] - ground[key], sp[key][2]];
+	}
+	sp.ground = ground;
 	return sp;
 }

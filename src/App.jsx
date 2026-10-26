@@ -140,7 +140,7 @@ import {
 	pathMetrics,
 	strokeToPathPoints,
 } from "./object-path.js";
-import { carriedPointAt, sceneObjectsAt } from "./object-travel.js"; import { objectTracksOf } from "./motion3/object-tracks.js"; import { ViewGhosts } from "./view-ghosts.jsx"; import { DraftGhost } from "./draft-ghost.jsx"; import { SculptSketch } from "./sculpt-sketch.jsx";
+import { carriedPointAt, sceneObjectsAt } from "./object-travel.js"; import { objectTracksOf } from "./motion3/object-tracks.js"; import { ViewGhosts } from "./view-ghosts.jsx"; import { DraftGhost } from "./draft-ghost.jsx"; import { SculptSketch } from "./sculpt-sketch.jsx"; import { PhysicsOverlayLayer } from "./physics-overlay.jsx"; import { syncPhysicsOverlays } from "./physics-overlay.js";
 import { routeOwnerFor } from "./route-owner.js";
 import {
 	exportFailureCode,
@@ -2874,7 +2874,7 @@ export default function App() {
 		// pass is the recorder's stand-in for the useFrame the preview gets.
 		// Riding characters move with their object first, then the props.
 		syncCarriers();
-		propSyncRef.current?.();
+		propSyncRef.current?.(); syncPhysicsOverlays(frame);
 		const sampled = sampleAt(context?.playbackScene ?? playbackScene, shotAtFrame(context?.shots ?? shots, frame), frame);
 		const framing = sampled.camera ?? context?.framing;
 		const cam = shotCamRef.current;
@@ -2959,7 +2959,7 @@ export default function App() {
 			look.current.pitch = cameraSnapshot.pitch;
 			propFrameRef.current = propFrame;
 			syncCarriers();
-			propSyncRef.current?.();
+			propSyncRef.current?.(); syncPhysicsOverlays();
 		}
 	}
 
@@ -3657,7 +3657,7 @@ export default function App() {
 				const point = new THREE.Vector3(); bone.getWorldPosition(point);
 				return point.toArray();
 			},
-			committedIkEdits, waypoints,
+			committedIkEdits, waypoints, rigs, characters, // rigs/characters: every cast member (QA reads a second rig)
 			// Scene props as the stage sees them, for QA that places a box and
 			// waits for its transform to land before fitting to it.
 			objects: sceneObjects,
@@ -4762,7 +4762,7 @@ export default function App() {
 									/>
 								</ObjectCarrier>
 							))}
-							<ViewGhosts rig={rigs[activeChar.id]} take={motion} frame={tlFrame} objects={sceneObjects} propTake={{ frameCount: tlFrameCount, fps: tlFps, objectTracks }} /><DraftGhost rigs={rigs} objects={sceneObjects} /><SculptSketch objects={sceneObjects} />
+							<ViewGhosts rig={rigs[activeChar.id]} take={motion} frame={tlFrame} objects={sceneObjects} propTake={{ frameCount: tlFrameCount, fps: tlFps, objectTracks }} /><DraftGhost rigs={rigs} objects={sceneObjects} /><SculptSketch objects={sceneObjects} /><PhysicsOverlayLayer rig={rigs[activeChar.id]} take={motion} objects={sceneObjects} />
 
 							{/* Selection marker: XYZ tripod + ring on the picked cast
 							    member; the X/Z arrows drag it across the deck. */}

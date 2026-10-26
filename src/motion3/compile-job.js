@@ -65,8 +65,9 @@ export function runCompileJob({ model, scene, spec: asked, probes: sentProbes, c
 	// ms.repair: the whole repair's wall time, so a sweep that repairs every variant shows what it costs
 	const r = fixed.result, label = fixed.spec?.label ?? null, ms = fixed.repair ? { ...r.ms, repair: Math.round(performance.now() - t0) } : r.ms;
 	const take = bake ? bakeTake(sk, r.out, { position: bake.position, yaw: bake.yaw }, { spec: r.stored, prompt: ("prompt" in bake ? bake.prompt : label) ?? "" }) : undefined;
-	// a person anchor's joints ride with the take, so its saved source compiles the same without the others' takes (people.js)
-	const people = take && keptPeople(scene, [r.expanded, r.stored]);
+	// a person anchor's joints (and the bodies fix.person pushed an arm out of) ride with the take, so its saved source
+	// compiles the same without the others' takes (people.js)
+	const people = take && keptPeople(scene, [r.expanded, r.stored], r.out);
 	if (people) take.people = people;
 	return { stored: r.stored, qa: r.qa, observations: r.observations, used: r.used, fixed: r.fixed, search: r.search, timeline: r.timeline,
 		...(r.probes ? { probes: r.probes } : {}), ...(r.notes || corrected.length ? { notes: [...corrected, ...(r.notes ?? [])] } : {}), ms, frameCount: r.out.frameCount, label,
