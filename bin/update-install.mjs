@@ -7,7 +7,7 @@
  * only argument that varies is a version that has passed an exact x.y.z test.
  */
 import { execFile, spawn } from "node:child_process";
-import { constants, accessSync, realpathSync } from "node:fs";
+import { constants, accessSync, existsSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 
 const VERSION = /^\d+\.\d+\.\d+$/;
@@ -65,6 +65,19 @@ async function computeSelfUpdate(pkgRoot, platform, npmBin) {
 	}
 }
 
+/**
+ * `<npm root -g>/cozyclay/bin/cozyclay.mjs`, the launcher a finished global
+ * install put in place (the folder canSelfUpdate matched), or null when npm
+ * does not answer or the file is missing. COZYCLAY_RESTART_BIN overrides it
+ * for tests, the way COZYCLAY_NPM_BIN stands in for npm.
+ */
+export async function globalLauncherPath(platform = process.platform) {
+	if (process.env.COZYCLAY_RESTART_BIN) return process.env.COZYCLAY_RESTART_BIN;
+	const root = await npmRootGlobal(npmBinary(platform), platform);
+	const bin = root && join(root, "cozyclay", "bin", "cozyclay.mjs");
+	return bin && existsSync(bin) ? bin : null;
+}
+
 function classOf(code) {
 	return ERROR_CODES.find(([, codes]) => codes.includes(code))?.[0] ?? null;
 }
@@ -92,7 +105,7 @@ export function classifyNpmError(stderr = "", spawnError = null) {
  * for a restart, it starts nothing and returns false.
  */
 export function createInstaller({ timeoutMs = INSTALL_TIMEOUT_MS } = {}) {
-	const state = { phase: "idle", errorClass: null, startedAt: null, durationMs: null };
+	const state = { phase: "idle", errorClass: null, startedAt: null, durationMs: null, version: null };
 	let timer = null;
 	function finish(phase, errorClass) {
 		if (state.phase !== "updating") return;
@@ -102,7 +115,7 @@ export function createInstaller({ timeoutMs = INSTALL_TIMEOUT_MS } = {}) {
 	function startInstall(version) {
 		if (!VERSION.test(String(version))) throw new TypeError("cozyclay: refusing to install a version that is not x.y.z");
 		if (state.phase === "updating" || state.phase === "restart_needed") return false;
-		Object.assign(state, { phase: "updating", errorClass: null, startedAt: Date.now(), durationMs: null });
+		Object.assign(state, { phase: "updating", errorClass: null, startedAt: Date.now(), durationMs: null, version });
 		const platform = process.platform;
 		let child;
 		try {
