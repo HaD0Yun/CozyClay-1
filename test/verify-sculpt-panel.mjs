@@ -241,6 +241,16 @@ const sheet = "data:image/png;base64,BBBB";
 	assert.match(rows[1], /--sculpt-part-depth:1/, "a child is indented by its depth");
 	assert.match(html, /mirror copy/);
 	assert.match(html, /blob ×2/, "a mirrored part says it draws twice");
-	assert.match(html, /Esc to deselect/);
+	assert.match(html, />W move · E rotate · R scale</, "a selected part names its gizmo keys");
+	assert.match(html, /title="W move · E rotate · R scale \(Shift: uniform\) · Esc to deselect"/);
+	assert.equal(tag(html, "sculpt-part-notice"), null, "no notice until the gizmo has one");
+	const refused = render({ sculptName: "Hero sculpt", parts: { tree, selected: { partId: "eye", mirrored: false }, onSelect: noop, notice: "Edit refused: Recipe refused at parts[eye].size" } });
+	assert.match(refused, /data-testid="sculpt-part-notice"[^>]*>Edit refused: Recipe refused at parts\[eye\]\.size</, "a refused gizmo edit shows its reason");
+	// A cutter is never drawn, so its row is listed but cannot be selected for the gizmo.
+	const cut = render({ sculptName: "Hero sculpt", parts: { tree: [...tree, { id: "notch", shape: "box", depth: 1, parent: "head", mirror: false, cutter: true }], selected: null, onSelect: noop } });
+	const notch = [...cut.matchAll(/<button[^>]*data-testid="sculpt-part-row"[^>]*>/g)].map((match) => match[0]).find((row) => /data-part="notch"/.test(row));
+	assert.match(notch, /disabled=""/, "a cutter row is disabled");
+	assert.match(notch, /data-cutter="true"/);
+	assert.match(notch, /title="A cutter is not drawn: it cuts its parent\. Ask the agent to change it\."/, "the row says why");
 	console.log("PASS sculpt panel: part tree");
 }
