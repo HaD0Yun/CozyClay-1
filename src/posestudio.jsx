@@ -6,6 +6,7 @@ import { POSE_BONES, normalizeBoneName, primeBindPose } from "./poses.js";
 import { poseThumbnail, warmThumbnailModels } from "./pose-thumbs.js";
 import { IK_TRACKS, MID_TRACKS, ikControlIsExposed } from "./motion/ik.js";
 import { pickIkHit } from "./motion/ik-pick.js";
+import { blockerDistanceTo, exposureProbe } from "./motion/ik-exposure.js";
 import { shouldRefreshIkExposure } from "./use-render-activity.js";
 import { POSER_LAYER } from "./dualview.jsx";
 import { ko } from "./locale.js";
@@ -283,7 +284,7 @@ const FK_ROTATE_SPEED = 5;
  * Every drag move calls `onSolve(kind, trackId, targetWorld)`; the drag end
  * calls `onDragEnd(trackId)` so the caller can key it.
  */
-export function IkHandles({ chains, fkJoints, ikState, enabled, focus, onFocus, onSolve, onDragEnd, selectionOnly = false, onPartPick }) {
+export function IkHandles({ chains, fkJoints, ikState, enabled, focus, onFocus, onSolve, onDragEnd, selectionOnly = false, onPartPick, focusToolsHidden = false, exposureProbeRef }) {
 	const { camera, gl, raycaster, scene } = useThree();
 	const handleRefs = useRef({}); // id -> mesh (all sphere handles)
 	const handleMetaRef = useRef(new Map()); // id -> { track, radius }
@@ -298,6 +299,9 @@ export function IkHandles({ chains, fkJoints, ikState, enabled, focus, onFocus, 
 	const blockerRefs = useRef([]);
 	const skinnedBlockerProxiesRef = useRef(new Map());
 	const occlusionRay = useRef(new THREE.Raycaster()).current;
+	// The last pass's blockers, so the fingertip handles can ask the same exposure question (#913).
+	const occludersRef = useRef(null);
+	useEffect(() => { if (exposureProbeRef) exposureProbeRef.current = exposureProbe(camera, occludersRef); }, [exposureProbeRef, camera]);
 	const gizmoRef = useRef(null);
 	const ringRef = useRef(null); // rotation rings around the focused joint
 	const readoutRef = useRef(null);
@@ -679,28 +683,9 @@ export function IkHandles({ chains, fkJoints, ikState, enabled, focus, onFocus, 
 				mesh.getWorldPosition(tmp.viewPoint);
 				const targetDistance = tmp.cameraPos.distanceTo(tmp.viewPoint);
 				tmp.rayDirection.copy(tmp.viewPoint).sub(tmp.cameraPos).normalize();
-				occlusionRay.set(tmp.cameraPos, tmp.rayDirection);
-				occlusionRay.near = 0.001;
-				occlusionRay.far = Math.max(0.001, targetDistance - 0.001);
-				let blockerDistance = occlusionRay.intersectObjects(staticBlockers, false)[0]?.distance;
-				// A coarse cloud of baked skin-surface spheres preserves the
-				// actual animated silhouette without asking Three.js to skin
-				// every triangle once per control ray. Camera-only changes now
-				// test a few cached points; pose changes rebuild the cloud once.
-				for (const proxy of skinnedProxies) {
-					const radiusSq = proxy.radius * proxy.radius;
-					for (const point of proxy.points) {
-						const dx = point.x - tmp.cameraPos.x;
-						const dy = point.y - tmp.cameraPos.y;
-						const dz = point.z - tmp.cameraPos.z;
-						const along = dx * tmp.rayDirection.x + dy * tmp.rayDirection.y + dz * tmp.rayDirection.z;
-						if (along < 0 || along > targetDistance + proxy.radius) continue;
-						const perpendicularSq = dx * dx + dy * dy + dz * dz - along * along;
-						if (perpendicularSq > radiusSq) continue;
-						const distance = Math.max(0, along - Math.sqrt(radiusSq - perpendicularSq));
-						if (distance < (blockerDistance ?? Infinity)) blockerDistance = distance;
-					}
-				}
+				// A coarse cloud of baked skin-surface spheres preserves the animated
+				// silhouette; camera-only changes test a few cached points, pose changes rebuild the cloud once.
+				const blockerDistance = blockerDistanceTo(occlusionRay, tmp.cameraPos, tmp.rayDirection, targetDistance, staticBlockers, skinnedProxies);
 				const visibilityDepth = meta?.track.visibilityDepth ?? (meta?.radius ?? JOINT_R) * 2;
 				const isExposed = ikControlIsExposed(targetDistance, blockerDistance, visibilityDepth);
 				visibilityDetailRef.current.set(id, {
@@ -719,6 +704,7 @@ export function IkHandles({ chains, fkJoints, ikState, enabled, focus, onFocus, 
 				tmp.viewPoint.applyMatrix4(camera.matrixWorldInverse);
 				exposureDepthRef.current.set(id, -tmp.viewPoint.z);
 			}
+			occludersRef.current = { blockers: [...blockers] };
 			exposurePerfRef.current.passes += 1;
 			exposurePerfRef.current.raycasts += Object.keys(handleRefs.current).length;
 			exposurePerfRef.current.lastPassMs = performance.now() - passStartedAt;
@@ -757,7 +743,8 @@ export function IkHandles({ chains, fkJoints, ikState, enabled, focus, onFocus, 
 		}
 		// A focused control keeps its gizmo and rings even when the body hides it:
 		// the user picked it, and while focused nothing else can take a press.
-		const focusExposed = !!focus;
+		// Finger editing hands the focused hand's space to the fingertip handles: no gizmo, rings or readout.
+		const focusExposed = !!focus && !focusToolsHidden;
 		if (gizmoRef.current) gizmoRef.current.visible = focusExposed;
 		if (ringRef.current) ringRef.current.visible = focusExposed;
 
@@ -947,7 +934,7 @@ const CLICK_PX = 4;
 				handleRefs.current[p.track.id]?.visible &&
 				(handleRefs.current[p.track.id]?.userData.ikExposed !== false || !p.part || p.track.id === focused)
 			);
-			if (focused && !selectionOnly) picks = picks.filter((p) => p.track.id === focused);
+			if (focused && !selectionOnly) picks = picks.filter((p) => p.track.id === focused && !(focusToolsHidden && (p.axisDir || p.part)));
 			else picks = picks.filter((p) => !p.axisDir); // spheres only
 			if (!picks.length) {
 				if (focused) beginDrag("empty", { id: "empty" }, null, null, downXY);
@@ -1059,7 +1046,7 @@ const CLICK_PX = 4;
 		<group>
 			{IK_TRACKS.map((track) => (chains.has(track.id) ? sphereFor(track, "chain", sideColor(track.id), HANDLE_R) : null))}
 			{MID_TRACKS.map((track) => (chains.has(track.chain) ? sphereFor(track, "mid", sideColor(track.id), JOINT_R) : null))}
-			{[...(fkJoints ?? [])].map(([id, joint]) => sphereFor(joint.track, id === "hips" ? "body" : "fk", sideColor(id), id === "hips" ? HANDLE_R : JOINT_R))}
+			{[...(fkJoints ?? [])].filter(([, joint]) => !joint.track.finger).map(([id, joint]) => sphereFor(joint.track, id === "hips" ? "body" : "fk", sideColor(id), id === "hips" ? HANDLE_R : JOINT_R))}
 
 			{gizmoTrack && (
 				<group ref={gizmoRef} renderOrder={999}>
@@ -1141,7 +1128,7 @@ const CLICK_PX = 4;
 					})}
 				</group>
 			)}
-			{rotateTrack && rotationDeg && (
+			{rotateTrack && rotationDeg && !focusToolsHidden && (
 				<group ref={readoutRef}>
 					<Html zIndexRange={[20, 0]} style={{ pointerEvents: "none" }}>
 						<RotationReadout readout={rotationReadout(rotationDeg, rotationDrag)} />

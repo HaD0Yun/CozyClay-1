@@ -33,6 +33,7 @@ import { isProxyFigure } from "../scenes.js";
 import { refuseRigOnly } from "../character-kind.js";
 import { DEFAULT_POSE, restoreBindPositions, applyPose, applyHipsOffset } from "../poses.js";
 import { bakeIkDragKey, bakeIkDragRange, chainsChangedBy, clampDragTarget, ikDragRecord, ikDragTouch, solveDragTarget } from "../motion/ik-drag.js";
+import { fingersOf, solveFingerGesture, restFingers } from "../motion/fingers.js";
 import { ikKeyJson, ikTrackKeyFromJson } from "../motion/ik-key-json.js";
 import { chooseIkEntryPose } from "../ik-camera.js";
 import { applyRangePin, captureRangePinTarget, normalizeRangePin, rangePinTargetWorld, rangePinTracks, removeRangePinKeys } from "../motion/range-pin.js";
@@ -71,8 +72,7 @@ export function createMotionDomain(appContext, characters) {
 	let release = native.subscribe(notify), viewRevision = 0;
 	const documentStore = { ...Object.fromEntries(Object.keys(native).map(key => [key, (...args) => native[key](...args)])),
 		subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); } };
-	const read = () => documentStore.read('motion');
-	const layer = id => read().find(row => row.id === id) ?? emptyMotionLayer(id);
+	const read = () => documentStore.read('motion'), layer = id => read().find(row => row.id === id) ?? emptyMotionLayer(id);
 	function materialize(take) {
 		if (take?.source && !takes.has(take.resourceId)) {
 			try { const compiled = compileTakeSource(take.source); if (compiled) takes.set(take.resourceId, compiled); }
@@ -110,7 +110,7 @@ export function createMotionDomain(appContext, characters) {
 				const resolved = resolveIkRig(rig); if (resolved) Object.assign(state, resolved, { rig });
 				if (savedRigs?.has(id)) appContext.shared.restoreExportRig(savedRigs.get(id));
 				else if (resolved) {
-					if (take) applyTakeFrame(rig, take, Math.min(frame(), take.frames - 1));
+					restFingers(resolved.fkJoints); if (take) applyTakeFrame(rig, take, Math.min(frame(), take.frames - 1));
 					else {
 						const character = cast.read().find(entry => entry.id === id);
 						restoreBindPositions(rig); applyPose(rig, { ...REST_BONES, ...(character?.pose ?? DEFAULT_POSE).bones });
@@ -253,7 +253,7 @@ export function createMotionDomain(appContext, characters) {
 		rigOnly(id, 'pose');
 		const rig = rigFor(id), resolved = rig && resolveIkRig(rig);
 		if (!resolved) throw new StudioProtocolError('TARGET_NOT_READY', 'The character rig is not loaded.');
-		restoreBindPositions(rig); applyPose(rig, { ...REST_BONES, ...pose.bones }); applyHipsOffset(rig, pose.rootY ?? 0);
+		restoreBindPositions(rig); restFingers(resolved.fkJoints); applyPose(rig, { ...REST_BONES, ...pose.bones }); applyHipsOffset(rig, pose.rootY ?? 0);
 		editKeys(id, state => {
 			state.tracked = new Set([...resolved.chains.keys(), ...resolved.fkJoints.keys()]);
 			ikBakeKeyframe(resolved.chains, state, at, resolved.fkJoints);
@@ -761,6 +761,7 @@ export function useMotion(appContext) {
 		ikDragRef.current = Object.assign(ikDragRecord(ikDragRef.current, appContext.shared.tlFrame), { characterId: appContext.shared.activeChar.id });
 		const touch = (id) => ikDragTouch(appContext.shared.ikStateRef.current, ikDragRef.current, id), activeId = appContext.shared.activeChar.id;
 		const clamp = () => clampDragTarget({ kind, trackId, targetWorld, bodyContact, chains: ikChains, record: ikDragRef.current, bypass: input?.bypass, open: () => ({ rigs: appContext.shared.rigs, activeId, cast: appContext.shared.characters, allow: domain.layer(activeId).take?.source?.spec?.checks?.allow, notify: appContext.notify }) });
+		if (kind === "finger") return solveFingerGesture(fingersOf(appContext.shared.ikStateRef.current.fkJoints)?.get(trackId), targetWorld, touch);
 		if (kind === "chain") {
 			const chain = appContext.shared.ikStateRef.current.chains?.get(trackId);
 			if (!chain) return;
@@ -915,7 +916,7 @@ export function useMotion(appContext) {
 		restoreBindPositions(appContext.shared.activeRig);
 		// Reset-then-pose, the same shape the Character effect applies: unlisted
 		// joints return to rest instead of keeping stale limbs from the clip.
-		applyPose(appContext.shared.activeRig, { ...REST_BONES, ...pose.bones });
+		restFingers(ikFkJoints); applyPose(appContext.shared.activeRig, { ...REST_BONES, ...pose.bones });
 		// The hips' measured height rides into the bake: the hips FK joint keys
 		// its local position (p), so a crouched pose keys a crouched body.
 		applyHipsOffset(appContext.shared.activeRig, pose.rootY ?? 0);
