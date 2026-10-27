@@ -4,6 +4,7 @@ import * as analytics from "../src/analytics.js";
 import { startExportAttempt } from "../src/export-attempt.js";
 import * as friction from "../src/analytics-friction.js";
 import { clickFrictionSeam, noteBusReceipt, notePointerDown } from "../src/click-friction.js";
+import { frictionHintSeam, hintNoSelection } from "../src/friction-hint.js";
 import { noteRefusal as noteBusRefusal } from "../src/command-bus-telemetry.js";
 import { STRICT_EVENT_KEYS, bucketAge, bucketLong, refusalCodeOf, strictPropValidator } from "../src/analytics-strict.js";
 import * as postTurn from "../src/post-turn-edits.js";
@@ -446,11 +447,13 @@ console.log("PASS friction counters: closed buckets, per-event caps, validator, 
 	const sent = [];
 	let clock = 0;
 	const restoreClicks = clickFrictionSeam({ capture: (event, props) => sent.push({ event, props }), clock: () => clock });
-	const element = ({ fid = null, disabled = false, typing = false, control = true } = {}) => {
+	const element = ({ fid = null, disabled = false, typing = false, control = true, area = null, title = null } = {}) => {
 		const el = {
-			getAttribute: (name) => (name === "data-fid" ? fid : null),
+			getAttribute: (name) => (name === "data-fid" ? fid : name === "title" ? title : null),
 			closest: (selector) => {
 				if (selector.includes("textarea")) return typing ? el : null;
+				// Studio areas are matched by class (analytics-controls.js AREAS).
+				if (selector.startsWith(".")) return area && selector.split(", ").includes(area) ? el : null;
 				if (selector === "[data-fid]") return fid ? el : null;
 				if (selector.includes("aria-disabled")) return disabled ? el : null;
 				return control || fid ? el : null;
@@ -511,6 +514,21 @@ console.log("PASS friction counters: closed buckets, per-event caps, validator, 
 	assert.deepEqual(take("ui:dead_click"), [], "an unlisted live control is not watched for effect");
 	click(element({ control: true, disabled: true }));
 	assert.deepEqual(take("ui:dead_click"), [{ control: "other", reason: "aria_disabled" }]);
+	// #973: an unnamed control inside a known Studio area reports the area, and a disabled click shows its reason.
+	const hints = [];
+	const restoreHints = frictionHintSeam({ capture: (text) => hints.push(text), clock: () => clock });
+	click(element({ control: true, disabled: true, area: ".menubar", title: "Nothing to export yet" }));
+	click(element({ control: true, disabled: true, area: ".menubar", title: "Nothing to export yet" }));
+	assert.deepEqual(take("ui:dead_click"), [{ control: "other_menu", reason: "aria_disabled" }, { control: "other_menu", reason: "aria_disabled" }]);
+	assert.deepEqual(hints, ["Nothing to export yet"], "the disabled control's own title shows, and the same hint does not repeat within 4 s");
+	click(element({ fid: "tool_pin", disabled: true }));
+	assert.equal(hints.at(-1), "Select a bone to pin first", "a named control without a title uses its fallback");
+	assert.equal(strictPropValidator("ui:dead_click")("control", "other_timeline"), true, "area ids pass the strict validator");
+	assert.equal(strictPropValidator("ui:dead_click")("control", "other_somewhere"), false, "an unlisted area does not");
+	hintNoSelection(); hintNoSelection();
+	assert.equal(hints.filter((text) => text === "Select something first").length, 1, "the selection hint shows at most once a minute");
+	restoreHints();
+	take("ui:dead_click");
 	// Typing targets and plain surfaces never feed the detector, counters included.
 	const before = friction.snapshot();
 	for (let i = 0; i < 5; i += 1) click(element({ fid: "agent_send", typing: true }));

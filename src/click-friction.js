@@ -8,7 +8,8 @@
 // or element ids. Typing targets and IME composition are ignored outright.
 import { track } from "./analytics.js";
 import { admit, bump } from "./analytics-friction.js";
-import { controlOf } from "./analytics-controls.js";
+import { controlOf, isUnnamedControl } from "./analytics-controls.js";
+import { hintDisabledClick } from "./friction-hint.js";
 
 const RAGE_WINDOW_MS = 1000, RAGE_RADIUS_PX = 24, RAGE_MIN = 3, RAGE_COOLDOWN_MS = 10_000, EFFECT_MS = 500;
 const RAGE_PER_CONTROL = 2, DEAD_PER_CONTROL = 2;
@@ -55,7 +56,7 @@ export function notePointerDown({ target, x, y, event, observe = () => () => {} 
 	const element = target?.closest?.(CONTROL);
 	if (!element) return;
 	const fid = element.closest("[data-fid]")?.getAttribute("data-fid");
-	const control = controlOf(fid);
+	const control = controlOf(fid, element);
 	const at = now();
 	// A rage burst: the same control, within 1 s of its first click and 24 px of where it began.
 	if (burst && burst.control === control && burst.element === element && at - burst.at <= RAGE_WINDOW_MS && Math.hypot(x - burst.x, y - burst.y) <= RAGE_RADIUS_PX) {
@@ -66,9 +67,9 @@ export function notePointerDown({ target, x, y, event, observe = () => () => {} 
 		burst = { control, element, at, x, y, count: 1, changed: () => lastReceiptAt >= since || lastMutationAt >= since };
 		burstTimer = setTimeout(finishBurst, RAGE_WINDOW_MS);
 	}
-	if (disabledOf(element)) { dead(control, "aria_disabled"); return; }
+	if (disabledOf(element)) { dead(control, "aria_disabled"); hintDisabledClick(element, control); return; }
 	// refused / no_effect: watched only on the closed controls, whose clicks are meant to do something.
-	if (control === "other") return;
+	if (isUnnamedControl(control)) return;
 	const stop = observe(() => { lastMutationAt = now(); });
 	setTimeout(() => {
 		try { stop(); } catch { /* the observer is advisory */ }

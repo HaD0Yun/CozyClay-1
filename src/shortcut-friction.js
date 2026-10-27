@@ -6,6 +6,7 @@
 import { track } from "./analytics.js";
 import { admit, bump } from "./analytics-friction.js";
 import { isImeComposing } from "./ime.js";
+import { hintNoSelection } from "./friction-hint.js";
 
 const IGNORED_PER_CLASS = 5, UNBOUND_PER_COMBO = 3, HELP_PER_SESSION = 3;
 let send = track, defer = (run) => setTimeout(run, 0), listening = false;
@@ -52,7 +53,7 @@ export function noteUnselectedKey(event) {
 		: event.code === "KeyD" && mod && !event.altKey && !event.shiftKey ? "duplicate"
 			: (event.key === "Delete" || event.key === "Backspace") && !mod ? "delete" : null;
 	if (!keyClass) return;
-	defer(() => { if (!event.defaultPrevented) noteShortcutIgnored(keyClass, "no_selection"); });
+	defer(() => { if (!event.defaultPrevented) { noteShortcutIgnored(keyClass, "no_selection"); hintNoSelection(); } });
 }
 
 const modOnly = (event) => (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey;
