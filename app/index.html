@@ -1,7 +1,12 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" translate="no">
   <head>
     <meta charset="UTF-8" />
+    <!-- The studio ships its own en / ko / zh UI. Browser page translation
+         swaps React-owned text nodes and crashes the tree with NotFoundError
+         (#972), so it is turned off here only; the landing and SEO pages stay
+         translatable. -->
+    <meta name="google" content="notranslate" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="description" content="CozyClay studio: block a 3D scene, pose characters, author camera moves, and preview generated motion in your browser." />
     <meta name="theme-color" content="#232323" />
