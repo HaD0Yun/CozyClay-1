@@ -24,6 +24,7 @@ export default [
 			ko: "터미널에서 npx cozyclay를 실행하면 브라우저에 스튜디오가 열립니다.",
 			en: "Run npx cozyclay in a terminal and the studio opens in your browser.",
 		},
+		speech: { ko: "터미널에서 엔피엑스 코지클레이를 실행하면 브라우저에 스튜디오가 열립니다.", en: "Run N P X cozyclay in a terminal and the studio opens in your browser." },
 		wait: ".v2-start-screen",
 	},
 	{
@@ -55,6 +56,7 @@ export default [
 			ko: "Cmd/Ctrl+B로 에이전트 패널을 엽니다. 여기서 \"Sign in with ChatGPT\"로 로그인하면 동작을 말로 요청할 수 있어요.",
 			en: "Press Cmd/Ctrl+B to open the Agent panel. Sign in here, then describe the motion you want.",
 		},
+		speech: { ko: "커맨드 또는 컨트롤 B로 에이전트 패널을 엽니다. 여기서 \"Sign in with ChatGPT\"로 로그인하면 동작을 말로 요청할 수 있어요.", en: "Press Command or Control B to open the Agent panel. Sign in here, then describe the motion you want." },
 		key: "Mod+B",
 		until: "[data-agent-card=signed-out]",
 	},
@@ -106,6 +108,7 @@ export default [
 			ko: "파일, 내보내기에서 \"키프레임 팩 (zip)\"을 고르거나 Cmd/Ctrl+E를 누르세요. 첫 프레임, 마지막 프레임, 참고 클립, 프롬프트가 한 zip에 담깁니다.",
 			en: "Choose File, Export, \"Keyframe pack (zip)\", or press Cmd/Ctrl+E. First frame, last frame, reference clip and prompt land in one zip.",
 		},
+		speech: { ko: "파일, 내보내기에서 키프레임 팩 집을 고르거나 커맨드 또는 컨트롤 E를 누르세요. 첫 프레임, 마지막 프레임, 참고 클립, 프롬프트가 한 집 파일에 담깁니다.", en: "Choose File, Export, Keyframe pack zip, or press Command or Control E. First frame, last frame, reference clip and prompt land in one zip." },
 		key: "Mod+E",
 	},
 	// The last sentence finishes with the export toast still on screen.

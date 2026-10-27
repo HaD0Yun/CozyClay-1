@@ -1,32 +1,38 @@
 #!/usr/bin/env node
-// Records one tutorial episode from the real startup chooser: drives the
-// Studio over CDP, screencasts it, and writes <episode>.mp4 plus a ko and an
-// en srt under dist/tutorial/. Run it through tools/tutorial/launch.mjs
+// Records one tutorial episode from the real startup chooser: prepares the
+// voice clips (tools/tutorial/voice.mjs), drives the Studio over CDP with each
+// cue held for its clip, screencasts it, and writes <episode>.mp4 (burned-in
+// captions, voice when there is any) plus a ko and an en srt under dist/tutorial/. Run it through tools/tutorial/launch.mjs
 // (npm run tutorial:record -- <episode>) or inside tools/qa-browser.mjs with
 // QA_URL pointing at a dev server. See tools/tutorial/README.md.
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { spawnSync } from "node:child_process";
 import { encode, findFfmpeg } from "./assemble.mjs";
+import { renderCaptions } from "./captions.mjs";
 import { connectPage } from "./cdp.mjs";
 import { createInput } from "./cursor.mjs";
-import { actionOf, stepHoldMs, toSrt, validateEpisode } from "./episode.mjs";
+import { DEFAULT_WPS, actionOf, stepHoldMs, toSrt, validateEpisode } from "./episode.mjs";
+import { bandHeightFor, muxArgs } from "./mux.mjs";
+import { prepareVoice } from "./voice.mjs";
 
 const sleep = (ms) => new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
 
 function parseArgs(argv) {
-	const options = { episode: null, locale: "en", size: "1600x1000", wps: 2.2, fps: 30, out: "dist/tutorial" };
+	const options = { episode: null, locale: "en", size: "1600x1000", "wps-ko": DEFAULT_WPS.ko, "wps-en": DEFAULT_WPS.en, voice: "on", fps: 30, out: "dist/tutorial" };
 	for (let index = 0; index < argv.length; index += 1) {
 		const flag = argv[index];
 		if (flag.startsWith("--")) options[flag.slice(2)] = argv[(index += 1)];
 		else options.episode = flag;
 	}
 	const [width, height] = String(options.size).split("x").map(Number);
-	if (!options.episode) throw new Error("usage: record.mjs <episode> [--locale en|ko] [--size 1600x1000|1920x1080] [--wps 2.2] [--fps 30] [--out dist/tutorial]");
+	if (!options.episode) throw new Error("usage: record.mjs <episode> [--locale en|ko] [--size 1600x1000|1920x1080] [--voice on|off] [--wps-ko 1.6] [--wps-en 2.2] [--fps 30] [--out dist/tutorial]");
 	if (!["en", "ko"].includes(options.locale)) throw new Error(`--locale must be en or ko (got ${options.locale})`);
 	if (!(width > 0 && height > 0)) throw new Error(`--size must look like 1600x1000 (got ${options.size})`);
-	return { ...options, width, height, wps: Number(options.wps), fps: Number(options.fps) };
+	if (!["on", "off"].includes(options.voice)) throw new Error(`--voice must be on or off (got ${options.voice})`);
+	return { ...options, width, height, wps: { ko: Number(options["wps-ko"]), en: Number(options["wps-en"]) }, fps: Number(options.fps) };
 }
 
 async function loadEpisode(name) {
@@ -79,6 +85,10 @@ const steps = await loadEpisode(options.episode);
 const episodeName = options.episode.replace(/^.*\//, "").replace(/\.(mjs|json)$/, "");
 const outputBase = join(options.out, options.locale === "en" ? episodeName : `${episodeName}-${options.locale}`);
 const frameDir = mkdtempSync(join(tmpdir(), "cozyclay-tutorial-"));
+// Voice first: each cue's hold comes from its clip, so the clips exist before the capture.
+const clips = prepareVoice({ steps, language: options.locale, voiceDir: resolve(import.meta.dirname, "voice", episodeName), workDir: frameDir, ffprobe: ffmpeg.path.replace(/ffmpeg$/, "ffprobe"), useSay: options.voice === "on" });
+const sources = [...clips.values()].map((clip) => clip.source);
+console.log(clips.size ? `voice (${options.locale}): ${clips.size} clips (${sources.filter((source) => source === "user").length} user, ${sources.filter((source) => source === "say").length} say)` : `voice (${options.locale}): none, captions only`);
 const cdp = await connectPage(Number(process.env.CDP_PORT || 9222));
 try {
 	// An export step's download lands in the scratch dir, never in the user's Downloads.
@@ -109,7 +119,7 @@ try {
 	const cues = [];
 	let open = null;
 	const closeCue = async () => {
-		await sleep(open.startMs + stepHoldMs(clock() - open.startMs, open.narration, options.wps) - clock());
+		await sleep(open.startMs + stepHoldMs(clock() - open.startMs, open.narration, options.wps, clips.get(open.id)?.audioS ?? null) - clock());
 		cues.push({ ...open, endMs: clock() });
 		console.log(`cue ${open.id}: ${((clock() - open.startMs) / 1000).toFixed(1)}s`);
 	};
@@ -127,8 +137,14 @@ try {
 	if (frames.length === 0) throw new Error("the screencast produced no frames");
 
 	mkdirSync(options.out, { recursive: true });
-	const command = await encode({ ffmpeg: ffmpeg.path, dir: frameDir, frames, endMs, fps: options.fps, output: `${outputBase}.mp4` });
-	console.log(`ffmpeg command: ${command}`);
+	const base = join(frameDir, "capture.mp4");
+	console.log(`ffmpeg command: ${await encode({ ffmpeg: ffmpeg.path, dir: frameDir, frames, endMs, fps: options.fps, output: base })}`);
+	const bandHeight = bandHeightFor(options.height);
+	const captions = await renderCaptions(cdp, { texts: cues.map((cue) => cue.narration[options.locale]), width: options.width, height: bandHeight, dir: frameDir, language: options.locale });
+	const args = muxArgs({ base, output: `${outputBase}.mp4`, cues, clips, captions, endMs, bandHeight });
+	const muxed = spawnSync(ffmpeg.path, args, { encoding: "utf8" });
+	if (muxed.status !== 0) throw new Error(`ffmpeg mux failed (exit ${muxed.status}): ${muxed.stderr.trim()}`);
+	console.log(`ffmpeg mux: ${clips.size ? "h264 + aac" : "h264, no audio"}, ${captions.length} captions, ${options.width}x${options.height + bandHeight}`);
 	for (const language of ["ko", "en"]) writeFileSync(`${outputBase}.${language}.srt`, toSrt(cues, language));
 	console.log(`wrote ${outputBase}.mp4 (${(endMs / 1000).toFixed(1)}s, ${frames.length} frames) and ${outputBase}.{ko,en}.srt`);
 } finally {
