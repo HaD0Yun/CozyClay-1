@@ -6,6 +6,7 @@
 import { existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { SCENES_STORAGE_KEY, createSceneDocument, serializeSceneDocument } from "../src/scenes.js";
 
 export function resolveChromePath() {
 	const candidates = [
@@ -29,4 +30,13 @@ export function chromeArgs(cdpPort) {
 		`--remote-debugging-port=${cdpPort}`,
 		`--user-data-dir=${mkdtempSync(join(tmpdir(), "cozyclay-live-qa-"))}`,
 	];
+}
+
+/** A new studio scene starts on an empty stage. The live suites drive the
+ * `char-a` Y Bot the first-run stage used to hold, so seed that stage into a
+ * fresh profile before the studio's first document reads its storage. Call it
+ * after Page.enable and before navigating to the studio. */
+export function seedCharacterStage(send) {
+	const key = JSON.stringify(SCENES_STORAGE_KEY), raw = JSON.stringify(serializeSceneDocument(createSceneDocument({ seedCharacter: true })));
+	return send("Page.addScriptToEvaluateOnNewDocument", { source: `try { if (!localStorage.getItem(${key})) localStorage.setItem(${key}, ${raw}); } catch {}` });
 }

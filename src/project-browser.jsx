@@ -13,8 +13,10 @@ import {
 	requestHandlePermission,
 	storeProjectsDirectory,
 	DEFAULT_PREVIS_MODE,
+	DEFAULT_CAST_STYLE,
 } from "./project.js";
 import { BrandMark, TemplateThumb } from "./project-browser-art.jsx";
+import { CAST_OPTIONS, StartChoiceGroup } from "./project-start-choices.jsx";
 import "./project-browser.css";
 
 const APP_VERSION = packageInfo.version;
@@ -105,6 +107,7 @@ export function ProjectNameDialog({ open, initialName = "My Project", onCancel, 
 export default function ProjectBrowser({ currentName, onOpen, onOpenFile, onNew, onClose, startup = false, starters = [], onStarter }) {
 	const starterTemplates = useMemo(() => starters.map(sampleTemplate), [starters]);
 	const [previsMode, setPrevisMode] = useState(DEFAULT_PREVIS_MODE);
+	const [castStyle, setCastStyle] = useState(DEFAULT_CAST_STYLE);
 	const templates = previsMode === "storyboard" ? [] : starterTemplates;
 	const defaultTemplate = starterTemplates[0] ?? NEW_PROJECT;
 	const [activeNav, setActiveNav] = useState(startup ? "new" : "recent");
@@ -211,11 +214,11 @@ export default function ProjectBrowser({ currentName, onOpen, onOpenFile, onNew,
 		const projectName = name.trim();
 		if (!projectName) return;
 		if (selectedTemplate?.starterId) {
-			onStarter?.(selectedTemplate.starterId, projectName, { previsMode: "animation" });
+			onStarter?.(selectedTemplate.starterId, projectName, { previsMode: "animation", castStyle });
 			return;
 		}
 		stagePendingProjectName(projectName);
-		onNew(projectName, { previsMode });
+		onNew(projectName, { previsMode, castStyle });
 	};
 
 	const recentEntries = [
@@ -260,22 +263,10 @@ export default function ProjectBrowser({ currentName, onOpen, onOpenFile, onNew,
 							{activeNav !== "new" && <button type="button" className="v2-start-close x" onClick={onClose} aria-label={ko("Close", "닫기")}>×</button>}
 						</div>
 						{activeNav === "new" && (
-							<div className="v2-start-mode" role="radiogroup" aria-label={ko("Project mode", "프로젝트 모드")} data-testid="start-previs-mode">
-								{MODE_OPTIONS.map((option) => (
-									<button
-										type="button"
-										key={option.id}
-										role="radio"
-										aria-checked={previsMode === option.id}
-										className={`v2-start-mode-option${previsMode === option.id ? " active" : ""}`}
-										data-previs-mode={option.id}
-										onClick={() => choosePrevisMode(option.id)}
-									>
-										<strong>{option.label()}</strong>
-										<span>{option.blurb()}</span>
-									</button>
-								))}
-							</div>
+							<>
+								<StartChoiceGroup label={ko("Project mode", "프로젝트 모드")} testId="start-previs-mode" dataKey="previs-mode" options={MODE_OPTIONS} value={previsMode} onChange={choosePrevisMode} />
+								<StartChoiceGroup label={ko("Cast style", "캐스트 방식")} testId="start-cast-style" dataKey="cast-style" options={CAST_OPTIONS} value={castStyle} onChange={setCastStyle} className="cast" />
+							</>
 						)}
 					</div>
 
