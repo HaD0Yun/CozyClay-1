@@ -86,7 +86,8 @@ export default [
 			en: "Press Space to play, or scrub the timeline. Seeing the playhead move is your first visible result.",
 		},
 		key: "Space",
-		until: ".tl-btn.play[aria-label='Pause playback']",
+		// The play button gains "on" while playing; its aria-label is translated.
+		until: ".tl-btn.play.on",
 	},
 	// The walk carries the character out of the viewport by frame ~100; pausing
 	// near frame 36 keeps it in view for the shot and export steps.
