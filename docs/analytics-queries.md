@@ -896,8 +896,9 @@ Historical `feature:used(mcp_connected)` is a connection signal, not work.
   execution start. No raw duration reaches analytics.
 - Workflow `failure_code`: `aborted`, `capture_failed`, `generation_failed`,
   `unknown` (including missing node input). Agent: `aborted`, `auth`,
-  `rate_limited`, `tool_failed`, `upstream`, `key_refused`, `stale_scene`,
-  `capability_missing`, `busy`, `invalid_request`, `unknown`. Never raw error
+  `rate_limited`, `tool_failed`, `upstream`, `network`, `key_refused`,
+  `stale_scene`, `capability_missing`, `busy`, `invalid_request`, `unknown`.
+  Never raw error
   prose.
 - New Agent codes, split out of `upstream` and `auth` in the analytics hygiene
   release (split by `app_version`; older rows keep the coarse code):
@@ -913,7 +914,24 @@ Historical `feature:used(mcp_connected)` is a connection signal, not work.
     `TARGET_NOT_READY`.
   - `invalid_request`: `INVALID_*`, HTTP 400, or another 4xx refusal such as
     409 `AMBIGUOUS_TARGET`.
-  - `upstream` keeps provider overload, 5xx, network and unclassified errors.
+  - `upstream`: provider trouble only, an HTTP 5xx or the runner's
+    `overloaded`, `upstream` or `truncated` (or the provider's `server_error`).
+    A 4xx status beside one of those codes reads by the status.
+  - `network`: the request never got an HTTP answer. A fetch `TypeError`
+    (offline, refused, DNS) or a socket code such as `ECONNRESET`, `ENOTFOUND`
+    or `ETIMEDOUT` on the error or its `cause`. Read from `name`, `code` and
+    `status` only, never the message. `network` covers both hops: browser to
+    sidecar, and sidecar to provider. The sidecar sends the same code on its
+    error frame for an error it throws itself, and a provider request that
+    fails in the model client reads `network` from the thrown error's socket
+    code or `TypeError`, kept before the client folds it into a string, or,
+    when only that string survives, from the runner's existing message
+    classification (`fetch failed`, `ECONNREFUSED`, ...). An HTTP status still
+    wins over both.
+  - `unknown`: anything else, including a code outside this set and an error
+    whose fields throw.
+  - Rows before the `network`/`unknown` split carry `upstream` for all three;
+    compare by `app_version`.
   Source tables: `src/workflow/agent-failure-codes.js` and
   `bin/agent/agent-failure-codes.mjs` (kept identical by
   `test/verify-agent-execution.mjs`).
