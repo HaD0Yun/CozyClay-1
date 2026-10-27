@@ -104,3 +104,16 @@ test("two instances of one imported graph keep their own opacity (#659)", async 
 	assert.equal(a.children[0].material, a.children[1].material, "materials shared inside one instance stay shared");
 	assert.ok(a.children[0].userData.instanceOwned, "instance materials are disposed with the instance");
 });
+
+test("leaving pose mode restores picking after a re-render replaced userData (#974)", () => {
+	const { root } = prop();
+	const custom = () => {};
+	root.children[2].raycast = custom;
+	applyPoseFade(root, 0.2);
+	// R3F compares userData by reference: an inline userData={{...}} prop is a new object every render.
+	for (const node of root.children) node.userData = { cutoutTexture: null };
+	applyPoseFade(root, null);
+	for (const node of root.children) assert.equal(typeof node.raycast, "function");
+	assert.equal(root.children[2].raycast, custom, "an authored raycast override comes back as it was");
+	assert.ok(hits(root) > 0);
+});
