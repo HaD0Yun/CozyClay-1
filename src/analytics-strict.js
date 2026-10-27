@@ -18,6 +18,9 @@ const REFUSAL_CODES = new Set([...STUDIO_ERROR_CODES, "other"]);
 export const CONNECT_PROVIDERS = Object.freeze(["openai-codex", "anthropic", "anthropic-subscription", "openai", "google",
 	"minimax", "minimax-cn", "openrouter", "cliproxy", "openai-compatible"]);
 
+/** landing:cta_clicked targets: the landing page's links out and copy buttons. */
+export const LANDING_CTA_TARGETS = Object.freeze(["app", "github", "discord", "npm", "copy_npx", "copy_clone", "copy_mcp", "copy_terminal", "agent_install_doc"]);
+
 /** A Studio refusal code as sent: one of STUDIO_ERROR_CODES, else "other". */
 export const refusalCodeOf = (code) => (STUDIO_ERROR_CODES.includes(code) ? code : "other");
 
@@ -94,6 +97,8 @@ const SCHEMAS = Object.freeze({
 	},
 	"shortcut:unbound": { combo: oneOf("copy", "paste", "cut", "select_all", "group", "find", "rename", "help") },
 	"help:shortcuts_opened": {},
+	// The landing page (src/site/landing-analytics.js): which call to action was pressed, never a URL or copied text.
+	"landing:cta_clicked": { target: oneOf(...LANDING_CTA_TARGETS) },
 	"search:no_results": { surface: oneOf("assets", "outliner"), query_len: oneOf("1", "2-3", "4-8", "gte9") },
 	"nav:thrash": { surface: oneOf("dock_tab", "mode", "agent_panel"), switches: oneOf("4-5", "6-10", "gte11"), window_s: oneOf(10) },
 	"camera:thrash": { gestures: oneOf("6-10", "gte11"), kind_mix: oneOf("orbit", "fly", "pan", "mixed"), window_s: oneOf(20) },
