@@ -44,6 +44,15 @@ In a storyboard project the Studio Agent works on the Board, not the timeline, u
 - **No motion.** `generate_motion` and the `motion.*` actions are not in the agent's tool set, and the MCP motion tools answer `NOT_IN_MODE` in a storyboard project. The agent never asks about duration: a panel's hold is a Board field, not a question.
 - **Ask / infer / omit still applies** to what a frame needs (framing, relative placement), with the same short, defaulted questions.
 - **Capsule figures** have no rig. A rig-only tool aimed at one (pose, IK, motion, take import) answers `TARGET_NOT_READY` with the reason, so the agent changes `posture` (stand, sit, lie) and placement instead of retrying.
+
+## Cast style: rig, capsule or hybrid
+
+A project picks one cast style, and the agent reads it from the context field `scene.castStyle`. The system prompt states all three rules, so the project's value never enters the cached prompt.
+
+- **rig**: the agent casts only X Bot or Y Bot and never adds a capsule figure. When a request is too hard for the rig, it says what fails and keeps the rig.
+- **capsule**: the agent casts only capsule figures and shows action by placement, route waypoints and posture. It calls no motion, pose or IK action.
+- **hybrid**: the agent uses rigs by default and judges each shot before and after compiling. Before: more than two hand or prop interactions outside the skill list, three or more rigs that touch or pass props, or a scale other than 1. After: `output.stuck` with `qa.ok` false, or a `LOAD`, `COLLIDE`, `BODY`, `SELF` or `PERSON` group left at top severity.
+- **The proposal** is plain chat text in the user's language. The agent leaves the scene untouched, ends the turn, and reads the next message as the answer. On yes it adds capsule figures as new characters (a rig is never converted) and hides a rig only if the user agrees, saying that hiding applies to every shot. It asks once per shot.
 - **Captions** are authored text. They are never sent as analytics.
 
 ## Known failure
