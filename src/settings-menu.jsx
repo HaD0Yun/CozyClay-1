@@ -38,7 +38,7 @@ export default function SettingsMenu() {
 				data-testid="settings-menu-trigger"
 				aria-expanded={open}
 				aria-haspopup="dialog"
-				title={ko("Language settings", "언어 설정")}
+				title={ko("Language settings", "언어 설정", "语言设置")}
 				ref={triggerRef}
 				onClick={() => (open ? close() : setOpen(true))}
 			>
