@@ -4,7 +4,7 @@
 // has ended and appends exactly one `supervisor` event to the turn record,
 // which the panel shows as a note card.
 
-export const SUPERVISOR_RUBRIC = "You are the previs supervisor reviewing one agent turn in CozyClay Studio. Judge ONLY from the evidence given (receipts, refusal codes, geometry facts, pictures). Evaluate exactly these seven items: 1 request coverage - every deliverable the user literally asked for exists (blocker when missing); 2 impossible items - anything refused with TARGET_NOT_READY / CAPABILITY_MISSING / CONFIRMATION_REQUIRED is 'refused', not 'missing'; it is a blocker only when the reply hid the refusal from the user; 3 spatial sanity - floating or sunken objects, unintended interpenetration, subjects occluded by set pieces (concern); 4 framing - requested size vs derivedSize, clipped subjects, subject out of frame (concern); 5 continuity across shots - 180-degree line (axisConsistent, cameraSide), eyeline, OTS over the correct shoulder, screen direction (concern); 6 undo integrity - the turn is one history entry / receipts are undoable (blocker when broken); 7 report honesty - the reply claims nothing the receipts do not show and claims no verification that did not run (blocker). Capsule figures (characterKind proxy) cannot pose, sit or animate: a refused pose on one is 'refused'. In a hybrid project (context scene.castStyle hybrid), capsule figures the user approved in place of rigs for a shot are not a coverage miss. Reply with JSON only: { \"items\": [{ \"text\": string, \"status\": \"done\"|\"partial\"|\"refused\"|\"missing\", \"evidence\": string }], \"issues\": [{ \"severity\": \"blocker\"|\"concern\"|\"note\", \"kind\": \"coverage\"|\"disclosure\"|\"spatial\"|\"framing\"|\"continuity\"|\"undo\"|\"honesty\", \"text\": string, \"evidence\": string }], \"summary\": string }. Write text fields in the user's language. Be concrete and short; cite ids, metres and shot names. An issue MAY carry \"fix\": { \"action\": \"<action id from the ACTIONS list>\", \"args\": { ... } } - ONE run_action call the next turn executes verbatim, with real ids and values taken from the receipts and geometry and args shaped by ACTION SCHEMAS. Examples: {\"action\":\"character.setPose\",\"args\":{\"characterId\":\"char-b\",\"posture\":\"sit\"}}, {\"action\":\"shot.frame\",\"args\":{\"shotId\":\"shot-1\",\"subjectIds\":[\"char-a\",\"char-b\"],\"framing\":{\"intent\":{\"size\":\"wide shot\",\"view\":\"front\",\"level\":\"eye\",\"side\":\"left\"}}}}, {\"action\":\"object.update\",\"args\":{\"id\":\"table-1\",\"position\":{\"x\":0,\"y\":0,\"z\":1.2}}}. Use only actions present in ACTIONS; never invent ids; never propose a pose or motion fix for a capsule figure; omit fix when no safe single action exists.";
+export const SUPERVISOR_RUBRIC = "You are the previs supervisor reviewing one agent turn in CozyClay Studio. Judge ONLY from the evidence given (receipts, refusal codes, geometry facts, pictures). Evaluate exactly these seven items: 1 request coverage - every deliverable the user literally asked for exists (blocker when missing); 2 impossible items - anything refused with TARGET_NOT_READY / CAPABILITY_MISSING / CONFIRMATION_REQUIRED is 'refused', not 'missing'; it is a blocker only when the reply hid the refusal from the user; 3 spatial sanity - floating or sunken objects, unintended interpenetration, subjects occluded by set pieces (concern); 4 framing - requested size vs derivedSize, clipped subjects, subject out of frame (concern); 5 continuity across shots - 180-degree line (axisConsistent, cameraSide), eyeline, OTS over the correct shoulder, screen direction (concern); 6 undo integrity - the turn is one history entry / receipts are undoable (blocker when broken); 7 report honesty - the reply claims nothing the receipts do not show and claims no verification that did not run (blocker). Capsule figures (characterKind proxy) cannot pose, sit or animate: a refused pose on one is 'refused'. In a hybrid project (castStyle hybrid, or no castStyle given), capsule figures the user approved in place of rigs for a shot (previousExchange holds the proposal the request answers) are not a coverage miss. Reply with JSON only: { \"items\": [{ \"text\": string, \"status\": \"done\"|\"partial\"|\"refused\"|\"missing\", \"evidence\": string }], \"issues\": [{ \"severity\": \"blocker\"|\"concern\"|\"note\", \"kind\": \"coverage\"|\"disclosure\"|\"spatial\"|\"framing\"|\"continuity\"|\"undo\"|\"honesty\", \"text\": string, \"evidence\": string }], \"summary\": string }. Write text fields in the user's language. Be concrete and short; cite ids, metres and shot names. An issue MAY carry \"fix\": { \"action\": \"<action id from the ACTIONS list>\", \"args\": { ... } } - ONE run_action call the next turn executes verbatim, with real ids and values taken from the receipts and geometry and args shaped by ACTION SCHEMAS. Examples: {\"action\":\"character.setPose\",\"args\":{\"characterId\":\"char-b\",\"posture\":\"sit\"}}, {\"action\":\"shot.frame\",\"args\":{\"shotId\":\"shot-1\",\"subjectIds\":[\"char-a\",\"char-b\"],\"framing\":{\"intent\":{\"size\":\"wide shot\",\"view\":\"front\",\"level\":\"eye\",\"side\":\"left\"}}}}, {\"action\":\"object.update\",\"args\":{\"id\":\"table-1\",\"position\":{\"x\":0,\"y\":0,\"z\":1.2}}}. Use only actions present in ACTIONS; never invent ids; never propose a pose or motion fix for a capsule figure; omit fix when no safe single action exists.";
 
 const REFUSAL_CODES = Object.freeze(["TARGET_NOT_READY", "CAPABILITY_MISSING", "CONFIRMATION_REQUIRED"]);
 const SUPERVISOR_LIMITS = Object.freeze({ delta: 8, warnings: 12, reply: 4000, images: 5, createdShots: 3, imageWidth: 1280, args: 600, timeoutMs: 120_000, schemaBytes: 6000 });
@@ -110,13 +110,13 @@ function boundSchemas(schemas) {
  * five pi ImageContent parts, in the order the text lists them. `actions` is
  * `{ index: [{ id, label }], schemas: [{ id, input }] }`: what a fix may name
  * and the input shape of the pre-selected ones (#743). */
-export function buildSupervisorInput({ request = "", frames = [], reply = "", geometry = null, refusals, images = [], notes = [], actions = null } = {}) {
+export function buildSupervisorInput({ request = "", frames = [], reply = "", geometry = null, refusals, images = [], notes = [], actions = null, castStyle, previousExchange } = {}) {
 	const turn = analyseTurnFrames(frames);
 	const pictures = (Array.isArray(images) ? images : []).map(image => ({ image, part: imagePart(image) })).filter(entry => entry.part).slice(0, SUPERVISOR_LIMITS.images);
 	const section = (name, value) => `${name}: ${JSON.stringify(value)}`;
 	const text = [
 		"<turn-review>",
-		section("request", String(request ?? "")),
+		section("request", String(request ?? "")), ...(previousExchange ? [section("previousExchange", previousExchange)] : []), ...(typeof castStyle === "string" ? [section("castStyle", castStyle)] : []),
 		section("toolCalls", turn.calls),
 		section("receipts", turn.receipts.map(entry => ({ tool: entry.tool, ...boundReceipt(entry.receipt) }))),
 		section("refusals", Array.isArray(refusals) ? refusals : turn.refusals),
@@ -272,14 +272,14 @@ async function gatherSupervisorEvidence({ hub, workspaceHandle, admission, basel
 			try { await operate(original); } catch (error) { notes.push(`playhead not restored to frame ${original}: ${redact(error?.message)}`); }
 		}
 	}
-	return { geometry, images: images.slice(0, SUPERVISOR_LIMITS.images), notes, actions: { index, schemas } };
+	return { geometry, images: images.slice(0, SUPERVISOR_LIMITS.images), notes, actions: { index, schemas }, ...(typeof context?.scene?.castStyle === "string" ? { castStyle: context.scene.castStyle } : {}) };
 }
 
 /**
  * Review one finished turn. Never throws: any failure becomes a frame with
  * verdict "unavailable" and the reason.
  */
-export async function runSupervisor({ registry, modelKey, effort = "high", turnId, request, frames, reply, hub, workspaceHandle, admission, baseline, actions = [], now = () => Date.now(), timeoutMs = SUPERVISOR_LIMITS.timeoutMs }) {
+export async function runSupervisor({ registry, modelKey, effort = "high", turnId, request, frames, reply, hub, workspaceHandle, admission, baseline, actions = [], previousExchange = null, now = () => Date.now(), timeoutMs = SUPERVISOR_LIMITS.timeoutMs }) {
 	const startedAt = now();
 	let thinking = null;
 	const frame = (fields) => ({ type: "supervisor", turnId, model: modelKey, effort: thinking, elapsedMs: Math.max(0, Math.round(now() - startedAt)), ...fields });
@@ -293,7 +293,7 @@ export async function runSupervisor({ registry, modelKey, effort = "high", turnI
 		thinking = level;
 		const turn = analyseTurnFrames(frames);
 		const evidence = await gatherSupervisorEvidence({ hub, workspaceHandle, admission, baseline, receipts: turn.receipts, actionIndex: actions });
-		const input = buildSupervisorInput({ request, frames, reply, geometry: evidence.geometry, refusals: turn.refusals, images: evidence.images, notes: evidence.notes, actions: evidence.actions });
+		const input = buildSupervisorInput({ request, frames, reply, geometry: evidence.geometry, refusals: turn.refusals, images: evidence.images, notes: evidence.notes, actions: evidence.actions, castStyle: evidence.castStyle, previousExchange });
 		const message = await registry.completeSimple(model, {
 			systemPrompt: SUPERVISOR_RUBRIC,
 			messages: [{ role: "user", content: [{ type: "text", text: input.text }, ...input.images], timestamp: Date.now() }],

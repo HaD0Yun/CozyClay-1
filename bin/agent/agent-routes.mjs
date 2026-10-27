@@ -420,8 +420,8 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 	};
 	const handleStudioTurn = async (req, res, value, path) => {
 		const { StudioProtocolError, validateStudioContextFreshness } = await import("../../src/studio-agent-protocol.js");
-		const [{ createStudioTools }, { encodeStudioContext }, { createScriptTool }, { runSupervisor, shouldSupervise }, { createPlanTool }] = await Promise.all([
-			import("./studio-tools.mjs"), import("../../src/studio-agent-context.js"), import("./script-tool.mjs"), import("./supervisor.mjs"), import("./plan-tool.mjs"),
+		const [{ createStudioTools }, { encodeStudioContext }, { createScriptTool }, { runSupervisor, shouldSupervise }, { createPlanTool }, { followUpExchange }] = await Promise.all([
+			import("./studio-tools.mjs"), import("../../src/studio-agent-context.js"), import("./script-tool.mjs"), import("./supervisor.mjs"), import("./plan-tool.mjs"), import("./supervisor-followup.mjs"),
 		]);
 		const hubDeps = await runtime; const hub = hubDeps.liveHub || liveHub;
 		if (path === "/agent/stop") {
@@ -621,7 +621,7 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 			let frame;
 			try {
 				frame = await runSupervisor({ registry: await ensureWorkflowModels(), modelKey, effort: process.env.COZYCLAY_SUPERVISOR_EFFORT || "high", turnId: value.turnId, request: value.text, frames: turnFrames, reply: lastReply,
-					hub, workspaceHandle: value.context.host.workspaceHandle, admission, baseline: value.context, actions: current?.actionIndex ?? [] });
+					hub, workspaceHandle: value.context.host.workspaceHandle, admission, baseline: value.context, actions: current?.actionIndex ?? [], previousExchange: followUpExchange(value.text, () => sessionStore.read(value.sessionId)?.history) });
 			} catch (error) {
 				frame = { type: "supervisor", turnId: value.turnId, verdict: "unavailable", model: modelKey, effort: null, elapsedMs: Date.now() - startedAt, summary: "", items: [], issues: [], fixes: [], droppedFixes: [], counts: { blocker: 0, concern: 0, note: 0, fixes: 0 }, reason: "The supervisor could not start." };
 			}

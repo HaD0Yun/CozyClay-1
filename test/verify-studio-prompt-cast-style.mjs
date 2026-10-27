@@ -9,10 +9,12 @@ import { MAIN_SYSTEM_PROMPT } from "../bin/agent/main-prompt.mjs";
 
 const PROXY_SENTENCE = "so use only placement commands on it.";
 const CAST_HEAD = "Cast style is context scene.castStyle. Never ask which body to use: the project already chose.";
+const FALLBACK = "If scene.castStyle is absent, treat the project as hybrid.";
 const PROPOSAL = "Proposal: \"This shot needs <what>. The rig path would need <cost: N compiles, still failing <group>>. Use capsule figures for this shot instead? (yes = capsules, no = keep the rig)\"";
 
 test("the animation prompt states one rule per cast style", () => {
-	assert.ok(prompt.includes(`\n${CAST_HEAD}\n`));
+	assert.ok(prompt.includes(`\n${CAST_HEAD} ${FALLBACK}\n`), "an absent castStyle falls back to hybrid");
+	assert.equal(prompt.split(FALLBACK).length, 2, "the fallback is stated once");
 	assert.match(prompt, /\n- rig: cast only X Bot or Y Bot \(model y-bot-tpose or x-bot-tpose\)\. Never add a proxy-figure\./);
 	assert.match(prompt, /\n- capsule: cast only capsule figures \(model "proxy-figure", posture stand, sit or lie\)\. [^\n]*do not call motion, pose or IK actions\./);
 	assert.match(prompt, /\n- hybrid: use rigs by default\. Judge the shot before and after compiling\./);
@@ -41,6 +43,6 @@ test("the block sits after the proxy sentence and before the motion reference", 
 test("the storyboard prompt, supervisor rubric and coordinator read the cast style", () => {
 	assert.ok(storyboard.endsWith("Cast style is context scene.castStyle; in a capsule project add only proxy-figure characters."));
 	assert.doesNotMatch(storyboard, /- hybrid:/);
-	assert.match(SUPERVISOR_RUBRIC, /capsule figures the user approved in place of rigs for a shot are not a coverage miss/);
+	assert.match(SUPERVISOR_RUBRIC, /In a hybrid project \(castStyle hybrid, or no castStyle given\), capsule figures the user approved in place of rigs for a shot \(previousExchange holds the proposal the request answers\) are not a coverage miss\./);
 	assert.match(MAIN_SYSTEM_PROMPT, /Carry the project's cast style \(context scene\.castStyle: rig, capsule or hybrid\)/);
 });
