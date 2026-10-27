@@ -3,8 +3,11 @@
 // browser.
 //
 // An episode is a flat array of steps, or { title, subtitle?, chapters: [{ id, title?, steps }] }.
+// A target is "<css>" (first visible match), { css, text } (first visible match containing
+// text), { js } (an expression giving an element or rect; a point for drag), an array (the
+// union, spotlight only), or { ko, en } holding one target per UI language.
 // A step is { id, narration?: { ko, en }, <one action>, until? }:
-//   click: "<css>" or ["<css>", ...]    eased cursor move, then a real click on each
+//   click: target or [target, ...]       eased cursor move, then a real click on each
 //   type:  "text" | { into: "<css>", text }  typed into the focused element, or
 //                                        into `into` after clicking it and selecting its value
 //   key:   "Mod+B" | "Space" | ...       one chord; Mod is Cmd on macOS, Ctrl elsewhere
@@ -14,11 +17,15 @@
 //   hold:  ms                            keep the frame still (alone), or how long a
 //                                        spotlight, card or terminal stays (beside it)
 //   eval:  "<js>"                        run in the page and awaited (setup the viewer does not see)
-//   spotlight: "<css>" | null, label: { ko, en }, note?: { ko, en }
-//                                        dim the page around the element, name it in a callout; null clears
-//   menu:  { open: "<css>", then: "<css>" }  click open, then click then (File > Export)
-//   card:  "opening" | "closing" | { title: { ko, en }, subtitle?: { ko, en } }
-//   terminal: { typed: "npx cozyclay", lines: [...] }  the install scene
+//   spotlight: target | null, label?: { ko, en }, note?: { ko, en }, glide?: false
+//                                        dim the page around the target, name it in a callout; null clears;
+//                                        glide: false skips the cursor move (a toast that lives 2 s)
+//   menu:  { open: target, then: target }  click open, then click then (File > Export)
+//   card:  "opening" | "closing" | { title: { ko, en }, subtitle?: { ko, en }, chapters?: true }
+//                                        chapters: true lists the titled chapters under it
+//   terminal: { print?: [...], type?: "npx cozyclay", fresh? }  the install scene: print lines,
+//                                        then type on the last line and press Enter; continues the
+//                                        page an earlier terminal step left, unless fresh
 //   studio: true                         open the Studio at its startup chooser
 // `until` is a selector the step waits for after its action. A step without
 // narration joins the cue of the narrated step before it. `speech: { ko?, en? }`
@@ -30,18 +37,36 @@ const LANGUAGES = ["ko", "en"];
 const isText = (value) => typeof value === "string" && value.trim().length > 0;
 const isMs = (value) => Number.isFinite(value) && value >= 0;
 const isPair = (value) => LANGUAGES.every((language) => isText(value?.[language]));
+const isLocalized = (value) => value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).sort().join() === "en,ko";
+
+/** A target as the episode may write it (see the header). */
+export function isTarget(value, { union = false } = {}) {
+	if (isText(value)) return true;
+	if (Array.isArray(value)) return union && value.length > 0 && value.every((item) => isTarget(item));
+	if (isLocalized(value)) return LANGUAGES.every((language) => isTarget(value[language], { union }));
+	if (isText(value?.js)) return true;
+	return isText(value?.css) && (value.text === undefined || isText(value.text) || (isLocalized(value.text) && isPair(value.text)));
+}
+
+/** The target for one UI language: { ko, en } maps and localized texts resolved. */
+export function localizeTarget(value, language) {
+	if (Array.isArray(value)) return value.map((item) => localizeTarget(item, language));
+	if (isLocalized(value)) return localizeTarget(value[language], language);
+	if (value && typeof value === "object" && isLocalized(value.text)) return { ...value, text: value.text[language] };
+	return value;
+}
 
 function actionError(name, value, step) {
-	if (name === "click") return (isText(value) || (Array.isArray(value) && value.length > 0 && value.every(isText))) ? null : "click needs a selector or a non-empty selector list";
-	if (name === "type") return isText(value) || (isText(value?.into) && isText(value?.text)) ? null : "type needs text, or { into, text }";
+	if (name === "click") return (isTarget(value) || (Array.isArray(value) && value.length > 0 && value.every((item) => isTarget(item)))) ? null : "click needs a target or a non-empty target list";
+	if (name === "type") return isText(value) || (isTarget(value?.into) && isText(value?.text)) ? null : "type needs text, or { into, text }";
 	if (name === "key") return isText(value) ? null : "key needs a chord such as Mod+B";
-	if (name === "drag") return (isText(value?.from) || isText(value?.from?.js)) && (isText(value?.to) || (Number.isFinite(value?.to?.dx) && Number.isFinite(value?.to?.dy))) ? null : "drag needs from (selector or { js }) and to (selector or { dx, dy })";
+	if (name === "drag") return isTarget(value?.from) && (isTarget(value?.to) || (Number.isFinite(value?.to?.dx) && Number.isFinite(value?.to?.dy))) ? null : "drag needs from (target) and to (target or { dx, dy })";
 	if (name === "eval") return isText(value) ? null : "eval needs a page expression";
-	if (name === "wait") return isText(value) || isMs(value) ? null : "wait needs a selector or milliseconds";
-	if (name === "spotlight") return value === null || (isText(value) && isPair(step.label) && (step.note === undefined || isPair(step.note))) ? null : "spotlight needs a selector and label { ko, en } (note optional), or null";
-	if (name === "menu") return isText(value?.open) && isText(value?.then) ? null : "menu needs { open, then } selectors";
-	if (name === "card") return value === "opening" || value === "closing" || (isPair(value?.title) && (value.subtitle === undefined || isPair(value.subtitle))) ? null : "card needs \"opening\", \"closing\" or { title: { ko, en }, subtitle? }";
-	if (name === "terminal") return isText(value?.typed) && Array.isArray(value?.lines) && value.lines.every((line) => typeof line === "string") ? null : "terminal needs { typed, lines: [] }";
+	if (name === "wait") return isTarget(value) || isMs(value) ? null : "wait needs a target or milliseconds";
+	if (name === "spotlight") return value === null || (isTarget(value, { union: true }) && (step.label === undefined || isPair(step.label)) && (step.note === undefined || (isPair(step.note) && step.label))) ? null : "spotlight needs a target (label { ko, en } and note optional), or null";
+	if (name === "menu") return isTarget(value?.open) && isTarget(value?.then) ? null : "menu needs { open, then } targets";
+	if (name === "card") return value === "opening" || value === "closing" || (isPair(value?.title) && (value.subtitle === undefined || isPair(value.subtitle)) && (value.chapters === undefined || value.chapters === true)) ? null : "card needs \"opening\", \"closing\" or { title: { ko, en }, subtitle?, chapters? }";
+	if (name === "terminal") return value && typeof value === "object" && (value.type === undefined || isText(value.type)) && (value.print === undefined || (Array.isArray(value.print) && value.print.every((line) => typeof line === "string"))) && Object.keys(value).every((key) => ["print", "type", "fresh"].includes(key)) ? null : "terminal needs { print?: [lines], type?: text, fresh? }";
 	if (name === "studio") return value === true ? null : "studio must be true";
 	return isMs(value) ? null : "hold needs milliseconds";
 }
@@ -49,10 +74,13 @@ function actionError(name, value, step) {
 /** The action a step performs; `hold` only when nothing else is there. */
 export const actionOf = (step) => ACTIONS.find((name) => Object.hasOwn(step, name)) ?? (Object.hasOwn(step, "hold") ? "hold" : undefined);
 
-/** { title, subtitle, chaptered, chapters: [{ id, title, steps }] } from either episode shape. */
+/**
+ * { title, subtitle, chaptered, firstChapter, chapters: [{ id, title, steps }] } from either
+ * episode shape. `firstChapter` is the number the first chapter carries (default 1).
+ */
 export function normalizeEpisode(episode) {
-	if (Array.isArray(episode)) return { title: null, subtitle: null, chaptered: false, chapters: [{ id: "main", title: null, steps: episode }] };
-	return { title: episode?.title ?? null, subtitle: episode?.subtitle ?? null, chaptered: true, chapters: episode?.chapters ?? [] };
+	if (Array.isArray(episode)) return { title: null, subtitle: null, chaptered: false, firstChapter: 1, chapters: [{ id: "main", title: null, steps: episode }] };
+	return { title: episode?.title ?? null, subtitle: episode?.subtitle ?? null, chaptered: true, firstChapter: episode?.firstChapter ?? 1, chapters: episode?.chapters ?? [] };
 }
 
 function stepErrors(step, label) {
@@ -66,13 +94,13 @@ function stepErrors(step, label) {
 		if (problem) errors.push(`${label}: ${problem}`);
 		if (action !== "hold" && Object.hasOwn(step, "hold") && !(HELD.includes(action) && isMs(step.hold))) errors.push(`${label}: hold only times a spotlight, card or terminal`);
 	}
-	if (step && Object.hasOwn(step, "until") && !isText(step.until)) errors.push(`${label}: until must be a selector`);
+	if (step && Object.hasOwn(step, "until") && !isTarget(step.until)) errors.push(`${label}: until must be a target`);
 	if (step && Object.hasOwn(step, "speech")) {
 		if (!step.narration) errors.push(`${label}: speech needs narration`);
 		for (const [language, text] of Object.entries(step.speech ?? {})) if (!LANGUAGES.includes(language) || !isText(text)) errors.push(`${label}: speech.${language} must be ko or en text`);
 	}
-	const allowed = ["id", "narration", "speech", "until", "hold", "label", "note", ...ACTIONS];
-	const unknown = Object.keys(step ?? {}).filter((key) => !allowed.includes(key) || ((key === "label" || key === "note") && action !== "spotlight"));
+	const allowed = ["id", "narration", "speech", "until", "hold", "label", "note", "glide", ...ACTIONS];
+	const unknown = Object.keys(step ?? {}).filter((key) => !allowed.includes(key) || (["label", "note", "glide"].includes(key) && action !== "spotlight") || (key === "glide" && step.glide !== false));
 	if (unknown.length) errors.push(`${label}: unknown field ${unknown.join(", ")}`);
 	return errors;
 }
@@ -81,7 +109,7 @@ function stepErrors(step, label) {
 export function validateEpisode(episode) {
 	const { title, chaptered, chapters } = normalizeEpisode(episode);
 	if (chaptered && (!Array.isArray(chapters) || chapters.length === 0)) return ["an episode object needs a non-empty chapters array"];
-	const errors = [];
+	const errors = Number.isInteger(normalizeEpisode(episode).firstChapter) && normalizeEpisode(episode).firstChapter >= 0 ? [] : ["firstChapter must be a whole number"];
 	const seen = new Set();
 	const chapterIds = new Set();
 	for (const chapter of chapters) {
@@ -127,8 +155,8 @@ export const joinTexts = (...pairs) => Object.fromEntries(LANGUAGES.map((languag
  */
 export const stepHoldMs = (actionMs, narration, wps, audioS = null, language = null) => Math.max(actionMs, audioS === null ? readingMs(narration, wps, language) : Math.ceil(audioS * 1000 - 1e-6) + 400);
 
-/** dist/tutorial/<episode>/<nn>-<id>.<locale>.mp4 for chapter `index` (0-based). */
-export const chapterFileName = (index, id, locale) => `${String(index + 1).padStart(2, "0")}-${id}.${locale}.mp4`;
+/** dist/tutorial/<episode>/<nn>-<id>.<locale>.mp4 for the chapter numbered `number`. */
+export const chapterFileName = (number, id, locale) => `${String(number).padStart(2, "0")}-${id}.${locale}.mp4`;
 
 export function srtTime(ms) {
 	const total = Math.max(0, Math.round(ms));

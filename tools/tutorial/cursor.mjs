@@ -62,20 +62,20 @@ export function createInput(cdp, { mac }) {
 		await mouse("mouseMoved", x, y, { button: "none" });
 		at = { x, y };
 	};
-	/** Center of the first visible match, scrolled into view; null when it never shows. */
-	const locate = async (selector, timeoutMs = 10000) => {
-		const query = JSON.stringify(selector);
-		if (!(await cdp.waitFor(`(() => { const node = document.querySelector(${query}); if (!node) return false; const box = node.getBoundingClientRect(); return box.width > 0 && box.height > 0; })()`, timeoutMs))) return null;
-		return cdp.evaluate(`(() => { const node = document.querySelector(${query}); node.scrollIntoView({ block: "nearest", inline: "nearest" }); const box = node.getBoundingClientRect(); return { x: Math.round(box.left + box.width / 2), y: Math.round(box.top + box.height / 2) }; })()`);
+	/** Center of a target (window.__tutorialFind, overlay.mjs), scrolled into view; null when it never shows. */
+	const locate = async (spec, timeoutMs = 10000) => {
+		const query = JSON.stringify(spec);
+		if (!(await cdp.waitFor(`!!window.__tutorialFind(${query})`, timeoutMs))) return null;
+		return cdp.evaluate(`(() => { window.__tutorialFind(${query}).el?.scrollIntoView({ block: "nearest", inline: "nearest" }); const box = window.__tutorialFind(${query}).rect; return { x: Math.round(box.x + box.width / 2), y: Math.round(box.y + box.height / 2) }; })()`);
 	};
-	const need = async (selector) => {
-		const point = await locate(selector);
-		if (!point) throw new Error(`no visible element for ${selector}`);
+	const need = async (spec) => {
+		const point = await locate(spec);
+		if (!point) throw new Error(`no visible element for ${JSON.stringify(spec)}`);
 		return point;
 	};
-	/** A drag start: a selector, or { js } evaluating to a viewport point such as a gizmo handle. */
+	/** A drag end: a target, or { js } evaluating to a viewport point such as a gizmo handle. */
 	const pointOf = async (source) => {
-		if (typeof source === "string") return need(source);
+		if (!source?.js) return need(source);
 		const point = await cdp.evaluate(`(async () => (${source.js}))()`);
 		if (!Number.isFinite(point?.x) || !Number.isFinite(point?.y)) throw new Error(`${source.js} gave no { x, y }`);
 		return { x: Math.round(point.x), y: Math.round(point.y) };
@@ -105,7 +105,7 @@ export function createInput(cdp, { mac }) {
 		},
 		async drag(from, to) {
 			const start = await pointOf(from);
-			const end = typeof to === "string" ? await need(to) : { x: start.x + to.dx, y: start.y + to.dy };
+			const end = Number.isFinite(to?.dx) ? { x: start.x + to.dx, y: start.y + to.dy } : await pointOf(to);
 			await glide(start.x, start.y);
 			await cdp.evaluate("window.__tutorialCursor.ripple()");
 			await mouse("mousePressed", start.x, start.y, { clickCount: 1, buttons: 1 });
@@ -144,7 +144,7 @@ export function createInput(cdp, { mac }) {
 			const parts = chord.split("+").map((part) => (part === "Mod" ? (mac ? "Meta" : "Control") : part === "Ctrl" ? "Control" : part === "Cmd" ? "Meta" : part));
 			const name = parts.pop();
 			const modifiers = parts.reduce((bits, part) => bits | (MODIFIER_BITS[part] ?? 0), 0);
-			const [key, code, keyCode] = NAMED_KEYS[name] ?? [name.toLowerCase(), `Key${name.toUpperCase()}`, name.toUpperCase().charCodeAt(0)];
+			const [key, code, keyCode] = NAMED_KEYS[name] ?? (/^\d$/.test(name) ? [name, `Digit${name}`, name.charCodeAt(0)] : [name.toLowerCase(), `Key${name.toUpperCase()}`, name.toUpperCase().charCodeAt(0)]);
 			const label = mac ? parts.map((part) => MAC_GLYPHS[part]).join("") + name : [...parts.map((part) => (part === "Control" ? "Ctrl" : part)), name].join("+");
 			// A focused button swallows Space and Cmd/Ctrl+B (src/motion/timeline.jsx), so the chord goes to the page.
 			await cdp.evaluate(`window.__tutorialCursor.keycap(${JSON.stringify(label)}); if (document.activeElement?.tagName === "BUTTON") document.activeElement.blur();`);

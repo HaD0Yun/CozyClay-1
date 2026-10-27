@@ -7,6 +7,7 @@ const OUTLINER = ".hierarchy-pane.v2-outliner";
 export default {
 	title: { ko: "CozyClay 둘러보기", en: "A tour of CozyClay" },
 	subtitle: { ko: "설치부터 편집기까지", en: "From install to the editor" },
+	firstChapter: 0,
 	chapters: [
 		{ id: "intro", steps: [{ id: "opening", card: "opening", hold: 2500 }] },
 		{
@@ -17,8 +18,9 @@ export default {
 				{
 					id: "install-run",
 					narration: { ko: "터미널에서 npx cozyclay를 실행하세요.", en: "Run npx cozyclay in a terminal." },
-					terminal: { typed: "npx cozyclay", lines: ["[placeholder] installing CozyClay", "[placeholder] CozyClay is running at http://127.0.0.1:5180/app/", "[placeholder] opening your browser"] },
+					terminal: { type: "npx cozyclay" },
 				},
+				{ id: "install-output", terminal: { print: ["[placeholder] installing CozyClay", "[placeholder] CozyClay is running at http://127.0.0.1:5180/app/", "[placeholder] opening your browser"] } },
 			],
 		},
 		{

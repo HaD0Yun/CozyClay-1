@@ -8,8 +8,9 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import firstVideo from "../tools/tutorial/episodes/first-video.mjs";
+import beginnerGuide from "../tools/tutorial/episodes/beginner-guide.mjs";
 import stubTour from "../tools/tutorial/episodes/stub-tour.mjs";
-import { DEFAULT_WPS, chapterFileName, joinTexts, normalizeEpisode, readingMs, srtTime, stepHoldMs, toSrt, validateEpisode } from "../tools/tutorial/episode.mjs";
+import { DEFAULT_WPS, chapterFileName, isTarget, joinTexts, localizeTarget, normalizeEpisode, readingMs, srtTime, stepHoldMs, toSrt, validateEpisode } from "../tools/tutorial/episode.mjs";
 import { bandHeightFor, chapterCutArgs, muxArgs } from "../tools/tutorial/mux.mjs";
 import { calloutPlacement } from "../tools/tutorial/overlay.mjs";
 import { terminalSequence } from "../tools/tutorial/terminal.mjs";
@@ -107,14 +108,29 @@ expect("the Korean track carries the Korean narration", toSrt(cues, "ko").includ
 expect("the stub tour is valid", validateEpisode(stubTour).length === 0, validateEpisode(stubTour).join("; "));
 expect("the stub tour has five chapters", normalizeEpisode(stubTour).chapters.map((chapter) => chapter.id).join() === "intro,install,start,editor,outro");
 expect("a flat episode is one unnamed chapter", JSON.stringify(normalizeEpisode([{ id: "a", hold: 1 }]).chapters.map((chapter) => [chapter.id, chapter.title])) === '[["main",null]]' && normalizeEpisode([]).chaptered === false);
-expect("chapter files are numbered from 01", chapterFileName(0, "install", "ko") === "01-install.ko.mp4" && chapterFileName(11, "export", "en") === "12-export.en.mp4");
+expect("chapter files carry the chapter number", chapterFileName(0, "install", "ko") === "00-install.ko.mp4" && chapterFileName(12, "export", "en") === "12-export.en.mp4");
+expect("chapters number from 1 unless the episode says otherwise", normalizeEpisode({ chapters: [] }).firstChapter === 1 && normalizeEpisode(beginnerGuide).firstChapter === 0);
+const guideErrors = validateEpisode(beginnerGuide);
+expect("the beginner guide is valid", guideErrors.length === 0, guideErrors.join("; "));
+expect("the beginner guide has the storyboard's seven chapters", normalizeEpisode(beginnerGuide).chapters.map((chapter) => chapter.id).join() === "install,start,layout,stage,motion,camera,export");
+const guideSteps = beginnerGuide.chapters.flatMap((chapter) => chapter.steps);
+expect("the beginner guide opens and closes with cards", guideSteps[0].card === "opening" && guideSteps.at(-1).card?.chapters === true);
+expect("every beginner-guide caption has both languages", guideSteps.filter((step) => step.narration).every((step) => step.narration.ko && step.narration.en) && guideSteps.filter((step) => step.narration).length >= 60, String(guideSteps.filter((step) => step.narration).length));
 const pair = { ko: "가", en: "a" };
 const chaptered = (steps, extra = {}) => validateEpisode({ title: pair, chapters: [{ id: "one", title: pair, steps }], ...extra });
 expect("a spotlight with label and note is valid", chaptered([{ id: "s", spotlight: ".x", label: pair, note: pair, hold: 2000 }]).length === 0);
-expect("a spotlight without a label is rejected", /spotlight needs/.test(chaptered([{ id: "s", spotlight: ".x" }]).join()));
+expect("a spotlight may ring a target without a callout", chaptered([{ id: "s", spotlight: ".x" }]).length === 0);
+expect("a note needs a label", /spotlight needs/.test(chaptered([{ id: "s", spotlight: ".x", note: pair }]).join()));
+expect("a spotlight may ring the union of targets", chaptered([{ id: "s", spotlight: [".a", { css: ".b", text: "B" }], label: pair }]).length === 0 && /click needs/.test(chaptered([{ id: "c", click: [[".a", ".b"]] }]).join()));
 expect("spotlight null clears", chaptered([{ id: "s", spotlight: null }]).length === 0);
 expect("label belongs to a spotlight only", /unknown field label/.test(chaptered([{ id: "s", click: ".x", label: pair }]).join()));
-expect("hold times a spotlight, card or terminal, nothing else", /hold only times/.test(chaptered([{ id: "s", click: ".x", hold: 5 }]).join()) && chaptered([{ id: "t", terminal: { typed: "npx cozyclay", lines: [] }, hold: 5 }]).length === 0);
+expect("hold times a spotlight, card or terminal, nothing else", /hold only times/.test(chaptered([{ id: "s", click: ".x", hold: 5 }]).join()) && chaptered([{ id: "t", terminal: { type: "npx cozyclay" }, hold: 5 }]).length === 0);
+expect("a terminal step prints, types or both, nothing else", chaptered([{ id: "t", terminal: {} }, { id: "u", terminal: { print: ["a"], type: "skip", fresh: true } }]).length === 0 && /terminal needs/.test(chaptered([{ id: "v", terminal: { typed: "x" } }]).join()));
+
+// Targets: CSS, CSS with text, JS, per-language maps.
+expect("targets: css, css with text, js, per-language", [".a", { css: ".a", text: "A" }, { css: ".a", text: pair }, { js: "document.body" }, { ko: ".k", en: ".e" }].every((target) => isTarget(target)));
+expect("not targets: empty, half a language map, an array outside a spotlight", ![" ", { ko: ".k" }, { css: "" }, [".a"]].some((target) => isTarget(target)) && isTarget([".a"], { union: true }));
+expect("a per-language target resolves for the UI language", localizeTarget({ ko: "select[aria-label=\"단위\"]", en: "select[aria-label=\"Units\"]" }, "ko") === "select[aria-label=\"단위\"]" && localizeTarget({ css: ".m", text: pair }, "en").text === "a" && JSON.stringify(localizeTarget([{ ko: ".k", en: ".e" }, ".x"], "en")) === "[\".e\",\".x\"]");
 expect("menu needs open and then", chaptered([{ id: "m", menu: { open: "#a", then: "#b" } }]).length === 0 && /menu needs/.test(chaptered([{ id: "m", menu: { open: "#a" } }]).join()));
 expect("cards: opening, closing or a titled chapter card", chaptered([{ id: "o", card: "opening" }, { id: "c", card: "closing" }, { id: "t", card: { title: pair, subtitle: pair } }]).length === 0 && /card needs/.test(chaptered([{ id: "x", card: { subtitle: pair } }]).join()));
 expect("an opening card needs the episode title", /opening card needs the episode title/.test(validateEpisode({ chapters: [{ id: "one", steps: [{ id: "o", card: "opening" }] }] }).join()));
@@ -134,11 +150,12 @@ const huge = place(0, 0, 1600, 1000);
 expect("a callout for a target filling the frame is clamped inside it", huge.x >= 12 && huge.x + box.width <= 1588 && huge.y >= 12 && huge.y + box.height <= 988, JSON.stringify(huge));
 expect("a callout beside a target at the top edge stays inside", place(1300, 0, 280, 20).y === 12, JSON.stringify(place(1300, 0, 280, 20)));
 
-// Terminal: typed characters, then enter, then the lines.
-const sequence = terminalSequence({ typed: "npx", lines: ["one", "two"] });
-expect("the terminal types each character, then enter, then each line", sequence.events.map((event) => event.kind + (event.text ?? "")).join() === "charn,charp,charx,enter,lineone,linetwo", JSON.stringify(sequence.events));
-expect("the terminal events are timed in order", JSON.stringify(sequence.events.map((event) => event.at)) === "[700,785,870,1405,2005,2325]" && sequence.totalMs === 2325, JSON.stringify(sequence));
-expect("a terminal with no lines ends at enter", terminalSequence({ typed: "a", lines: [] }).totalMs === 1235);
+// Terminal: printed lines 0.6 s apart, then the typed answer at ~12 chars/s, then Enter.
+const sequence = terminalSequence({ print: ["one", "two"], type: "ab" });
+expect("the terminal prints each line, then types, then presses Enter", sequence.events.map((event) => event.kind + (event.text ?? "")).join() === "lineone,linetwo,chara,charb,enter", JSON.stringify(sequence.events));
+expect("the terminal events are timed in order", JSON.stringify(sequence.events.map((event) => event.at)) === "[400,1000,1500,1583,2033]" && sequence.totalMs === 2033, JSON.stringify(sequence));
+expect("typing alone starts right away", JSON.stringify(terminalSequence({ type: "a" }).events.map((event) => event.at)) === "[400,850]");
+expect("an empty terminal step plays nothing", terminalSequence({}).events.length === 0);
 
 // Chapter cuts and an episode without captions.
 const cut = chapterCutArgs({ input: "full.mp4", output: "02-install.ko.mp4", startMs: 3400, endMs: 10900, audio: false });

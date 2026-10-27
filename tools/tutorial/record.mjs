@@ -7,7 +7,7 @@
 // -- <episode>) or inside tools/qa-browser.mjs with QA_URL pointing at a dev
 // server. See tools/tutorial/README.md.
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -41,7 +41,7 @@ function parseArgs(argv) {
 
 async function loadEpisode(name) {
 	const base = existsSync(name) ? resolve(name) : resolve(import.meta.dirname, "episodes", name);
-	const file = [base, `${base}.mjs`, `${base}.json`].find((candidate) => existsSync(candidate));
+	const file = [base, `${base}.mjs`, `${base}.json`].find((candidate) => existsSync(candidate) && statSync(candidate).isFile());
 	if (!file) throw new Error(`no episode ${name} (looked in tools/tutorial/episodes/)`);
 	const episode = file.endsWith(".json") ? JSON.parse(readFileSync(file, "utf8")) : (await import(pathToFileURL(file).href)).default;
 	const errors = validateEpisode(episode);
@@ -103,6 +103,7 @@ try {
 	// and the cue closes once the narration has had its time, or at a chapter end.
 	const cues = [];
 	const marks = [];
+	const timeline = [];
 	let open = null;
 	const closeCue = async () => {
 		if (!open) return;
@@ -114,11 +115,14 @@ try {
 		await closeCue();
 		marks.push({ chapter, startMs: marks.length ? clock() : 0 });
 		for (const step of chapter.steps) {
-			if (step.narration) {
+			// A card is a new scene: the caption before it ends where it starts.
+			if (step.narration || step.card) {
 				await closeCue();
-				open = { id: step.id, startMs: clock(), narration: step.narration };
+				if (step.narration) open = { id: step.id, startMs: clock(), narration: step.narration };
 			}
+			const stepStart = clock();
 			await runStep({ cdp, input, wps: options.wps, locale: options.locale, url, episode, chapter }, step);
+			timeline.push({ chapter: chapter.id, id: step.id, action: actionOf(step), startMs: stepStart, endMs: clock() });
 		}
 		console.log(`chapter ${chapter.id}: ${((clock() - marks.at(-1).startMs) / 1000).toFixed(1)}s`);
 	}
@@ -137,10 +141,12 @@ try {
 	console.log(`ffmpeg mux: ${clips.size ? "h264 + aac" : "h264, no audio"}, ${captions.length} captions, ${options.width}x${options.height + bandHeight}`);
 	const srtBase = fullPath.replace(/\.mp4$/, "");
 	for (const language of episode.chaptered ? [options.locale] : ["ko", "en"]) writeFileSync(`${srtBase}${episode.chaptered ? "" : `.${language}`}.srt`, toSrt(cues, language));
+	// When each step ran, for QA frames (one per spotlight) and for timing a re-record.
+	writeFileSync(`${srtBase}.steps.json`, `${JSON.stringify(timeline, null, "\t")}\n`);
 	console.log(`wrote ${fullPath} (${(endMs / 1000).toFixed(1)}s, ${frames.length} frames)`);
 	if (episode.chaptered) marks.forEach((mark, index) => {
 		const endAt = index + 1 < marks.length ? marks[index + 1].startMs : endMs;
-		const output = join(outDir, chapterFileName(index, mark.chapter.id, options.locale));
+		const output = join(outDir, chapterFileName(episode.firstChapter + index, mark.chapter.id, options.locale));
 		run(ffmpeg.path, chapterCutArgs({ input: fullPath, output, startMs: mark.startMs, endMs: endAt, audio: clips.size > 0 }), `cut ${mark.chapter.id}`);
 		console.log(`wrote ${output} (${((endAt - mark.startMs) / 1000).toFixed(1)}s)`);
 	});

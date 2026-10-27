@@ -26,11 +26,43 @@ export function calloutPlacement(target, box, viewport, gap = 16, margin = 12) {
 	return { side, x: Math.round(clamp(x, margin, viewport.width - margin - box.width)), y: Math.round(clamp(y, margin, viewport.height - margin - box.height)) };
 }
 
+/**
+ * Resolves a target in the page: a CSS selector (first visible match),
+ * { css, text } (first visible match containing the text), { js } (an
+ * expression giving an element or a { x, y, width, height } rect), or an
+ * array (the union of its targets). Returns { el, rect } or null.
+ * Self-contained, because it is serialized into the page.
+ */
+function findTarget(spec) {
+	if (Array.isArray(spec)) {
+		const rects = spec.map(findTarget).filter(Boolean).map((found) => found.rect);
+		if (!rects.length) return null;
+		const left = Math.min(...rects.map((rect) => rect.x)), top = Math.min(...rects.map((rect) => rect.y));
+		const right = Math.max(...rects.map((rect) => rect.x + rect.width)), bottom = Math.max(...rects.map((rect) => rect.y + rect.height));
+		return { el: null, rect: { x: left, y: top, width: right - left, height: bottom - top } };
+	}
+	const box = (node) => { const rect = node.getBoundingClientRect(); return rect.width > 0 && rect.height > 0 ? { el: node, rect: { x: rect.left, y: rect.top, width: rect.width, height: rect.height } } : null; };
+	if (spec && typeof spec === "object" && spec.js) {
+		const value = (0, eval)(spec.js);
+		if (!value) return null;
+		return value instanceof Element ? box(value) : { el: null, rect: { x: value.x, y: value.y, width: value.width, height: value.height } };
+	}
+	const { css, text } = typeof spec === "string" ? { css: spec } : spec;
+	for (const node of document.querySelectorAll(css)) {
+		if (text && !node.textContent.includes(text)) continue;
+		const found = box(node);
+		if (found) return found;
+	}
+	return null;
+}
+
 const FONT = `"Apple SD Gothic Neo","Noto Sans CJK KR","Noto Sans KR","Malgun Gothic",system-ui,sans-serif`;
 
 export const TEACHING_OVERLAY = `(() => {
 	if (window.__tutorialOverlay) return;
 	const place = ${calloutPlacement.toString()};
+	const find = ${findTarget.toString()};
+	window.__tutorialFind = find;
 	const PAD = 8;
 	const css = document.createElement("style");
 	css.textContent = \`
@@ -55,9 +87,10 @@ export const TEACHING_OVERLAY = `(() => {
 	const mount = () => { document.documentElement.append(css, root); };
 	if (document.documentElement) mount(); else document.addEventListener("DOMContentLoaded", mount);
 	const follow = () => {
-		if (target && target.isConnected) {
-			const box = target.getBoundingClientRect();
-			const rect = { x: box.left - PAD, y: box.top - PAD, width: box.width + PAD * 2, height: box.height + PAD * 2 };
+		const found = target ? find(target) : null;
+		if (found) {
+			const box = found.rect;
+			const rect = { x: box.x - PAD, y: box.y - PAD, width: box.width + PAD * 2, height: box.height + PAD * 2 };
 			Object.assign(hole.style, { left: rect.x + "px", top: rect.y + "px", width: rect.width + "px", height: rect.height + "px" });
 			if (callout) {
 				const spot = place(rect, { width: callout.offsetWidth, height: callout.offsetHeight }, { width: innerWidth, height: innerHeight });
@@ -70,18 +103,21 @@ export const TEACHING_OVERLAY = `(() => {
 	const fadeOut = (node) => { if (!node) return; node.style.opacity = "0"; setTimeout(() => node.remove(), 350); };
 	const text = (tag, value) => { const node = document.createElement(tag); node.textContent = value; return node; };
 	window.__tutorialOverlay = {
-		spotlight(selector, label, note) {
-			const node = document.querySelector(selector);
-			if (!node) return false;
-			node.scrollIntoView({ block: "nearest", inline: "nearest" });
-			target = node;
+		spotlight(spec, label, note) {
+			const found = find(spec);
+			if (!found) return false;
+			found.el?.scrollIntoView({ block: "nearest", inline: "nearest" });
+			target = spec;
 			fadeOut(callout);
-			callout = document.createElement("div");
-			callout.className = "tt-callout";
-			callout.append(text("b", label));
-			if (note) callout.append(text("span", note));
-			root.append(callout);
-			requestAnimationFrame(() => { hole.style.opacity = "1"; callout.style.opacity = "1"; });
+			callout = null;
+			if (label) {
+				callout = document.createElement("div");
+				callout.className = "tt-callout";
+				callout.append(text("b", label));
+				if (note) callout.append(text("span", note));
+				root.append(callout);
+			}
+			requestAnimationFrame(() => { hole.style.opacity = "1"; if (callout) callout.style.opacity = "1"; });
 			return true;
 		},
 		clear() { hole.style.opacity = "0"; fadeOut(callout); callout = null; setTimeout(() => { if (!callout) target = null; }, 350); },
@@ -92,9 +128,9 @@ export const TEACHING_OVERLAY = `(() => {
 			if (eyebrow) card.append(text("small", eyebrow));
 			card.append(text("h1", title));
 			if (subtitle) card.append(text("p", subtitle));
-			if (items?.length) {
+			if (items?.titles.length) {
 				const list = document.createElement("ol");
-				items.forEach((item, index) => { const row = document.createElement("li"); row.append(text("b", String(index + 1).padStart(2, "0")), item); list.append(row); });
+				items.titles.forEach((item, index) => { const row = document.createElement("li"); if (items.numbered) row.append(text("b", String(index + 1).padStart(2, "0"))); row.append(item); list.append(row); });
 				card.append(list);
 			}
 			root.append(card);

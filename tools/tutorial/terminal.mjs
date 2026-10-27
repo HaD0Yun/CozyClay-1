@@ -1,34 +1,42 @@
-// The install scene: a local terminal page (scenes/terminal.html) types the
-// command and prints the output lines, captured like any Studio frame.
+// The install scene: a local terminal page (scenes/terminal.html) prints
+// output lines and types on the last line, captured like any Studio frame.
+// Consecutive terminal steps continue the same page, so a prompt printed by
+// one step can be answered by the next.
 import { pathToFileURL } from "node:url";
 
 export const TERMINAL_URL = pathToFileURL(new URL("./scenes/terminal.html", import.meta.url).pathname).href;
 
 /**
- * The timed events the terminal page plays: one `char` per typed character,
- * an `enter`, then one `line` per output line. Pure, so it is tested.
+ * The timed events the terminal page plays for one step: one `line` per
+ * printed line, then one `char` per typed character and an `enter`. Pure,
+ * so it is tested. About 12 typed characters a second, lines 0.6 s apart.
  */
-export function terminalSequence({ typed, lines }, { startMs = 700, charMs = 85, enterMs = 450, firstLineMs = 600, lineMs = 320 } = {}) {
+export function terminalSequence({ print = [], type = "" }, { startMs = 400, lineMs = 600, charMs = 83, typeAfterMs = 500, enterMs = 450 } = {}) {
 	const events = [];
 	let at = startMs;
-	for (const character of typed) {
-		events.push({ at, kind: "char", text: character });
-		at += charMs;
-	}
-	at += enterMs;
-	events.push({ at, kind: "enter" });
-	lines.forEach((line, index) => {
-		at += index === 0 ? firstLineMs : lineMs;
+	print.forEach((line, index) => {
+		if (index > 0) at += lineMs;
 		events.push({ at, kind: "line", text: line });
 	});
+	if (type) {
+		if (print.length) at += typeAfterMs;
+		for (const [index, character] of [...type].entries()) {
+			if (index > 0) at += charMs;
+			events.push({ at, kind: "char", text: character });
+		}
+		at += enterMs;
+		events.push({ at, kind: "enter" });
+	}
 	return { events, totalMs: at };
 }
 
-/** Show the terminal page (fresh) and play `scene`; resolves when the last line is out. */
+/** Play one terminal step: on a fresh page when asked or when the page is elsewhere, else continuing. */
 export async function playTerminal(cdp, scene) {
-	const loaded = cdp.once("Page.loadEventFired");
-	await cdp.send("Page.navigate", { url: TERMINAL_URL });
-	await loaded;
+	if (scene.fresh || (await cdp.evaluate("location.href")) !== TERMINAL_URL) {
+		const loaded = cdp.once("Page.loadEventFired");
+		await cdp.send("Page.navigate", { url: TERMINAL_URL });
+		await loaded;
+	}
 	const { events, totalMs } = terminalSequence(scene);
 	await cdp.evaluate(`window.__terminal.play(${JSON.stringify(events)})`);
 	await new Promise((resolve) => setTimeout(resolve, totalMs + 200));
