@@ -4,6 +4,7 @@
 // take is compiled in the page because the recording has no signed-in agent;
 // the narration says so.
 import { skeletonFor } from "../../../src/motion3/rigs/index.js";
+import { castFirstCharacter } from "./cast.mjs";
 
 const skeleton = skeletonFor("y-bot-tpose");
 const rest = (bone) => skeleton.restWorldPos[skeleton.index[bone]];
@@ -38,6 +39,10 @@ export default [
 	{ id: "create-click", click: "[data-testid=start-create]", until: ".timeline" },
 	// The character rig takes about a second to load after Create.
 	{ id: "rig-load", hold: 1500 },
+	...castFirstCharacter("cast", {
+		ko: "장면 보기의 \"추가\" 메뉴에서 Y Bot을 골라 캐릭터를 놓으세요.",
+		en: "Open Add in the Scene view and pick Y Bot to place a character.",
+	}),
 	{
 		id: "select",
 		narration: { ko: "아웃라이너에서 \"캐릭터 1\"을 고르세요.", en: "Select \"Character 1\" in the Outliner." },
@@ -73,11 +78,11 @@ export default [
 	{
 		id: "motion-compile",
 		eval: `(() => {
-			const { x, z } = window.__cozyclay.characters.find((character) => character.id === "char-a");
+			const character = window.__cozyclay.characters[0], { x, z } = character;
 			const spec = ${JSON.stringify(WALK)};
 			const set = spec.keys[0].set;
 			for (const name of ["root", "foot_l", "foot_r"]) set[name] = [set[name][0] + x, set[name][1], set[name][2] + z];
-			return window.__cozyclay.runStudioAction("motion.compile", { characterId: "char-a", spec });
+			return window.__cozyclay.runStudioAction("motion.compile", { characterId: character.id, spec });
 		})()`,
 	},
 	{ id: "guide-ask", click: GUIDE_NEXT },

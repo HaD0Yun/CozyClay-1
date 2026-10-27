@@ -14,11 +14,11 @@ const WALK = {
 	generators: [{ type: "walk", f0: 6, steps: 8, heading: [0, 0] }],
 };
 const COMPILE_WALK = `(() => {
-	const { x, z } = window.__cozyclay.characters.find((character) => character.id === "char-a");
+	const character = window.__cozyclay.characters[0], { x, z } = character;
 	const spec = ${JSON.stringify(WALK)};
 	const set = spec.keys[0].set;
 	for (const name of ["root", "foot_l", "foot_r"]) set[name] = [set[name][0] + x, set[name][1], set[name][2] + z];
-	return window.__cozyclay.runStudioAction("motion.compile", { characterId: "char-a", spec });
+	return window.__cozyclay.runStudioAction("motion.compile", { characterId: character.id, spec });
 })()`;
 const BODY_LANE = ".tl-track:has(.tl-track-chip.body)";
 // Root path's data-lane-label is translated in the Korean UI ("루트 경로"); its class is not.

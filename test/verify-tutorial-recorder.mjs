@@ -10,6 +10,7 @@ import { join } from "node:path";
 import firstVideo from "../tools/tutorial/episodes/first-video.mjs";
 import beginnerGuide from "../tools/tutorial/episodes/beginner-guide.mjs";
 import stubTour from "../tools/tutorial/episodes/stub-tour.mjs";
+import { ADD_CHARACTER, FIRST_CHARACTER_ROW } from "../tools/tutorial/episodes/cast.mjs";
 import { DEFAULT_WPS, chapterFileName, isTarget, joinTexts, localizeTarget, normalizeEpisode, readingMs, srtTime, stepHoldMs, toSrt, validateEpisode } from "../tools/tutorial/episode.mjs";
 import { bandHeightFor, chapterCutArgs, muxArgs } from "../tools/tutorial/mux.mjs";
 import { calloutPlacement } from "../tools/tutorial/overlay.mjs";
@@ -114,6 +115,13 @@ const guideErrors = validateEpisode(beginnerGuide);
 expect("the beginner guide is valid", guideErrors.length === 0, guideErrors.join("; "));
 expect("the beginner guide has the storyboard's seven chapters", normalizeEpisode(beginnerGuide).chapters.map((chapter) => chapter.id).join() === "install,start,layout,stage,motion,camera,export");
 const guideSteps = beginnerGuide.chapters.flatMap((chapter) => chapter.steps);
+// A new project is an empty stage (#986): an episode adds a character before it first touches one.
+for (const [name, episode] of [["first-video", firstVideo], ["beginner-guide", beginnerGuide], ["stub-tour", stubTour]]) {
+	const steps = normalizeEpisode(episode).chapters.flatMap((chapter) => chapter.steps);
+	const first = steps.findIndex((step) => JSON.stringify(step).includes(FIRST_CHARACTER_ROW) && step.menu?.then !== ADD_CHARACTER);
+	const cast = steps.findIndex((step) => step.menu?.then === ADD_CHARACTER);
+	expect(`${name}: a character is cast before the first step that uses one`, first === -1 || (cast !== -1 && cast < first), JSON.stringify({ first, cast }));
+}
 expect("the beginner guide opens and closes with cards", guideSteps[0].card === "opening" && guideSteps.at(-1).card?.chapters === true);
 expect("every beginner-guide caption has both languages", guideSteps.filter((step) => step.narration).every((step) => step.narration.ko && step.narration.en) && guideSteps.filter((step) => step.narration).length >= 60, String(guideSteps.filter((step) => step.narration).length));
 const pair = { ko: "가", en: "a" };

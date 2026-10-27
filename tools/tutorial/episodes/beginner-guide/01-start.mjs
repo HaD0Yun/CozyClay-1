@@ -1,4 +1,5 @@
 // Chapter 1 · Start screen: project kind and settings, then Create.
+import { castFirstCharacter } from "../cast.mjs";
 import { chapterCard, clear, spot, t } from "./steps.mjs";
 
 export default {
@@ -44,5 +45,6 @@ export default {
 		clear("1.9b"),
 		{ id: "1.9c", click: "[data-testid=\"start-create\"]", until: "[data-testid=\"sequencer\"]" },
 		{ id: "1.9d", hold: 1500 },
+		...castFirstCharacter("1.10", t("새 프로젝트는 빈 무대입니다. 장면 보기의 \"추가\"에서 Y Bot을 골라 캐릭터를 놓으세요.", "A new project is an empty stage. Open Add in the Scene view and pick Y Bot to place a character.")),
 	],
 };
