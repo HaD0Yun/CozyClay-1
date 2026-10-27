@@ -2175,7 +2175,7 @@ value sets in `sanitizeProps` drop anything else).
 
 | Event | Properties | Meaning |
 | --- | --- | --- |
-| `scene:created` | `scene_source`, `previs_mode` | `previs_mode` is `storyboard` or `animation`; absent on events from before modes existed |
+| `scene:created` | `scene_source`, `previs_mode`, `cast_style` | `previs_mode` is `storyboard` or `animation`; absent on events from before modes existed. `cast_style` is `rig`, `capsule` or `hybrid`, sent with `scene_source: new_project` only |
 | `storyboard:panel_created` | `source` | `agent` (Studio Agent, MCP or any non-UI command) or `manual` (Board `+ Panel`, timeline add in a storyboard project) |
 | `storyboard:panel_stylized` | `outcome` | `ok` (the stylized picture is stored on the panel) or `error` (renderer not ready, entitlement or network refusal, storage failure) |
 | `cast:proxy_added` | `surface` | `assets` (Capsule figure tile), `agent` (Studio Agent or another non-UI command) or `mcp` (`add_character` live tool) |

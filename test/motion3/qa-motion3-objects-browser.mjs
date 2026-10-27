@@ -35,6 +35,9 @@ const waitFor = async (expression, ms = 60_000) => {
 };
 await send("Runtime.enable");
 
+// A new project starts on an empty stage: cast the Y Bot these checks drive.
+assert.ok(await waitFor("Boolean(window.__cozyclay?.runStudioAction)"), "Studio never exposed its actions");
+await evaluate(`(async () => { if (!window.__cozyclay.characters?.length) await window.__cozyclay.runStudioAction("character.add", { character: { id: "char-a", model: "y-bot-tpose" } }); })()`);
 assert.ok(await waitFor("Boolean(window.__cozyclay?.rigA && window.__cozyclay.runStudioAction)"), "Studio never exposed a rig");
 const first = await evaluate(`(async () => {
 	let doc = await window.__cozyclayProject.export();

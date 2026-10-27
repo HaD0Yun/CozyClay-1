@@ -34,7 +34,7 @@ This is the full disclosure behind the short version on [cozyclay.org/privacy](h
 | `ui:dead_click` | A click on a primary control that did nothing: `control` (as above) and `reason` (`aria_disabled` when the control was disabled, `refused` when the Studio refused the command, `no_effect` when nothing changed within half a second). At most 2 per control per session. Clicks into text fields are never observed |
 | `feature:used` | One signal per feature per session (`pose_edit` is a real pose change; `pose_save` is saving a pose to the library; `export_storyboard` and `export_render_pass` are counted too) |
 | `$pageview` | Funnel and drop-off analysis |
-| `scene:created` | Funnel and drop-off analysis; carries `previs_mode` (`storyboard` or `animation`) when the project has a mode |
+| `scene:created` | Funnel and drop-off analysis; carries `previs_mode` (`storyboard` or `animation`) when the project has a mode, and `cast_style` (`rig`, `capsule` or `hybrid`) for a new project |
 | `storyboard:panel_created` | A storyboard panel was added; `source` is `agent` or `manual`. No caption, name or id |
 | `storyboard:panel_stylized` | A Board panel Stylize finished; `outcome` is `ok` or `error`. No prompt, caption or image |
 | `cast:proxy_added` | A capsule figure was added to the scene; `surface` is `assets`, `agent` or `mcp`. No name or position |

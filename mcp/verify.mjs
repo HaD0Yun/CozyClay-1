@@ -129,13 +129,17 @@ check("add_character refuses an unknown posture", badPosture.isError === true, J
 console.log(`add_character proxy-figure cast line: ${proxyLine.trim()}`);
 check("capsule figure removal works", (await call("remove_character", { character: "C" })).startsWith("Removed C"));
 
-// Down to one character, the scene must refuse to empty its cast.
+// An empty stage is legal: the last character can go, and the scene still
+// describes and prompts without a cast.
 await call("remove_character", { character: "B" });
 const lastOne = await call("remove_character", { character: "A" });
-check("last character is protected", lastOne.includes("at least one character"), lastOne);
+check("the last character can be removed", lastOne.startsWith("Removed A") && lastOne.includes("CAST (total: 0"), lastOne);
+check("describe_scene reads an empty cast", (await call("describe_scene")).includes("CAST (total: 0"));
+const emptyPrompt = await client.callTool({ name: "render_prompt", arguments: { mode: "video", environment: "an empty studio", style: "flat light" } });
+check("render_prompt answers on an empty stage", emptyPrompt.isError !== true && typeof emptyPrompt.content?.[0]?.text === "string", JSON.stringify(emptyPrompt));
 
 // Re-cast the pair the prompt checks below rely on.
-await call("place_character", { character: "A", subject: "a detective in a wet trench coat" });
+await call("add_character", { subject: "a detective in a wet trench coat" });
 await call("add_character", { subject: "a courier holding a package", x: 1.6, z: 0.4, facing: -150 });
 const hiddenCast = await call("place_character", { character: "B", hidden: true });
 const hiddenCastLine = hiddenCast.split("\n").find((line) => /^\s+B /.test(line)) ?? "";

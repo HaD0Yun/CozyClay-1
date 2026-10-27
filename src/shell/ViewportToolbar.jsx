@@ -6,12 +6,11 @@ import { PRESETS, SHOT_ASPECT_PRESETS } from "../app-stage.jsx";
 import { CAMERA_PRESETS } from "../camera-move.js";
 import { PRIME_SET } from "../shot.js";
 import { CatalogueEntries } from "../object-catalog.jsx";
-import { CHARACTER_MODEL_IDS } from "../scenes.js";
 import { elementByPath } from "../studio-elements.js";
 import { saveAutoColor } from "../auto-color.js";
 import { trackFeature } from "../analytics.js";
 import { GUIDE_LABELS, nextGuideMode } from "../shot-guides.js";
-import GhostsMenuGroup from "./GhostsMenuGroup.jsx"; import { addCameraShot } from "./add-camera-shot.js";
+import GhostsMenuGroup from "./GhostsMenuGroup.jsx"; import { addCameraShot } from "./add-camera-shot.js"; import { addCharacterEntries } from "./add-character-entries.js";
 import "./viewport.css";
 
 // G1: the single mode+tool pill. Keys 1-5 and W/E/R are bound in App's
@@ -122,7 +121,7 @@ export default function ViewportToolbar() {
 		autoColor, setAutoColor, isCharacterSelection, partColoursChoice, embedMode,
 		agentCollapsed, addSceneObject, spawnCharacter, characters, flySpeed,
 		ikEditTool, setIkEditTool, motion, setRangePinPartPick,
-		previsMode, sculptView, requestSculptView, sculptParts, appContext, setToast,
+		previsMode, castStyle, sculptView, requestSculptView, sculptParts, appContext, setToast,
 	} = useStudioShell();
 	const menu = useOverlayMenu();
 
@@ -277,16 +276,14 @@ export default function ViewportToolbar() {
 							<CatalogueEntries onPick={(kind) => { addSceneObject(kind); menu.close(); }} />
 							<div className="add-object-group">
 								<span className="add-object-heading">{ko("Scene", "장면")}</span>
-								<button
-									type="button"
-									role="menuitem"
-									className="add-object-item"
-									data-add="character"
-									onClick={() => { spawnCharacter(CHARACTER_MODEL_IDS[0], characterSpawnX(characters.length), 0); menu.close(); }}
-								>
-									<span className="add-object-swatch vp-add-swatch-cast" aria-hidden="true" />
-									<span>{ko("Character", "캐릭터")}</span>
-								</button>
+								{addCharacterEntries(castStyle).map((entry) => (
+									<button key={entry.add} type="button" role="menuitem" className="add-object-item" data-add={entry.add}
+										onClick={() => { spawnCharacter(entry.model, characterSpawnX(characters.length), 0); menu.close(); }}
+									>
+										<span className="add-object-swatch vp-add-swatch-cast" aria-hidden="true" />
+										<span>{entry.label()}</span>
+									</button>
+								))}
 								<button
 									type="button"
 									role="menuitem"

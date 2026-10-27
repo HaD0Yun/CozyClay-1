@@ -25,9 +25,12 @@ export const PROJECT_VERSION = 5;
 export const PREVIS_MODES = Object.freeze(["storyboard", "animation"]);
 export const DEFAULT_PREVIS_MODE = "animation";
 
-export function normalizePrevisMode(value) {
-	return PREVIS_MODES.includes(value) ? value : DEFAULT_PREVIS_MODE;
-}
+export const normalizePrevisMode = (value) => (PREVIS_MODES.includes(value) ? value : DEFAULT_PREVIS_MODE);
+// Which bodies the project is cast with: rigged humanoids for detailed previs,
+// capsule figures for simple previs, or a mix. A file without the field
+// predates the choice and already holds a rig character, so it reads as hybrid.
+export const CAST_STYLES = Object.freeze(["rig", "capsule", "hybrid"]), DEFAULT_CAST_STYLE = "hybrid";
+export const normalizeCastStyle = (value) => (CAST_STYLES.includes(value) ? value : DEFAULT_CAST_STYLE);
 export const PROJECT_EXTENSION = ".cclayproject";
 export const WORKFLOW_VERSION = 1;
 export const WORKFLOW_STORAGE_KEY = "cozyclay.workflow.v1";
@@ -301,7 +304,7 @@ function readEmbeddedAssets(value, report) {
  * assetRef references them. Throws `resources-too-large` when the whole
  * manifest exceeds its budget.
  */
-export function createProjectDocument({ scenesDocument, workspaceLayout, customPoses, name, previsMode, assets, savedAt, workflow }) {
+export function createProjectDocument({ scenesDocument, workspaceLayout, customPoses, name, previsMode, castStyle, assets, savedAt, workflow }) {
 	const assetRecords = new Map();
 	for (const record of Array.isArray(assets) ? assets : []) {
 		const asset = embeddedAsset(record);
@@ -323,7 +326,7 @@ export function createProjectDocument({ scenesDocument, workspaceLayout, customP
 		kind: "project",
 		version: PROJECT_VERSION,
 		name: typeof name === "string" && name.trim() ? name.trim() : "Untitled",
-		previsMode: normalizePrevisMode(previsMode),
+		previsMode: normalizePrevisMode(previsMode), castStyle: normalizeCastStyle(castStyle),
 		...(Number.isFinite(savedAt) && savedAt > 0 ? { savedAt } : {}),
 		scenes: scenesDocument,
 		workspace: workspaceLayout ?? null,
@@ -355,7 +358,7 @@ export function buildAnimationProjectFromStoryboard(project) {
 		workspaceLayout: structuredClone(project?.workspaceLayout ?? null),
 		customPoses: structuredClone(project?.customPoses ?? []),
 		name: `${project?.name || "Untitled"} - ${ko("Animation", "애니메이션")}`,
-		previsMode: "animation",
+		previsMode: "animation", castStyle: project?.castStyle,
 				assets: project?.assets ?? [],
 		workflow: structuredClone(project?.workflow ?? createWorkflowGraph()),
 		savedAt: Date.now(),
@@ -367,8 +370,8 @@ export function buildAnimationProjectFromStoryboard(project) {
  * problems?, project? }. Invalid embedded records are skipped, each one
  * reported as a warning string and a `{ kind, id, code, message }` problem.
  * v2/v3 files carry images at the top-level `assets`; v4 moves everything
- * under `resources`; v5 adds the top-level `previsMode` (absent or unknown
- * reads as the default). Older files are read as-is, never rewritten.
+ * under `resources`; v5 adds the top-level `previsMode` and `castStyle`
+ * (absent or unknown reads as the default). Older files are read as-is, never rewritten.
  */
 export function readProjectDocument(raw) {
 	let parsed;
@@ -402,7 +405,7 @@ export function readProjectDocument(raw) {
 		problems,
 		project: {
 			name: typeof parsed.name === "string" && parsed.name.trim() ? parsed.name.trim() : "Untitled",
-			previsMode: normalizePrevisMode(parsed.previsMode),
+			previsMode: normalizePrevisMode(parsed.previsMode), castStyle: normalizeCastStyle(parsed.castStyle),
 			savedAt: Number.isFinite(parsed.savedAt) && parsed.savedAt > 0 ? parsed.savedAt : null,
 			scenesDocument: { version: scenes.version, activeSceneId: scenes.activeSceneId ?? null, scenes: scenes.scenes },
 			workspaceLayout: parsed.workspace && typeof parsed.workspace === "object" ? parsed.workspace : null,
@@ -549,17 +552,18 @@ export function loadProjectSession(storage = globalThis.localStorage) {
 		const value = JSON.parse(storage?.getItem(PROJECT_SESSION_KEY) || "null");
 		if (!value || typeof value !== "object") return null;
 		const name = typeof value.name === "string" ? value.name.trim() : "";
-		return name ? { name, previsMode: normalizePrevisMode(value.previsMode), updatedAt: Number.isFinite(value.updatedAt) ? value.updatedAt : 0 } : null;
+		return name ? { name, previsMode: normalizePrevisMode(value.previsMode), castStyle: normalizeCastStyle(value.castStyle), updatedAt: Number.isFinite(value.updatedAt) ? value.updatedAt : 0 } : null;
 	} catch {
 		return null;
 	}
 }
 
-export function storeProjectSession(name, previsMode = DEFAULT_PREVIS_MODE, storage = globalThis.localStorage) {
+// `identity` is the previs mode, or `{ previsMode, castStyle }`.
+export function storeProjectSession(name, identity = DEFAULT_PREVIS_MODE, storage = globalThis.localStorage) {
 	const normalized = typeof name === "string" ? name.trim() : "";
 	if (!normalized) return false;
 	try {
-		storage?.setItem(PROJECT_SESSION_KEY, JSON.stringify({ name: normalized, previsMode: normalizePrevisMode(previsMode), updatedAt: Date.now() }));
+		storage?.setItem(PROJECT_SESSION_KEY, JSON.stringify({ name: normalized, previsMode: normalizePrevisMode(identity?.previsMode ?? identity), castStyle: normalizeCastStyle(identity?.castStyle), updatedAt: Date.now() }));
 		return true;
 	} catch {
 		return false;

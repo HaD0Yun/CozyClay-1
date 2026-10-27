@@ -14,6 +14,7 @@ import {
 	createScene,
 	createSceneDocument,
 	createSceneStage,
+	createSeededSceneStage,
 	duplicateScene,
 	loadSceneDocumentFromStorage,
 	createCharacterEntry,
@@ -92,7 +93,16 @@ assert.equal(createSceneStage({}).sensorId, "fullFrame", "fullFrame is the defau
 assert.equal(createSceneStage({ sensorId: "super16" }).sensorId, "super16", "a named filmback survives stage normalization");
 assert.equal(createSceneStage({ sensorId: "unknown" }).sensorId, "fullFrame", "an unknown filmback repairs to fullFrame");
 
-const isolatedScenes = [createScene("A"), createScene("B")];
+// A new scene starts on an empty stage; the seed helper still yields the old
+// one-character cast, freshly owned per call.
+assert.deepEqual(createScene("Empty").stage.characters, [], "a new scene starts on an empty stage");
+assert.deepEqual(createSceneDocument().scenes[0].stage.characters, [], "a new document starts on an empty stage");
+assert.deepEqual(createSceneDocument({ seedCharacter: true }).scenes[0].stage.characters.map(({ id, model, posture }) => ({ id, model, posture })), [{ id: "char-a", model: "y-bot-tpose", posture: "stand" }], "the seeded document keeps the old Y Bot");
+assert.deepEqual(createSceneStage({ characters: [] }).characters, [], "an empty stored cast stays empty instead of reseeding char-a");
+assert.deepEqual(readSceneDocument(serializeSceneDocument(createSceneDocument())).document.scenes[0].stage.characters, [], "an empty stage survives save and reload");
+assert.equal(createSceneStage({ subject: "a lone detective" }).characters.length, 1, "a pre-v3 envelope without a cast list still migrates its fixed cast");
+assert.equal(readSceneDocument(JSON.stringify({ version: 2, activeSceneId: "s", scenes: [{ id: "s", name: "Old", objects: [] }] })).document.scenes[0].stage.characters[0].id, "char-a", "a pre-v3 document that stored no cast opens with the seed character");
+const isolatedScenes = [createScene("A"), createScene("B")].map((scene) => ({ ...scene, stage: createSeededSceneStage() }));
 isolatedScenes[0].stage.characters[0].x = 8;
 assert.equal(isolatedScenes[1].stage.characters[0].x, 0, "moving Scene A's actor leaves Scene B unchanged");
 

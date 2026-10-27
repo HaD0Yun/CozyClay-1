@@ -52,10 +52,12 @@ export function isProxyFigure(character) {
 export const DEFAULT_SUBJECT_ONE = "a young woman in a tan coat";
 export const DEFAULT_SUBJECT_TWO = "a man in a dark coat";
 
+// The one-character cast every scene used to open with. A new scene now
+// starts on an empty stage; legacy documents that never stored a cast, and
+// fixtures that want a body to work with, still seed this one.
+const SEED_CHARACTER = Object.freeze({ id: "char-a", model: DEFAULT_CHARACTER_MODEL, x: 0, z: 0, rot: 0, hidden: false, pose: null, subject: DEFAULT_SUBJECT_ONE });
 const DEFAULT_SCENE_STAGE = Object.freeze({
-	characters: Object.freeze([
-		Object.freeze({ id: "char-a", model: DEFAULT_CHARACTER_MODEL, x: 0, z: 0, rot: 0, hidden: false, pose: null, subject: DEFAULT_SUBJECT_ONE }),
-	]),
+	characters: Object.freeze([]),
 	hasCharSheet: false,
 	// The look reference for the location: a data URL so it survives save/load
 	environmentImage: null,
@@ -241,16 +243,17 @@ function migrateLegacyCast(source) {
 	return cast;
 }
 
-const STAGE_ENVELOPE_KEYS = new Set([
+const LEGACY_CAST_KEYS = Object.freeze(["charA", "charB", "showB", "poseA", "poseB", "subject", "subject2"]), STAGE_ENVELOPE_KEYS = new Set([
 	"characters", "hasCharSheet", "environmentImage", "environment", "style", "hasEnvSheet", "shotAspect", "cameraPresetId", "sensorId", "keyLight", "lighting",
-	"charA", "charB", "showB", "poseA", "poseB", "subject", "subject2",
+	...LEGACY_CAST_KEYS,
 ]);
 
 export function createSceneStage(stage = null) {
 	const source = plainObject(stage) ? stage : {};
-	const characters = Array.isArray(source.characters) && source.characters.length
+	// With no cast list, a pre-v3 envelope folds its fixed cast in; anything else is an empty stage.
+	const characters = Array.isArray(source.characters)
 		? source.characters.map((entry, index) => createCharacterEntry(entry, index))
-		: migrateLegacyCast(source);
+		: LEGACY_CAST_KEYS.some((key) => Object.hasOwn(source, key)) ? migrateLegacyCast(source) : [];
 	// Unknown extra keys (shotAspect was one, once) ride along so the envelope
 	// stays sealed-but-lossless; legacy cast keys are deliberately dropped.
 	const extras = {};
@@ -359,8 +362,13 @@ export function activeScene(scenes, activeSceneId) {
 	return index < 0 ? null : scenes[index];
 }
 
-export function createSceneDocument() {
-	const scene = createScene();
+// The stage a scene opened with before empty stages: one standing Y Bot.
+export const createSeededSceneStage = () => createSceneStage({ characters: [SEED_CHARACTER] });
+
+// A one-scene document on an empty stage. `{ seedCharacter: true }` gives
+// the scene the old one-character cast instead.
+export function createSceneDocument({ seedCharacter = false } = {}) {
+	const scene = { ...createScene(), ...(seedCharacter === true ? { stage: createSeededSceneStage() } : {}) };
 	return { version: SCENES_VERSION, activeSceneId: scene.id, scenes: [scene] };
 }
 
@@ -410,7 +418,8 @@ export function readSceneDocument(raw, legacyRaw = null) {
 			if (!plainObject(legacy) || legacy.version !== 1 || !Array.isArray(legacy.objects)) {
 				return { status: "corrupt", document: createSceneDocument(), dropped: 0, quarantineRaw: legacyRaw };
 			}
-			const document = createSceneDocument();
+			// A v1 scene had no stored cast; it always opened with the seed character.
+			const document = createSceneDocument({ seedCharacter: true });
 			document.scenes[0].objects = legacy.objects.filter(plainObject).map((object) => retireObjectKind(cloneValue(object)));
 			return { status: "migrated", document, dropped: legacy.objects.length - document.scenes[0].objects.length };
 		}
@@ -432,7 +441,9 @@ export function readSceneDocument(raw, legacyRaw = null) {
 	// v4 → v5 needs no step of its own: every cast member passes through
 	// createCharacterEntry, which fills the missing posture with "stand".
 	const legacyClock = payload.version < 4;
-	const repaired = repairDocument(payload, createSceneStage(payload.stage), legacyClock);
+	// Before v3 the cast lived on one global stage, and a document without one
+	// opened with the seed character.
+	const repaired = repairDocument(payload, payload.version < 3 && !plainObject(payload.stage) ? createSeededSceneStage() : createSceneStage(payload.stage), legacyClock);
 	return { status: migrating ? "migrated" : "valid", ...repaired };
 }
 

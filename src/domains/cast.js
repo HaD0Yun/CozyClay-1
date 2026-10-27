@@ -221,8 +221,6 @@ export function useCast(appContext) {
 	}
 
 	function removeCharacter(charId) {
-		const list = appContext.live.characters;
-		if (list.length <= 1) return;
 		domain.run('character.remove', { characterId: charId });
 		// The full-take cache remains native until the motion owner migrates.
 		if (!appContext.storeDomain('motion')) appContext.shared.motionFullRef.current.delete(charId);
@@ -373,6 +371,7 @@ export function useCast(appContext) {
 
 	function setLayerField(key, value) {
 		const entry = domain.read().find(entry => entry.id === domain.activeId) ?? domain.read()[0];
+		if (!entry) return;
 		const next = typeof value === 'function' ? value(entry.layer[key]) : value;
 		if (sameCastValue(entry.layer[key], next)) return;
 		return domain.run('cast.setLayer', { characterId: entry.id, layer: { [key]: next } });
@@ -743,7 +742,8 @@ export function useCast(appContext) {
 		return appContext.storeDomain('motion').switchLayer(entry.id);
 	}
 	function switchActiveCharacterLayer() {
-		const entry = domain.projection().find(entry => entry.id === domain.activeId) ?? domain.projection()[0];
+		// An empty stage loads no layer (id null).
+		const entry = domain.projection().find(entry => entry.id === domain.activeId) ?? domain.projection()[0] ?? { id: null };
 		const previous = appContext.shared.loadedLayerCharRef.current;
 		if (previous === entry.id) return;
 		switchNativeMotionLayer(previous, entry);
@@ -784,7 +784,6 @@ export function useCast(appContext) {
 			const live = appContext.live.state;
 			const character = characterForRef(live.characters, args.ref);
 			if (!character) throw new Error("Character not found");
-			if (live.characters.length <= 1) throw new Error("Cannot remove the final character");
 			domain.run('character.remove', { characterId: character.id });
 			return { id: character.id };
 		}
@@ -793,8 +792,10 @@ export function useCast(appContext) {
 	function toggleCharacterHidden(charId) { return domain.run('character.update', { characterId: charId, patch: { hidden: castMemberOf(charId).hidden !== true } }); }
 	domain.snapshotMotion = snapshotNativeMotion;
 	domain.syncLayer = () => {
+		// An empty stage has no layer to edit: the buffer holds no route.
 		const entry = domain.read().find(entry => entry.id === appContext.shared.loadedLayerCharRef.current) ?? domain.read()[0];
-		appContext.shared.bufferRef.current = { ...appContext.shared.bufferRef.current, ...entry.layer };
+		appContext.shared.bufferRef.current = { ...appContext.shared.bufferRef.current, ...(entry?.layer ?? { waypoints: [] }) };
+		if (!entry) return setActiveWaypointId(null);
 		
 		setActiveWaypointId(id => entry.layer.waypoints.some(waypoint => waypoint.id === id) ? id : null);
 	};
@@ -809,7 +810,7 @@ export function useCast(appContext) {
 		const shots = appContext.storeDomain('shot');
 		if (!shots) return;
 		const current = domain.projection(), active = current.find(entry => entry.id === domain.activeId) ?? current[0];
-		const extent = timelineContentExtent(current, active.id, appContext.shared.bufferRef.current.motion, null);
+		const extent = timelineContentExtent(current, active?.id ?? null, appContext.shared.bufferRef.current.motion, null);
 		domain.setTimeline(Math.max(24, timelineSpan(extent, shots.read(), shots.state().frameCount)));
 	};
 	domain.extendTimeline = domain.syncTimeline;
