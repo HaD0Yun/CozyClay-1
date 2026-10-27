@@ -13,7 +13,8 @@
 //   hold:  ms                            keep the frame still
 //   eval:  "<js>"                        run in the page and awaited (setup the viewer does not see)
 // `until` is a selector the step waits for after its action. A step without
-// narration joins the cue of the narrated step before it.
+// narration joins the cue of the narrated step before it. `speech: { ko?, en? }`
+// replaces what the voice reads (tools/tutorial/voice.mjs), not the caption.
 
 const ACTIONS = ["click", "type", "key", "drag", "wait", "hold", "eval"];
 const LANGUAGES = ["ko", "en"];
@@ -48,7 +49,11 @@ export function validateEpisode(steps) {
 			if (problem) errors.push(`${label}: ${problem}`);
 		}
 		if (step && Object.hasOwn(step, "until") && !isText(step.until)) errors.push(`${label}: until must be a selector`);
-		const unknown = Object.keys(step ?? {}).filter((key) => !["id", "narration", "until", ...ACTIONS].includes(key));
+		if (step && Object.hasOwn(step, "speech")) {
+			if (!step.narration) errors.push(`${label}: speech needs narration`);
+			for (const [language, text] of Object.entries(step.speech ?? {})) if (!LANGUAGES.includes(language) || !isText(text)) errors.push(`${label}: speech.${language} must be ko or en text`);
+		}
+		const unknown = Object.keys(step ?? {}).filter((key) => !["id", "narration", "speech", "until", ...ACTIONS].includes(key));
 		if (unknown.length) errors.push(`${label}: unknown field ${unknown.join(", ")}`);
 	});
 	return errors;
@@ -56,14 +61,21 @@ export function validateEpisode(steps) {
 
 export const actionOf = (step) => ACTIONS.find((name) => Object.hasOwn(step, name));
 
-/** One second to take in the new screen, then the wordier language at `wordsPerSecond`. */
-export function narrationMs(narration, wordsPerSecond) {
+/** Words per second when a cue has no voice clip; Korean `say` measures 1.7-1.9, so 1.6 leaves room. */
+export const DEFAULT_WPS = { ko: 1.6, en: 2.2 };
+
+/** One second to take in the new screen, then the slower language at its own words per second. */
+export function narrationMs(narration, wps) {
 	const words = (text) => text.trim().split(/\s+/).filter(Boolean).length;
-	return 1000 + Math.max(...LANGUAGES.map((language) => words(narration[language]))) / wordsPerSecond * 1000;
+	return 1000 + Math.max(...LANGUAGES.map((language) => words(narration[language]) / wps[language])) * 1000;
 }
 
-/** A step holds for max(action duration, narration estimate). */
-export const stepHoldMs = (actionMs, narration, wordsPerSecond) => Math.max(actionMs, narrationMs(narration, wordsPerSecond));
+/**
+ * How long a cue stays on screen: its clip plus a 0.4 s breath when there is
+ * voice, the narration estimate otherwise, and never less than its actions.
+ * The epsilon keeps float noise (4.66 * 1000 = 4660.000000000001) from adding a millisecond.
+ */
+export const stepHoldMs = (actionMs, narration, wps, audioS = null) => Math.max(actionMs, audioS === null ? narrationMs(narration, wps) : Math.ceil(audioS * 1000 - 1e-6) + 400);
 
 export function srtTime(ms) {
 	const total = Math.max(0, Math.round(ms));
