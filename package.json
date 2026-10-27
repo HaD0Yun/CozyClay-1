@@ -41,6 +41,7 @@
     "demo:api": "npm --prefix workers/api run dev",
     "demo:api:install": "npm --prefix workers/api ci",
     "qa:browser": "node tools/qa-browser.mjs --",
+    "tutorial:record": "node tools/tutorial/launch.mjs",
     "test:shot-authoring": "node test/verify-shot-authoring.mjs",
     "test:camera-follow": "node test/verify-camera-follow.mjs",
     "test:sample-at": "node test/verify-sample-at.mjs",
