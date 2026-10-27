@@ -1,13 +1,18 @@
 #!/usr/bin/env node
 // Tutorial recorder without a browser, `say` or ffmpeg: the episode schema,
-// the hold rule and the srt writer (tools/tutorial/episode.mjs), the voice
-// clip lookup (voice.mjs), the mux filter graph (mux.mjs), and the shipped episode.
+// chapters, the hold rule and the srt writer (tools/tutorial/episode.mjs), the
+// callout placement (overlay.mjs), the terminal sequence (terminal.mjs), the
+// voice clip lookup (voice.mjs), the mux and chapter-cut argv (mux.mjs), and
+// the shipped episodes.
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import firstVideo from "../tools/tutorial/episodes/first-video.mjs";
-import { DEFAULT_WPS, narrationMs, srtTime, stepHoldMs, toSrt, validateEpisode } from "../tools/tutorial/episode.mjs";
-import { bandHeightFor, muxArgs } from "../tools/tutorial/mux.mjs";
+import stubTour from "../tools/tutorial/episodes/stub-tour.mjs";
+import { DEFAULT_WPS, chapterFileName, joinTexts, normalizeEpisode, readingMs, srtTime, stepHoldMs, toSrt, validateEpisode } from "../tools/tutorial/episode.mjs";
+import { bandHeightFor, chapterCutArgs, muxArgs } from "../tools/tutorial/mux.mjs";
+import { calloutPlacement } from "../tools/tutorial/overlay.mjs";
+import { terminalSequence } from "../tools/tutorial/terminal.mjs";
 import { speechText, userClip } from "../tools/tutorial/voice.mjs";
 
 let failures = 0;
@@ -39,12 +44,12 @@ for (const [label, extra] of [["click", { click: "#go" }], ["click list", { clic
 }
 expect("an empty episode is rejected", validateEpisode([]).length === 1);
 expect("a step without an action is rejected", /exactly one action/.test(errorsFor({}).join()));
-expect("a step with two actions is rejected", /found 2/.test(errorsFor({ click: "#a", hold: 100 }).join()));
-expect("the first step must be narrated", /first step needs narration/.test(validateEpisode([{ id: "a", hold: 1 }]).join()));
+expect("a step with two actions is rejected", /found 2/.test(errorsFor({ click: "#a", key: "Space" }).join()));
+expect("a silent first step is valid", validateEpisode([{ id: "a", hold: 1 }]).length === 0);
 expect("a silent step after a narrated one is valid", validateEpisode([step({ hold: 1 }), { id: "b", hold: 1 }]).length === 0);
 expect("a type into without text is rejected", /type needs/.test(errorsFor({ type: { into: "#name" } }).join()));
 expect("an empty eval is rejected", /eval needs/.test(errorsFor({ eval: " " }).join()));
-expect("a step missing Korean narration is rejected", /narration\.ko/.test(validateEpisode([{ id: "a", narration: { en: "hi" }, hold: 1 }]).join()));
+expect("a step missing Korean narration is rejected", /narration needs ko and en/.test(validateEpisode([{ id: "a", narration: { en: "hi" }, hold: 1 }]).join()));
 expect("duplicate ids are rejected", /duplicate id/.test(validateEpisode([step({ hold: 1 }), step({ hold: 1 })]).join()));
 expect("an unknown field is rejected", /unknown field speed/.test(errorsFor({ hold: 1, speed: 2 }).join()));
 expect("a drag without a target is rejected", /drag needs/.test(errorsFor({ drag: { from: "#a" } }).join()));
@@ -52,10 +57,12 @@ expect("a negative hold is rejected", /hold needs/.test(errorsFor({ hold: -1 }).
 expect("an empty click list is rejected", /click needs/.test(errorsFor({ click: [] }).join()));
 
 const even = { ko: 2.5, en: 2.5 };
-expect("narration time is one second plus the slower language", narrationMs(narration, even) === 3000, String(narrationMs(narration, even)));
-expect("each language reads at its own rate", narrationMs(narration, { ko: 1, en: 2.5 }) === 4000, String(narrationMs(narration, { ko: 1, en: 2.5 })));
-expect("Korean defaults to 1.6 words per second", DEFAULT_WPS.ko === 1.6 && DEFAULT_WPS.en === 2.2);
-expect("without a clip a step holds for its narration when the action is quick", stepHoldMs(300, narration, even) === 3000);
+expect("reading time is 1.2 s plus the slower language", readingMs(narration, even) === 3200, String(readingMs(narration, even)));
+expect("each language reads at its own rate", readingMs(narration, { ko: 1, en: 2.5 }) === 4200, String(readingMs(narration, { ko: 1, en: 2.5 })));
+expect("a video reads in its own language", readingMs(narration, { ko: 1, en: 2.5 }, "en") === 3200 && readingMs(narration, { ko: 1, en: 2.5 }, "ko") === 4200);
+expect("reading speeds default to ko 1.6 and en 2.5 words per second", DEFAULT_WPS.ko === 1.6 && DEFAULT_WPS.en === 2.5);
+expect("a callout reads its label and note together", readingMs(joinTexts({ ko: "아웃라이너", en: "Outliner" }, { ko: "장면 목록", en: "Every item in the scene" }), DEFAULT_WPS, "en") === 3600);
+expect("without a clip a step holds for its reading time when the action is quick", stepHoldMs(300, narration, even) === 3200 && stepHoldMs(300, narration, even, null, "en") === 3200);
 expect("a step holds for its action when the action is slow", stepHoldMs(4500, narration, even) === 4500 && stepHoldMs(4500, narration, even, 2) === 4500);
 expect("with a clip the hold is the clip plus 0.4 s, rounded up", stepHoldMs(300, narration, even, 4.66) === 5060 && stepHoldMs(0, narration, even, 1.0001) === 1401);
 expect("a clip overrides the words-per-second estimate", stepHoldMs(0, narration, { ko: 0.1, en: 0.1 }, 2) === 2400);
@@ -95,6 +102,50 @@ const cues = [{ startMs: 500, endMs: 2500, narration }, { startMs: 2500, endMs: 
 const expectedEn = "1\n00:00:00,500 --> 00:00:02,500\none two three four five\n\n2\n00:00:02,500 --> 00:01:01,000\nnext\n";
 expect("the srt writer numbers cues and spans each hold", toSrt(cues, "en") === expectedEn, JSON.stringify(toSrt(cues, "en")));
 expect("the Korean track carries the Korean narration", toSrt(cues, "ko").includes("\n하나 둘 셋\n") && toSrt(cues, "ko").endsWith("다음\n"));
+
+// Chapters: shape, naming, validation of the teaching actions.
+expect("the stub tour is valid", validateEpisode(stubTour).length === 0, validateEpisode(stubTour).join("; "));
+expect("the stub tour has five chapters", normalizeEpisode(stubTour).chapters.map((chapter) => chapter.id).join() === "intro,install,start,editor,outro");
+expect("a flat episode is one unnamed chapter", JSON.stringify(normalizeEpisode([{ id: "a", hold: 1 }]).chapters.map((chapter) => [chapter.id, chapter.title])) === '[["main",null]]' && normalizeEpisode([]).chaptered === false);
+expect("chapter files are numbered from 01", chapterFileName(0, "install", "ko") === "01-install.ko.mp4" && chapterFileName(11, "export", "en") === "12-export.en.mp4");
+const pair = { ko: "가", en: "a" };
+const chaptered = (steps, extra = {}) => validateEpisode({ title: pair, chapters: [{ id: "one", title: pair, steps }], ...extra });
+expect("a spotlight with label and note is valid", chaptered([{ id: "s", spotlight: ".x", label: pair, note: pair, hold: 2000 }]).length === 0);
+expect("a spotlight without a label is rejected", /spotlight needs/.test(chaptered([{ id: "s", spotlight: ".x" }]).join()));
+expect("spotlight null clears", chaptered([{ id: "s", spotlight: null }]).length === 0);
+expect("label belongs to a spotlight only", /unknown field label/.test(chaptered([{ id: "s", click: ".x", label: pair }]).join()));
+expect("hold times a spotlight, card or terminal, nothing else", /hold only times/.test(chaptered([{ id: "s", click: ".x", hold: 5 }]).join()) && chaptered([{ id: "t", terminal: { typed: "npx cozyclay", lines: [] }, hold: 5 }]).length === 0);
+expect("menu needs open and then", chaptered([{ id: "m", menu: { open: "#a", then: "#b" } }]).length === 0 && /menu needs/.test(chaptered([{ id: "m", menu: { open: "#a" } }]).join()));
+expect("cards: opening, closing or a titled chapter card", chaptered([{ id: "o", card: "opening" }, { id: "c", card: "closing" }, { id: "t", card: { title: pair, subtitle: pair } }]).length === 0 && /card needs/.test(chaptered([{ id: "x", card: { subtitle: pair } }]).join()));
+expect("an opening card needs the episode title", /opening card needs the episode title/.test(validateEpisode({ chapters: [{ id: "one", steps: [{ id: "o", card: "opening" }] }] }).join()));
+expect("studio must be true", chaptered([{ id: "s", studio: true }]).length === 0 && /studio must be true/.test(chaptered([{ id: "s", studio: "yes" }]).join()));
+expect("chapter ids are file-safe and unique", /lowercase/.test(validateEpisode({ chapters: [{ id: "Bad Id", steps: [{ id: "a", hold: 1 }] }] }).join()) && /duplicate id/.test(validateEpisode({ chapters: [{ id: "a", steps: [{ id: "x", hold: 1 }] }, { id: "a", steps: [{ id: "y", hold: 1 }] }] }).join()));
+expect("step ids are unique across chapters", /duplicate id/.test(validateEpisode({ chapters: [{ id: "a", steps: [{ id: "x", hold: 1 }] }, { id: "b", steps: [{ id: "x", hold: 1 }] }] }).join()));
+
+// Callout placement: right, left, below, above, then the roomiest side clamped.
+const viewport = { width: 1600, height: 1000 };
+const box = { width: 300, height: 80 };
+const place = (x, y, width, height) => calloutPlacement({ x, y, width, height }, box, viewport);
+expect("a callout goes right of a target with room", JSON.stringify(place(100, 400, 200, 50)) === JSON.stringify({ side: "right", x: 316, y: 385 }), JSON.stringify(place(100, 400, 200, 50)));
+expect("a callout goes left when the right edge is near", JSON.stringify(place(1350, 400, 200, 50)) === JSON.stringify({ side: "left", x: 1034, y: 385 }), JSON.stringify(place(1350, 400, 200, 50)));
+expect("a callout goes below a full-width target", JSON.stringify(place(20, 100, 1560, 60)) === JSON.stringify({ side: "below", x: 650, y: 176 }), JSON.stringify(place(20, 100, 1560, 60)));
+expect("a callout goes above a full-width target at the bottom", JSON.stringify(place(20, 880, 1560, 60)) === JSON.stringify({ side: "above", x: 650, y: 784 }), JSON.stringify(place(20, 880, 1560, 60)));
+const huge = place(0, 0, 1600, 1000);
+expect("a callout for a target filling the frame is clamped inside it", huge.x >= 12 && huge.x + box.width <= 1588 && huge.y >= 12 && huge.y + box.height <= 988, JSON.stringify(huge));
+expect("a callout beside a target at the top edge stays inside", place(1300, 0, 280, 20).y === 12, JSON.stringify(place(1300, 0, 280, 20)));
+
+// Terminal: typed characters, then enter, then the lines.
+const sequence = terminalSequence({ typed: "npx", lines: ["one", "two"] });
+expect("the terminal types each character, then enter, then each line", sequence.events.map((event) => event.kind + (event.text ?? "")).join() === "charn,charp,charx,enter,lineone,linetwo", JSON.stringify(sequence.events));
+expect("the terminal events are timed in order", JSON.stringify(sequence.events.map((event) => event.at)) === "[700,785,870,1405,2005,2325]" && sequence.totalMs === 2325, JSON.stringify(sequence));
+expect("a terminal with no lines ends at enter", terminalSequence({ typed: "a", lines: [] }).totalMs === 1235);
+
+// Chapter cuts and an episode without captions.
+const cut = chapterCutArgs({ input: "full.mp4", output: "02-install.ko.mp4", startMs: 3400, endMs: 10900, audio: false });
+expect("a chapter cut seeks to its start and runs its length", cut.join(" ").includes("-ss 3.400 -t 7.500 -i full.mp4") && cut.includes("-an") && cut.at(-1) === "02-install.ko.mp4");
+expect("a voiced chapter cut keeps aac", chapterCutArgs({ input: "a", output: "b", startMs: 0, endMs: 1000, audio: true }).includes("aac"));
+const bare = muxArgs({ base: "cap.mp4", output: "out.mp4", cues: [], clips: new Map(), captions: [], endMs: 3000, bandHeight: 130 });
+expect("an episode without narration still gets the band and no audio", bare.includes("[v]") && !bare.includes("aac"));
 
 if (failures > 0) {
 	console.error(`\n${failures} tutorial recorder check(s) failed`);

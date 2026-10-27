@@ -6,14 +6,16 @@
 const OVERLAY = `(() => {
 	if (window.__tutorialCursor) return;
 	const root = document.createElement("div");
-	root.style.cssText = "position:fixed;inset:0;pointer-events:none;z-index:2147483647";
+	root.className = "tt-pointer-host";
+	root.style.cssText = "position:fixed;inset:0;pointer-events:none;z-index:2147483647;transition:opacity .3s";
 	const pointer = document.createElement("div");
 	pointer.style.cssText = "position:absolute;left:0;top:0;width:28px;height:28px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))";
 	pointer.innerHTML = '<svg viewBox="0 0 28 28" width="28" height="28"><path d="M3 2 L3 22 L8.5 17 L12.5 25.5 L16 24 L12 15.8 L19.5 15.5 Z" fill="#fff" stroke="#111" stroke-width="1.6" stroke-linejoin="round"/></svg>';
 	const keycap = document.createElement("div");
 	keycap.style.cssText = "position:absolute;left:50%;bottom:72px;transform:translateX(-50%);padding:10px 18px;border-radius:10px;background:rgba(20,20,24,.86);color:#fff;font:600 22px/1 system-ui,sans-serif;letter-spacing:.04em;opacity:0;transition:opacity .18s";
 	root.append(pointer, keycap);
-	document.documentElement.append(root);
+	const mount = () => document.documentElement.append(root);
+	if (document.documentElement) mount(); else document.addEventListener("DOMContentLoaded", mount);
 	let x = innerWidth / 2, y = innerHeight / 2, keycapTimer = 0;
 	const place = () => { pointer.style.transform = "translate(" + (x - 3) + "px," + (y - 2) + "px)"; };
 	place();
@@ -87,9 +89,20 @@ export function createInput(cdp, { mac }) {
 		await sleep(250);
 	};
 	return {
-		install: () => cdp.evaluate(OVERLAY),
+		/** The pointer and the teaching overlay on this page and every page the episode opens next. */
+		async install(...extra) {
+			for (const source of [OVERLAY, ...extra]) {
+				await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source });
+				await cdp.evaluate(source);
+			}
+		},
 		locate,
 		click: async (selector) => press(await need(selector)),
+		/** Glide to the element and rest there without pressing. */
+		async hover(selector) {
+			const point = await need(selector);
+			await glide(point.x, point.y);
+		},
 		async drag(from, to) {
 			const start = await pointOf(from);
 			const end = typeof to === "string" ? await need(to) : { x: start.x + to.dx, y: start.y + to.dy };

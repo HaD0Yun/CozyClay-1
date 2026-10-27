@@ -42,7 +42,7 @@ export function muxArgs({ base, output, cues, clips, captions, endMs, bandHeight
 	return [
 		"-hide_banner", "-loglevel", "error", "-y", ...inputs,
 		"-filter_complex", filters.join(";"),
-		"-map", `[v${cues.length - 1}]`, ...(voiced ? ["-map", "[aout]", "-c:a", "aac", "-b:a", "128k"] : []),
+		"-map", cues.length ? `[v${cues.length - 1}]` : "[v]", ...(voiced ? ["-map", "[aout]", "-c:a", "aac", "-b:a", "128k"] : []),
 		"-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p",
 		"-t", seconds(endMs), "-movflags", "+faststart", output,
 	];
@@ -50,3 +50,12 @@ export function muxArgs({ base, output, cues, clips, captions, endMs, bandHeight
 
 /** Caption band height for a frame height: about 13%, even, so two lines fit. */
 export const bandHeightFor = (height) => Math.round((height * 0.13) / 2) * 2;
+
+/** ffmpeg argv cutting [startMs, endMs) of the finished episode into one chapter file, re-encoded for exact cuts. */
+export function chapterCutArgs({ input, output, startMs, endMs, audio }) {
+	return [
+		"-hide_banner", "-loglevel", "error", "-y", "-ss", seconds(startMs), "-t", seconds(endMs - startMs), "-i", input,
+		"-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p",
+		...(audio ? ["-c:a", "aac", "-b:a", "128k"] : ["-an"]), "-movflags", "+faststart", output,
+	];
+}
