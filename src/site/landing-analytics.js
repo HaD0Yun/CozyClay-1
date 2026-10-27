@@ -7,7 +7,7 @@ import { LANDING_CTA_TARGETS } from "../analytics-strict.js";
 const COPY_TARGETS = [["--via site", "copy_npx"], ["git clone", "copy_clone"], ["mcpServers", "copy_mcp"], ["cclay live", "copy_terminal"]];
 
 /** The landing:cta_clicked target for a clicked element, or null when it is not a call to action. */
-export function ctaTarget(element) {
+function ctaTarget(element) {
 	const copy = element.closest?.("button.copy[data-copy]");
 	if (copy) return COPY_TARGETS.find(([needle]) => copy.dataset.copy.includes(needle))?.[1] ?? null;
 	const href = element.closest?.("a[href]")?.getAttribute("href") ?? "";

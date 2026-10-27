@@ -743,7 +743,8 @@ function disabledReason(env) {
 	return runtime.kind === "disabled" ? runtime.reason : getAnalyticsOptOut() ? "opted out" : null;
 }
 
-export async function initAnalytics() {
+/** `lite` (the landing page): $pageview and explicit events only; no session, error, long-task or device signals. */
+export async function initAnalytics({ lite = false } = {}) {
 	if (initialized || initPromise) return initPromise;
 	// Explicit hosted opt-in only. This flag never changes consent or build
 	// policy; npm installations use the CLI-owned state instead.
@@ -809,11 +810,8 @@ export async function initAnalytics() {
 			globalThis.__cozyclayAnalytics = { instance: posthog };
 			posthog.capture("$pageview");
 			sessionStartedAt = Date.now();
-			installSessionEndListeners(resolved, globalProperties);
-			installErrorListeners();
-			observeLongTasks();
-			void recordDeviceProfile();
-			if (resolved.distribution === "npm") {
+			if (!lite) { installSessionEndListeners(resolved, globalProperties); installErrorListeners(); observeLongTasks(); void recordDeviceProfile(); }
+			if (resolved.distribution === "npm" && !lite) {
 				track("app:session_started");
 				if (resolved.firstLaunch) {
 					const heardFrom = resolved.firstLaunchHeardFrom;
