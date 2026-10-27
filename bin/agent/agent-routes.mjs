@@ -13,7 +13,7 @@ import { createAgentRunner } from "./agent-runner.mjs";
 import { createProviderRoutes } from "./provider-routes.mjs";
 import { STUDIO_SYSTEM_PROMPT_STORYBOARD } from "./studio-prompt.mjs";
 import { studioTransaction } from "./studio-turn-transaction.mjs";
-import { agentFailureCode, failureCodeOf } from "./agent-failure-codes.mjs";
+import { agentFailureCode, failureCodeOf, frameCodeOf } from "./agent-failure-codes.mjs";
 
 // Values the codex backend accepts for reasoning.effort (its own 400 lists them).
 export const REASONING_EFFORTS = ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"];
@@ -212,7 +212,7 @@ function errorInfo(error, quota) {
 	if (error?.code === "entitlement") return { code: "entitlement", ...explain("This account cannot generate images.") };
 	if (error?.code === "overloaded") return { code: "overloaded", ...explain("The model service is overloaded right now. Try again in a moment.") };
 	if (error?.code === "server_error") return { code: "overloaded", ...explain("The model service hit an internal error. Try again in a moment.") };
-	return { code: "upstream", ...explain("The model or live editor could not complete this turn.") };
+	return { code: frameCodeOf(error), ...explain("The model or live editor could not complete this turn.") };
 }
 
 /** Use the existing client and its request queue, retaining failure headers that
@@ -420,8 +420,8 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 	};
 	const handleStudioTurn = async (req, res, value, path) => {
 		const { StudioProtocolError, validateStudioContextFreshness } = await import("../../src/studio-agent-protocol.js");
-		const [{ createStudioTools }, { encodeStudioContext }, { createScriptTool }, { runSupervisor, shouldSupervise }, { createPlanTool }] = await Promise.all([
-			import("./studio-tools.mjs"), import("../../src/studio-agent-context.js"), import("./script-tool.mjs"), import("./supervisor.mjs"), import("./plan-tool.mjs"),
+		const [{ createStudioTools }, { encodeStudioContext }, { createScriptTool }, { runSupervisor, shouldSupervise }, { createPlanTool }, { followUpExchange }] = await Promise.all([
+			import("./studio-tools.mjs"), import("../../src/studio-agent-context.js"), import("./script-tool.mjs"), import("./supervisor.mjs"), import("./plan-tool.mjs"), import("./supervisor-followup.mjs"),
 		]);
 		const hubDeps = await runtime; const hub = hubDeps.liveHub || liveHub;
 		if (path === "/agent/stop") {
@@ -608,7 +608,7 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 			const info = errorInfo(error);
 			turnOutcome = controller.signal.aborted ? "cancelled" : "failed";
 			turnFailureCode = controller.signal.aborted ? "aborted" : agentFailureCode(error, controller.signal, toolFailed);
-			send({ type: "error", code: controller.signal.aborted ? "aborted" : error.code || "upstream", message: info.status === undefined ? error.message : info.message, ...(info.status === undefined ? {} : { status: info.status }) });
+			send({ type: "error", code: controller.signal.aborted ? "aborted" : frameCodeOf(error), message: info.status === undefined ? error.message : info.message, ...(info.status === undefined ? {} : { status: info.status }) });
 			emitFrame({ type: "done" });
 		}
 		if (controller.signal.aborted) { turnOutcome = "cancelled"; turnFailureCode = "aborted"; }
@@ -621,7 +621,7 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 			let frame;
 			try {
 				frame = await runSupervisor({ registry: await ensureWorkflowModels(), modelKey, effort: process.env.COZYCLAY_SUPERVISOR_EFFORT || "high", turnId: value.turnId, request: value.text, frames: turnFrames, reply: lastReply,
-					hub, workspaceHandle: value.context.host.workspaceHandle, admission, baseline: value.context, actions: current?.actionIndex ?? [] });
+					hub, workspaceHandle: value.context.host.workspaceHandle, admission, baseline: value.context, actions: current?.actionIndex ?? [], previousExchange: followUpExchange(value.text, () => sessionStore.read(value.sessionId)?.history) });
 			} catch (error) {
 				frame = { type: "supervisor", turnId: value.turnId, verdict: "unavailable", model: modelKey, effort: null, elapsedMs: Date.now() - startedAt, summary: "", items: [], issues: [], fixes: [], droppedFixes: [], counts: { blocker: 0, concern: 0, note: 0, fixes: 0 }, reason: "The supervisor could not start." };
 			}

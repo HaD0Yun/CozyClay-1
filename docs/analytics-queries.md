@@ -13,6 +13,7 @@ handoff. A handoff does not prove that the operating system saved the file.
 | `export:attempt_failed` | Started properties plus `duration_bucket`, `failure_code`, `stage`, `progress` |
 | `export:attempt_cancelled` | Started properties plus `duration_bucket`, `failure_code=aborted`, `stage`, `progress` |
 | `export:saved` | `method`, `reason` (one per saved file; not part of an attempt) |
+| `export:menu_opened` | `surface`, `mode`, `webcodecs`, `shots` (one per Export flyout open; not part of an attempt) |
 
 - `attempt_id`: fresh random 32-character lowercase hexadecimal value, held only
   by that attempt. It is not persisted or derived from an installation, filename,
@@ -64,6 +65,19 @@ file, without a file name or path:
 It is not an attempt outcome: do not count it as a success or join it into the
 lifecycle numerator. A multi-file export emits several.
 
+`export:menu_opened` fires once each time the Export flyout opens, by click or
+keyboard; reopening counts again and there is no session cap. `surface` is
+`studio` or `embed`, `mode` is `animation` or `storyboard`, `shots` the shot
+count bucket (panels in a storyboard; `0`, `1-3`, `4-10`, `gte11`), and
+`webcodecs` is `true` when the window has both `VideoEncoder` and `VideoFrame`.
+That is a synchronous presence check, not `isConfigSupported`, so `true` does
+not promise an MP4 export will encode. For menu -> attempt conversion, join
+`export:menu_opened` to `export:attempt_started` by `distinct_id` and
+`$session_id`, and split by `webcodecs`: a low rate with `webcodecs = false`
+reads as "could not use it", a low rate after opening as "did not choose it",
+and no `export:menu_opened` at all as "did not find it". Rows before this
+event existed have no menu opens; do not read them as zero.
+
 `track()` drops any event name outside the allowlist (`EVENT_PROPERTIES` in
 `src/analytics.js`). Before the analytics hygiene release, unknown names were
 sent with empty properties; such rows hold no data and can be ignored.
@@ -81,7 +95,10 @@ clock or randomness failure cannot stop the export. Reloads, tab closure,
 opt-out, blocked delivery or process termination can leave unresolved starts or
 orphan terminals. No recovery event is invented. QA helpers that invoke a
 top-level export use pipeline completion; the raw `__exportOffscreen` test seam
-is an internal encoder probe, not a user attempt.
+is an internal encoder probe and the `exportKeyframePack` QA seam is a reference
+export without the download; neither is a user attempt.
+Exclude keyframe_pack rows from that seam before this change by their shape: no
+`objects`, `surface` studio, up to several starts per second from one id.
 
 ### Compatibility mapping
 
@@ -864,8 +881,8 @@ Historical `feature:used(mcp_connected)` is a connection signal, not work.
 | `agent:turn_succeeded` | `turn_id`, `duration_bucket` |
 | `agent:turn_failed`, `agent:turn_cancelled` | `turn_id`, `duration_bucket`, `failure_code` |
 | `agent:result_applied` | `turn_id` |
-| `mcp:tool_requested` | `request_id`, `tool_category` |
-| `mcp:tool_executed` | `request_id`, `tool_category`, `outcome`, `duration_bucket` |
+| `mcp:tool_requested` | `request_id`, `tool_category`, `tool_name` |
+| `mcp:tool_executed` | `request_id`, `tool_category`, `tool_name`, `outcome`, `duration_bucket` |
 | `mcp:result_applied` | `request_id` |
 
 - IDs are fresh 128-bit secure random values, encoded as 32 lowercase hex
@@ -879,8 +896,9 @@ Historical `feature:used(mcp_connected)` is a connection signal, not work.
   execution start. No raw duration reaches analytics.
 - Workflow `failure_code`: `aborted`, `capture_failed`, `generation_failed`,
   `unknown` (including missing node input). Agent: `aborted`, `auth`,
-  `rate_limited`, `tool_failed`, `upstream`, `key_refused`, `stale_scene`,
-  `capability_missing`, `busy`, `invalid_request`, `unknown`. Never raw error
+  `rate_limited`, `tool_failed`, `upstream`, `network`, `key_refused`,
+  `stale_scene`, `capability_missing`, `busy`, `invalid_request`, `unknown`.
+  Never raw error
   prose.
 - New Agent codes, split out of `upstream` and `auth` in the analytics hygiene
   release (split by `app_version`; older rows keep the coarse code):
@@ -896,7 +914,24 @@ Historical `feature:used(mcp_connected)` is a connection signal, not work.
     `TARGET_NOT_READY`.
   - `invalid_request`: `INVALID_*`, HTTP 400, or another 4xx refusal such as
     409 `AMBIGUOUS_TARGET`.
-  - `upstream` keeps provider overload, 5xx, network and unclassified errors.
+  - `upstream`: provider trouble only, an HTTP 5xx or the runner's
+    `overloaded`, `upstream` or `truncated` (or the provider's `server_error`).
+    A 4xx status beside one of those codes reads by the status.
+  - `network`: the request never got an HTTP answer. A fetch `TypeError`
+    (offline, refused, DNS) or a socket code such as `ECONNRESET`, `ENOTFOUND`
+    or `ETIMEDOUT` on the error or its `cause`. Read from `name`, `code` and
+    `status` only, never the message. `network` covers both hops: browser to
+    sidecar, and sidecar to provider. The sidecar sends the same code on its
+    error frame for an error it throws itself, and a provider request that
+    fails in the model client reads `network` from the thrown error's socket
+    code or `TypeError`, kept before the client folds it into a string, or,
+    when only that string survives, from the runner's existing message
+    classification (`fetch failed`, `ECONNREFUSED`, ...). An HTTP status still
+    wins over both.
+  - `unknown`: anything else, including a code outside this set and an error
+    whose fields throw.
+  - Rows before the `network`/`unknown` split carry `upstream` for all three;
+    compare by `app_version`.
   Source tables: `src/workflow/agent-failure-codes.js` and
   `bin/agent/agent-failure-codes.mjs` (kept identical by
   `test/verify-agent-execution.mjs`).
@@ -904,6 +939,20 @@ Historical `feature:used(mcp_connected)` is a connection signal, not work.
   `frame_capture`, `image_generate`, `scene_write`, `other`.
 - MCP `tool_category`: `read`, `camera`, `scene_write`, `prompt_authoring`,
   `frame_capture`, `motion_generate`, `motion_apply`, `project_io`, `other`.
+  `studio_commands` counts as `read`; `studio_run` stays `other` because its
+  kind depends on its action, so read it by `tool_name`.
+- MCP `tool_name` (on `mcp:tool_requested` and `mcp:tool_executed` only): the
+  live tool that ran, one of `describe_scene`, `describe_shot`,
+  `render_prompt`, `mark_camera_move`, `describe_camera_move`, `save_project`,
+  `set_camera`, `frame_shot`, `add_character`, `place_character`,
+  `remove_character`, `focus_character`, `place_object`, `import_mesh`,
+  `sculpt_object`, `compare_sculpt`, `group_objects`, `update_object`,
+  `remove_object`, `apply_batch`, `add_scene`, `switch_scene`, `open_project`,
+  `capture_frame`, `studio_commands`, `studio_run`, or `other` for any name
+  outside that list. Source: `MCP_TOOL_NAMES` in `src/analytics.js`, held equal
+  to `liveWorkspaceTools` in `mcp/tool-handlers.mjs` by
+  `test/verify-analytics.mjs`. Rows sent before this change (and by older MCP
+  servers) have no `tool_name`; before it, `studio_commands` counted as `other`.
 - Agent tool `outcome`: `succeeded`, `failed`, `cancelled`. MCP also permits
   `uncertain` when editor acknowledgement/verification cannot establish an
   outcome. Uncertainty is not an ordinary failure or confirmed application.
@@ -1032,7 +1081,9 @@ execute several tools in the same category. Browser wire deduplication suppresse
 repeat frames without collapsing separate tool invocations. Tool counts are not
 Agent turn demand. For MCP category reliability, include requested `tool_category`
 in `per_execution`; retain the request-ID cohort so missing terminal frames are
-not silently excluded from the denominator.
+not silently excluded from the denominator. For per-tool reliability and the
+applied ratio per tool, group the same cohort by requested `tool_name`; rows
+without `tool_name` predate it.
 
 This query applies #270's type-exact internal-QA exclusion to every source event.
 Do not infer traffic or channel use from prompts, responses, arguments, labels,
@@ -1259,6 +1310,9 @@ Exclude `internal_qa = true` with
   about 1 Hz, so a run left playing in the background reads as late.
 - `app:session_started` is sent by npm installs only. Hosted sessions start
   with `$pageview`; use it in place of `app:session_started` there.
+- Hosted rows carry `app_version` from the deployed package version as of
+  the change that added the fallback (the deploy sets no `VITE_APP_VERSION`).
+  Earlier hosted rows have no `app_version`.
 
 ## 1.1 Step funnel (update: `studio:ready`)
 
@@ -2175,7 +2229,7 @@ value sets in `sanitizeProps` drop anything else).
 
 | Event | Properties | Meaning |
 | --- | --- | --- |
-| `scene:created` | `scene_source`, `previs_mode` | `previs_mode` is `storyboard` or `animation`; absent on events from before modes existed |
+| `scene:created` | `scene_source`, `previs_mode`, `cast_style` | `previs_mode` is `storyboard` or `animation`; absent on events from before modes existed. `cast_style` is `rig`, `capsule` or `hybrid`, sent with `scene_source: new_project` only |
 | `storyboard:panel_created` | `source` | `agent` (Studio Agent, MCP or any non-UI command) or `manual` (Board `+ Panel`, timeline add in a storyboard project) |
 | `storyboard:panel_stylized` | `outcome` | `ok` (the stylized picture is stored on the panel) or `error` (renderer not ready, entitlement or network refusal, storage failure) |
 | `cast:proxy_added` | `surface` | `assets` (Capsule figure tile), `agent` (Studio Agent or another non-UI command) or `mcp` (`add_character` live tool) |

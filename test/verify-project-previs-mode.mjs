@@ -68,7 +68,7 @@ assert.equal(storeProjectSession("Boards", "storyboard", storage), true);
 assert.equal(JSON.parse(memory.get(PROJECT_SESSION_KEY)).previsMode, "storyboard");
 assert.equal(loadProjectSession(storage).previsMode, "storyboard");
 memory.set(PROJECT_SESSION_KEY, JSON.stringify({ name: "Old session" }));
-assert.deepEqual(loadProjectSession(storage), { name: "Old session", previsMode: "animation", updatedAt: 0 }, "a pre-v5 session record restores as animation");
+assert.deepEqual(loadProjectSession(storage), { name: "Old session", previsMode: "animation", castStyle: "hybrid", updatedAt: 0 }, "a pre-v5 session record restores as animation and hybrid");
 
 // Scenes domain: blank creation, file open and reload restore set the mode.
 const f = projectFixture();

@@ -39,7 +39,7 @@ expect(
 	"a mesh id cannot become a cutout — workflow image sync is pictures only",
 	appendAssetCutout(document, { id: `mesh-${"a".repeat(32)}` }).reason === "invalid-asset",
 );
-const motionDocument = createSceneDocument();
+const motionDocument = createSceneDocument({ seedCharacter: true });
 const spec = { schema: "cozyclay.motion-spec.v1", fps: 24, frames: 48, use: [{ skill: "standIdle", f0: 0 }] };
 const motionPatch = applyMotionToCharacter(motionDocument, "char-1", { spec });
 expect("motion patch rejects a missing character", !motionPatch.changed && motionPatch.reason === "character-not-found");

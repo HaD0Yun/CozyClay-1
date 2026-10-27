@@ -17,7 +17,7 @@ export default function SubjectsPanel({
 									label={ko(`Subject ${index + 1}`, `인물 ${index + 1}`, `角色 ${index + 1}`)}
 									onPose={() => openStudio(entry.id)}
 									posing={posing === entry.id}
-									onRemove={index > 0 ? () => run('character.remove', { characterId: entry.id }) : undefined}
+									onRemove={() => run('character.remove', { characterId: entry.id })}
 									color={entry.tint ?? defaultCharacterTint(entry, index)}
 									/* A colour picker streams values while it is open, so the
 									   whole picking session is one Ctrl+Z entry. */

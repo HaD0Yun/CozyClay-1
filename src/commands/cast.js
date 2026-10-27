@@ -64,7 +64,8 @@ export function register(registry, ports) {
 			if (owner().read().some(entry => entry.id === row.id)) fail('INVALID_ARGUMENT', 'Character id already exists.');
 			owner().write(rows => [...rows, row]);
 		},
-		'character.remove': ({ characterId }) => { character(characterId); if (owner().read().length <= 1) fail('INVALID_ARGUMENT', 'Cannot remove the final character.'); owner().write(rows => rows.filter(row => row.id !== characterId)); },
+		// An empty stage is legal: a new project starts on one.
+		'character.remove': ({ characterId }) => { character(characterId); owner().write(rows => rows.filter(row => row.id !== characterId)); },
 		'character.update': ({ characterId, patch: value }) => {
 			// Rig <-> capsule figure is a different kind of cast member; rig-to-rig model swaps stay.
 			if (Object.hasOwn(value, 'model') && (value.model === PROXY_FIGURE_MODEL) !== isProxyFigure(character(characterId))) fail('INVALID_ARGUMENT', KIND_FIXED_REFUSAL.en);

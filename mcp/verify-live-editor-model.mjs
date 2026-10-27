@@ -8,7 +8,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { createServer } from "node:net";
 import { fileURLToPath } from "node:url";
 
-import { chromeArgs, resolveChromePath } from "./qa-chrome.mjs";
+import { chromeArgs, resolveChromePath, seedCharacterStage } from "./qa-chrome.mjs";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const serverPath = fileURLToPath(new URL("./server.mjs", import.meta.url));
@@ -153,7 +153,7 @@ try {
 		if (frame.method === "Fetch.requestPaused") heldModelRequests.push(frame.params.requestId);
 	});
 	await send("Page.enable");
-	await send("Page.navigate", { url: `http://127.0.0.1:${vitePort}/app/` });
+	await seedCharacterStage(send); await send("Page.navigate", { url: `http://127.0.0.1:${vitePort}/app/` });
 
 	client = new Client({ name: "cozyclay-live-editor-model-verify", version: "1.0.0" });
 	await client.connect(new StdioClientTransport({ command: process.execPath, args: [serverPath, "--live-port", String(livePort)] }));

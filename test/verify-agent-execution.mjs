@@ -89,7 +89,7 @@ for (const [status, failureCode] of [[401, "auth"], [429, "rate_limited"], [503,
 	const transport = createHttpTransport({ capture: (event, props) => keep(captured, event, props), fetchImpl: async () => { throw error; } });
 	await assert.rejects(transport.turn(request, () => {}), (caught) => caught === error);
 	assert.deepEqual(names(captured), ["agent:turn_requested", "agent:turn_failed"]);
-	assert.equal(captured[1].props.failure_code, "upstream");
+	assert.equal(captured[1].props.failure_code, "network");
 }
 for (const body of ["", encode({ type: "done" }), 'data: {"type":"execution_telemetry"']) {
 	const captured = [];
@@ -148,7 +148,7 @@ for (const explicit of [true, false]) {
 	const captured = [];
 	const foreign = Object.defineProperty({}, "status", { get() { throw new Error("foreign getter"); } });
 	await assert.rejects(createHttpTransport({ capture: (event, props) => keep(captured, event, props), fetchImpl: async () => { throw foreign; } }).turn(request, () => {}), (error) => error === foreign);
-	assert.equal(captured.at(-1).props.failure_code, "upstream");
+	assert.equal(captured.at(-1).props.failure_code, "unknown");
 }
 
 // Real model HTTP/SSE -> Codex parser -> agent tools -> HTTP transport. A real
@@ -250,6 +250,33 @@ for (const explicit of [true, false]) {
 			assert.ok(!wire.includes("execution_telemetry") && !wire.includes("execution_tool_started"), "missing/invalid browser IDs disable only telemetry");
 		}
 	} finally { await handler.close(); await close(sidecar); await close(model); }
+}
+// A model URL that refuses the connection: the model client folds the fetch
+// error into a failed message, and the turn still reads network on all three
+// readings (the error frame, the sidecar's turn_failed, the browser's).
+{
+	const refusing = createServer();
+	const modelUrl = await listen(refusing);
+	await close(refusing);
+	const fixtureToken = `e30.${Buffer.from(JSON.stringify({ "https://api.openai.com/auth": { chatgpt_account_id: "fixture" } })).toString("base64url")}.e30`;
+	const auth = { getAccessToken: async () => fixtureToken, readStored: async () => ({ refresh_token: "fixture-refresh", access_token: fixtureToken, expires_at: Date.now() + 60 * 60 * 1000 }) };
+	const handler = createAgentHandler({ auth, codexBaseUrl: modelUrl, liveHub: { command: async () => ({ accepted: true }) } });
+	const sidecar = createServer((req, res) => handler(req, res).catch((error) => { res.writeHead(500); res.end(error.message); }));
+	const sidecarUrl = await listen(sidecar);
+	try {
+		const captured = [];
+		const wire = [];
+		const transport = createHttpTransport({ surface: "workflow", capture: (event, props) => keep(captured, event, props), fetchImpl: async (url, init) => {
+			const response = await fetch(sidecarUrl + url, init);
+			const copy = await response.clone().text(); wire.push(...[...copy.matchAll(/^data: (.+)$/gm)].map((match) => JSON.parse(match[1])));
+			return response;
+		} });
+		await transport.turn({ ...request, model: "gpt-6-astra", sessionId: "refused-model" }, () => {});
+		assert.equal(wire.find(({ type }) => type === "error")?.code, "network", `the error frame: ${JSON.stringify(wire.filter(({ type }) => type === "error"))}`);
+		assert.equal(wire.find(({ event }) => event === "agent:turn_failed")?.props.failure_code, "network", "the sidecar's agent:turn_failed");
+		assert.deepEqual(names(captured), ["agent:turn_requested", "agent:turn_failed"]);
+		assert.equal(captured[1].props.failure_code, "network", "the browser's agent:turn_failed");
+	} finally { await handler.close(); await close(sidecar); }
 }
 // --- #379 / 16k (F2 pass 5 finding 4): on the REAL codex HTTP path, the
 // quota frame must carry the ACTUAL response header values (proving the
@@ -652,8 +679,11 @@ for (const count of [2, 5]) {
 		[{ code: "CAPABILITY_MISSING", status: 409 }, "capability_missing"], [{ code: "LIVE_HUB_UNAVAILABLE", status: 409 }, "capability_missing"],
 		[{ code: "busy" }, "busy"], [{ code: "TARGET_BUSY", status: 409 }, "busy"],
 		[{ status: 400 }, "invalid_request"], [{ code: "INVALID_CONTEXT", status: 400 }, "invalid_request"], [{ code: "AMBIGUOUS_TARGET", status: 409 }, "invalid_request"],
-		[{ code: "overloaded", status: 529 }, "upstream"], [{ code: "upstream", status: 502 }, "upstream"], [{ code: "truncated" }, "upstream"], [new TypeError("offline"), "upstream"],
-		[{ code: "constructor" }, "upstream"], [{ message: "401 Unauthorized" }, "upstream"],
+		[{ code: "overloaded", status: 529 }, "upstream"], [{ code: "upstream", status: 502 }, "upstream"], [{ code: "truncated" }, "upstream"], [{ status: 500 }, "upstream"], [{ code: "server_error" }, "upstream"],
+		[new TypeError("offline"), "network"], [{ code: "ECONNRESET" }, "network"], [{ code: "ENOTFOUND" }, "network"],
+		[Object.assign(new TypeError("fetch failed"), { cause: { code: "ECONNREFUSED" } }), "network"], [{ name: "TypeError", status: 502 }, "upstream"],
+		[{ code: "network" }, "network"], [{ code: "unknown" }, "unknown"], [{ code: "upstream", status: 400 }, "invalid_request"], [{ code: "overloaded", status: 429 }, "rate_limited"],
+		[{ code: "constructor" }, "unknown"], [{ code: "entitlement" }, "unknown"], [{ message: "401 Unauthorized" }, "unknown"], [new Error("network down"), "unknown"], [{}, "unknown"],
 	];
 	for (const [input, expected] of cases) {
 		assert.equal(transportFailureCode(input), expected, `browser ${JSON.stringify(input)}`);
@@ -665,7 +695,23 @@ for (const count of [2, 5]) {
 	assert.equal(agentFailureCode({ code: "unauthorized", status: 401 }, live, true), "key_refused");
 	assert.equal(agentFailureCode(new DOMException("x", "AbortError"), live), "aborted");
 	const foreign = Object.defineProperty({}, "status", { get() { throw new Error("foreign getter"); } });
-	assert.equal(transportFailureCode(foreign), "upstream"); assert.equal(failureCodeOf(foreign), "upstream");
+	assert.equal(agentFailureCode(new TypeError("offline"), live, true), "tool_failed");
+	assert.equal(agentFailureCode(new TypeError("offline"), live), "network");
+	assert.equal(agentFailureCode({ code: "constructor" }, live), "unknown");
+	assert.equal(transportFailureCode(foreign), "unknown"); assert.equal(failureCodeOf(foreign), "unknown");
+	// A sidecar error frame carries the error's own code, else failureCodeOf: never a literal upstream.
+	const { frameCodeOf } = await import("../bin/agent/agent-failure-codes.mjs");
+	const refused = Object.assign(new TypeError("fetch failed"), { cause: { code: "ECONNREFUSED" } });
+	assert.equal(frameCodeOf({ code: "overloaded", status: 529 }), "overloaded", "a runner code is sent unchanged");
+	assert.equal(frameCodeOf(foreign), "unknown");
+	for (const [thrown, expected] of [[refused, "network"], [new Error("private x"), "unknown"], [{ status: 503 }, "upstream"]]) {
+		const captured = [];
+		const frame = { type: "error", code: frameCodeOf(thrown), message: "private sidecar failure", ...(Number.isInteger(thrown.status) ? { status: thrown.status } : {}) };
+		const transport = createHttpTransport({ capture: (event, props) => keep(captured, event, props), fetchImpl: async () => new Response(encode(frame) + encode({ type: "done" })) });
+		await transport.turn(request, () => {});
+		assert.deepEqual(names(captured), ["agent:turn_requested", "agent:turn_failed"]);
+		assert.equal(captured[1].props.failure_code, expected, `sidecar frame for ${thrown.name ?? "status"} reads ${expected} in the browser`);
+	}
 	for (const [status, body, expected] of [
 		[409, { error: { code: "STALE_SCENE", message: "private moved" } }, "stale_scene"],
 		[409, { error: { code: "CAPABILITY_MISSING", message: "private port 5184 in use" } }, "capability_missing"],

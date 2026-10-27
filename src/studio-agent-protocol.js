@@ -4,9 +4,9 @@ import { STUDIO_ERROR_CODES, refusalCode } from "./studio-error-codes.js";
 import { EFFECT_VALUE_SCHEMA } from "./effects/effect-record.js";
 import { TEXT_VALUE_SCHEMA } from "./text/text-record.js";
 import { wrongType, unknownField, missingField, arrayRefusal, duplicateItem, stringRefusal, enumRefusal, numberRefusal, unionRefusal } from "./studio-schema-errors.js";
-// Mirrors PREVIS_MODES (project.js) and POSTURES (scenes.js). Neither is imported:
-// both pull in three.js, which the agent sidecar must not load. The protocol test pins the lists to their owners.
-const PREVIS_MODES = ["storyboard", "animation"], POSTURES = ["stand", "sit", "lie"];
+// Mirrors PREVIS_MODES and CAST_STYLES (project.js) and POSTURES (scenes.js). Neither is imported:
+// both pull in three.js, which the agent sidecar must not load. The protocol tests pin the lists to their owners.
+const PREVIS_MODES = ["storyboard", "animation"], CAST_STYLES = ["rig", "capsule", "hybrid"], POSTURES = ["stand", "sit", "lie"];
 
 // Sized for the compact index of up to 400 entities (~100 bytes each) beside
 // 24 detailed rows; a small scene stays far below it.
@@ -232,7 +232,7 @@ const jobSummary = object({ id, characterId: id, state: choices(STUDIO_VARIANTS.
 const contextSchema = object({
 	schema: literal("studio-context-v1"), host, revision,
 	units: object({ distance: literal("m"), angle: literal("deg"), up: literal("+Y"), yawZero: literal("+Z"), yawPositiveToward: literal("+X"), pivot: literal("base"), fps: literal(24), rangeEnd: literal("exclusive") }),
-	scene: object({ name, aspect: text(40), floorY: number(), frameCount: integer(), objectCount: integer(), characterCount: integer() }, { previsMode: choices(PREVIS_MODES) }),
+	scene: object({ name, aspect: text(40), floorY: number(), frameCount: integer(), objectCount: integer(), characterCount: integer() }, { previsMode: choices(PREVIS_MODES), castStyle: choices(CAST_STYLES) }),
 	selection, activeCharacterId: nullable(id), view, shot: nullable(currentShot), camera: nullable(camera),
 	entities: array(entity, 24), entityPage: object({ returned: integer(0, 24), total: integer(), truncated: bool, nextCursor: nullable(text(512)) }),
 	shots: array(shotSummary, 8), shotsTruncated: bool, assets: array(assetSummary, STUDIO_CONTEXT_LIMITS.assets),

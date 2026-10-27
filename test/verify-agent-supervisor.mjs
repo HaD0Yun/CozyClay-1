@@ -20,6 +20,7 @@ import { getCurrentSystemPrompt } from "@earendil-works/pi-ai";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
 import { createAgentHandler } from "../bin/agent/agent-routes.mjs";
 import { buildSupervisorInput, parseSupervisorVerdict, shouldSupervise, SUPERVISOR_RUBRIC, validateFixes } from "../bin/agent/supervisor.mjs";
+import { followUpExchange, isFollowUpAnswer } from "../bin/agent/supervisor-followup.mjs";
 import { supervisorFollowUp } from "../src/workflow/agent-client.js";
 import { createFakeModel } from "./fixtures/fake-model.mjs";
 import { contextFixture, envelopeFixture, receiptFixture } from "./verify-studio-agent-protocol.mjs";
@@ -118,6 +119,29 @@ const ACTION_SCHEMAS = [
 	assert.deepEqual(text.slice(2), ["Also check:", "- [concern] concern issue (e)"], "an unfixed concern follows under its own header, the note does not");
 	assert.equal(supervisorFollowUp({ issues: note.issues }), "Supervisor review \u2014 please address:\n- [blocker] blocker issue (e)\n- [concern] concern issue (e)", "without fixes the text is unchanged");
 	console.log("PASS fixes are validated against the action index and schemas, and the follow-up runs them verbatim");
+}
+
+// --- cast style and the exchange a short answer approves ---------------------
+{
+	const line = (text, name) => text.split("\n").find(entry => entry.startsWith(`${name}: `));
+	assert.equal(JSON.parse(line(buildSupervisorInput({ request: "r", castStyle: "hybrid" }).text, "castStyle").slice("castStyle: ".length)), "hybrid", "a present castStyle rides in the digest");
+	assert.equal(line(buildSupervisorInput({ request: "r" }).text, "castStyle"), undefined, "an absent castStyle is omitted");
+	for (const answer of ["yes", " Yes! ", "n", "OK.", "sure", "응", "네.", "예", "아니", "아니요?", "좋아"]) assert.ok(isFollowUpAnswer(answer), answer);
+	for (const request of ["yes please add a lamp", "put a chair left of her", ""]) assert.equal(isFollowUpAnswer(request), false, request);
+	const proposal = "This shot needs three rigs passing a tray. Use capsule figures for this shot instead? (yes = capsules, no = keep the rig)";
+	const message = (role, text) => ({ role, content: [{ type: "text", text }] });
+	const history = [message("user", "first"), message("assistant", "done"), message("user", "stage the dinner shot"), message("assistant", proposal)];
+	const exchange = { user: "stage the dinner shot", assistant: proposal };
+	assert.deepEqual(followUpExchange("yes", () => history), exchange, "read before the answer was stored");
+	assert.deepEqual(followUpExchange("yes", () => [...history, message("user", "yes"), message("assistant", "Added two capsules.")]), exchange, "the answering turn itself is skipped");
+	assert.equal(followUpExchange("put a chair left of her", () => history), null, "a normal request carries no previous exchange");
+	assert.equal(followUpExchange("yes", () => []), null, "nothing to answer, nothing carried");
+	assert.equal(followUpExchange("yes", () => { throw new Error("unreadable"); }), null, "an unreadable history is skipped");
+	const followUp = buildSupervisorInput({ request: "yes", previousExchange: exchange });
+	assert.deepEqual(JSON.parse(line(followUp.text, "previousExchange").slice("previousExchange: ".length)), exchange, "a follow-up's digest carries the exchange it answers");
+	assert.equal(line(buildSupervisorInput({ request: "put a chair left of her" }).text, "previousExchange"), undefined, "a normal request's digest does not");
+	assert.match(SUPERVISOR_RUBRIC, /castStyle hybrid, or no castStyle given[^.]*previousExchange/, "the rubric names what it now receives");
+	console.log("PASS the digest carries castStyle when present and, for a short answer, the exchange it approves");
 }
 
 // --- (b) the route ------------------------------------------------------------

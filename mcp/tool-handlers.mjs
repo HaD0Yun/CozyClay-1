@@ -75,7 +75,9 @@ import { documentWithCamera, splitSavedCamera } from "./project-camera.mjs";
 
 /** The authoring state. One scene document, one camera, one project name. */
 export const state = {
-	doc: createSceneDocument(),
+	// Memory mode keeps the one-character stage it always opened with; the
+	// studio's new project starts empty, and a connected editor reports its own.
+	doc: createSceneDocument({ seedCharacter: true }),
 	name: "Untitled",
 	/** the project's previs mode ("storyboard" | "animation"); the live editor reports it with every describe */
 	previsMode: DEFAULT_PREVIS_MODE,
@@ -1009,7 +1011,6 @@ export const createToolHandlers = ({ projectRootPromise } = {}) => {
 				const st = stage();
 				const target = findCharacter(character);
 				if (!target) return text(`No character "${character}". ${castHint()}`);
-				if (st.characters.length === 1) return text("The scene needs at least one character.");
 				const letter = letterFor(target);
 				st.characters = st.characters.filter((c) => c !== target);
 				if (state.focus && !findCharacter(state.focus)) {
@@ -1527,7 +1528,7 @@ export const createToolHandlers = ({ projectRootPromise } = {}) => {
 					mode,
 					model: modelById(model) ?? undefined,
 					shot: currentShot(),
-					subject: framed.subject,
+					subject: framed?.subject ?? "",
 					subject2: other?.subject ?? null,
 					posePhrase: pose_phrase,
 					pose2Phrase: other ? pose2_phrase : "",
