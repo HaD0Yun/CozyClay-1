@@ -15,6 +15,8 @@ export function writePoseFadeOpacity(value, storage = globalThis.localStorage) {
 // Keyed by material: a material shared by several meshes is recorded once, so the restore is exact.
 const originals = new WeakMap();
 const noRaycast = () => {};
+// Keyed by mesh, not userData: R3F replaces an inline userData prop on re-render (#974).
+const savedRaycasts = new WeakMap();
 
 function materialsOf(mesh) {
 	return Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : [];
@@ -67,11 +69,13 @@ export function applyPoseFade(root, fade, own = 1) {
 			}
 		}
 		if (unpickable && node.raycast !== noRaycast) {
-			node.userData.poseFadeRaycast = node.raycast;
+			if (Object.hasOwn(node, "raycast")) savedRaycasts.set(node, node.raycast);
 			node.raycast = noRaycast;
 		} else if (!unpickable && node.raycast === noRaycast) {
-			node.raycast = node.userData.poseFadeRaycast;
-			delete node.userData.poseFadeRaycast;
+			// Nothing saved means the prototype's method was in use: drop the own property.
+			if (savedRaycasts.has(node)) node.raycast = savedRaycasts.get(node);
+			else delete node.raycast;
+			savedRaycasts.delete(node);
 		}
 	});
 }
