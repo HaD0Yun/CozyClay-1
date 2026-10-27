@@ -52,7 +52,9 @@ function show(text) {
 /** The reason a disabled control gives: the hosted agent note, else its own title, else the per-control fallback. */
 function disabledReason(element, control) {
 	if (control === "agent_connect" && hostedSite()) return HOSTED_AGENT();
-	const own = (element?.getAttribute?.("data-disabled-reason") || element?.getAttribute?.("title") || "").trim().slice(0, 140);
+	// data-disabled-reason is sometimes a machine id (no-shots, export-running); only a sentence is shown.
+	const reason = (element?.getAttribute?.("data-disabled-reason") || "").trim();
+	const own = (/\s/.test(reason) ? reason : element?.getAttribute?.("title") || "").trim().slice(0, 140);
 	return own || FALLBACK[control]?.() || null;
 }
 
