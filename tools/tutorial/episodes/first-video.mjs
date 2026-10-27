@@ -66,7 +66,18 @@ export default [
 		},
 		key: "Mod+B",
 	},
-	{ id: "motion-compile", eval: `window.__cozyclay.runStudioAction("motion.compile", { characterId: "char-a", spec: ${JSON.stringify(WALK)} })` },
+	// The walk starts where the "move" step left the character: the studio's
+	// own character state offsets the spec's root and feet on the floor.
+	{
+		id: "motion-compile",
+		eval: `(() => {
+			const { x, z } = window.__cozyclay.characters.find((character) => character.id === "char-a");
+			const spec = ${JSON.stringify(WALK)};
+			const set = spec.keys[0].set;
+			for (const name of ["root", "foot_l", "foot_r"]) set[name] = [set[name][0] + x, set[name][1], set[name][2] + z];
+			return window.__cozyclay.runStudioAction("motion.compile", { characterId: "char-a", spec });
+		})()`,
+	},
 	{ id: "guide-ask", click: GUIDE_NEXT },
 	{
 		id: "play",
