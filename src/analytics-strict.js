@@ -4,7 +4,7 @@
 import { STUDIO_ERROR_CODES } from "./studio-error-codes.js";
 import { ERROR_TYPE_VALUES, sessionEndedPropAllowed } from "./analytics-values.js";
 import { FRICTION_SUMMARY_KEYS, frictionPropAllowed } from "./analytics-friction.js";
-import { CONTROL_IDS } from "./analytics-controls.js";
+import { AREA_IDS, CONTROL_IDS } from "./analytics-controls.js";
 
 const TURN_ID_PATTERN = /^[a-f0-9]{32}$/;
 // The friction count vocabulary (analytics-friction.js bucketFrictionCount).
@@ -110,8 +110,8 @@ const SCHEMAS = Object.freeze({
 		gap: (value) => value === "first" || long(value), prev_outcome: oneOf("succeeded", "failed", "cancelled", "none"), turn_index: count,
 		attached: bool, task_mode: bool,
 	},
-	"ui:rage_click": { control: oneOf(...CONTROL_IDS, "other"), clicks: oneOf("3", "4-5", "gte6"), changed: bool },
-	"ui:dead_click": { control: oneOf(...CONTROL_IDS, "other"), reason: oneOf("aria_disabled", "refused", "no_effect") },
+	"ui:rage_click": { control: oneOf(...CONTROL_IDS, ...AREA_IDS, "other"), clicks: oneOf("3", "4-5", "gte6"), changed: bool },
+	"ui:dead_click": { control: oneOf(...CONTROL_IDS, ...AREA_IDS, "other"), reason: oneOf("aria_disabled", "refused", "no_effect") },
 	// The update notice (src/update/update-telemetry.js): an install kind and buckets, never a version string or npm output.
 	"update:notice_shown": { kind: oneOf("global", "npx"), behind: oneOf("patch", "minor", "major") },
 	"update:clicked": { action: oneOf("update_now", "copy_command", "later", "dismiss", "release_notes", "restart"), kind: oneOf("global", "npx") },
