@@ -124,9 +124,11 @@ export function createInput(cdp, { mac }) {
 		},
 		async type(value) {
 			const { into, text } = typeof value === "string" ? { text: value } : value;
+			// The field the click found: every target form, as need() resolves it, not a bare selector.
+			const field = `window.__tutorialFind(${JSON.stringify(into)})?.el`;
 			if (into) {
 				await press(await need(into));
-				await cdp.evaluate(`document.querySelector(${JSON.stringify(into)})?.select?.()`);
+				await cdp.evaluate(`${field}?.select?.()`);
 			}
 			for (const character of text) {
 				await cdp.send("Input.insertText", { text: character });
@@ -134,7 +136,7 @@ export function createInput(cdp, { mac }) {
 			}
 			// A React-controlled input can drop inserted text; the native setter plus an input event cannot be missed.
 			if (into) await cdp.evaluate(`(() => {
-				const input = document.querySelector(${JSON.stringify(into)});
+				const input = ${field};
 				if (!input || input.value === ${JSON.stringify(text)}) return;
 				Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input), "value").set.call(input, ${JSON.stringify(text)});
 				input.dispatchEvent(new Event("input", { bubbles: true }));

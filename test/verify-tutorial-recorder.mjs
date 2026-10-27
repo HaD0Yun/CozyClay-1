@@ -7,6 +7,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { runInNewContext } from "node:vm";
 import firstVideo from "../tools/tutorial/episodes/first-video.mjs";
 import beginnerGuide from "../tools/tutorial/episodes/beginner-guide.mjs";
 import stubTour from "../tools/tutorial/episodes/stub-tour.mjs";
@@ -14,6 +15,7 @@ import { ADD_CHARACTER, FIRST_CHARACTER_ROW } from "../tools/tutorial/episodes/c
 import { DEFAULT_WPS, chapterFileName, isTarget, joinTexts, localizeTarget, normalizeEpisode, readingMs, srtTime, stepHoldMs, toSrt, validateEpisode } from "../tools/tutorial/episode.mjs";
 import { bandHeightFor, chapterCutArgs, muxArgs } from "../tools/tutorial/mux.mjs";
 import { calloutPlacement } from "../tools/tutorial/overlay.mjs";
+import { createInput } from "../tools/tutorial/cursor.mjs";
 import { terminalSequence } from "../tools/tutorial/terminal.mjs";
 import { speechText, userClip } from "../tools/tutorial/voice.mjs";
 
@@ -171,6 +173,31 @@ expect("a chapter cut seeks to its start and runs its length", cut.join(" ").inc
 expect("a voiced chapter cut keeps aac", chapterCutArgs({ input: "a", output: "b", startMs: 0, endMs: 1000, audio: true }).includes("aac"));
 const bare = muxArgs({ base: "cap.mp4", output: "out.mp4", cues: [], clips: new Map(), captions: [], endMs: 3000, bandHeight: 130 });
 expect("an episode without narration still gets the band and no audio", bare.includes("[v]") && !bare.includes("aac"));
+
+// Typing into a structured target ({ css, text } or { js }) resolves the field
+// through __tutorialFind, the way a click does; document.querySelector would
+// coerce the object to "[object Object]" and throw.
+for (const into of ["[data-testid=start-project-name]", { css: "input", text: "Name" }, { js: "document.body" }]) {
+	class Field { selected = false; events = 0; select() { this.selected = true; } scrollIntoView() {} dispatchEvent() { this.events += 1; } }
+	Object.defineProperty(Field.prototype, "value", { configurable: true, get() { return this.v ?? ""; }, set(text) { this.v = text; } });
+	const field = new Field(), seen = [], errors = [];
+	const sandbox = {
+		window: { __tutorialFind: (spec) => (JSON.stringify(spec) === JSON.stringify(into) ? { el: field, rect: { x: 0, y: 0, width: 10, height: 10 } } : null), __tutorialCursor: new Proxy({}, { get: () => () => {} }) },
+		document: { querySelector: (selector) => { if (typeof selector !== "string") throw new SyntaxError(`'${selector}' is not a valid selector`); return null; }, activeElement: null },
+		Event: class { constructor(type) { this.type = type; } }, Object, Math, JSON,
+	};
+	const cdp = {
+		send: async () => {},
+		waitFor: async () => true,
+		evaluate: async (expression) => {
+			seen.push(expression);
+			try { return runInNewContext(expression, sandbox); } catch (error) { errors.push(error.message); return null; }
+		},
+	};
+	await createInput(cdp, { mac: false }).type({ into, text: "ok" });
+	expect(`type() into ${JSON.stringify(into)} selects and sets the field it clicked`, errors.length === 0 && field.selected && field.value === "ok" && field.events === 1, JSON.stringify({ errors, selected: field.selected, value: field.value }));
+	expect(`type() into ${JSON.stringify(into)} never hands a target to document.querySelector`, !seen.some((expression) => expression.includes("document.querySelector(")));
+}
 
 if (failures > 0) {
 	console.error(`\n${failures} tutorial recorder check(s) failed`);
