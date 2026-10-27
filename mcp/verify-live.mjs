@@ -34,7 +34,7 @@ export async function studio({ projectRoot, withCast = false } = {}) {
 	// the swap and all authored state; this replaces only the renderer seam.
 	f.actionHandlers.current.afterRender = async () => {
 		const id = f.live.current.characters[0]?.id;
-		f.live.current.activeCharacterId = id;
+		f.live.current.activeCharacterId = id ?? null;
 		f.live.current.studioSelection = id ? { kind: "character", id } : null;
 	};
 	const hub = await startLiveHub(0);
@@ -362,9 +362,9 @@ cases.cast = async () => {
 		s.f.cast.switchActiveCharacterLayer();
 		receipt(await s.call("remove_character", { character: "2" }), "character.remove");
 		receipt(await s.call("remove_character", { character: "B" }), "character.remove");
-		const final = await s.call("remove_character", { character: "A" });
-		assert.equal(JSON.parse(final.content[0].text).code, "INVALID_ARGUMENT");
-		assert.equal(s.f.cast.read().length, 1);
+		// The last character goes too: an empty stage is legal.
+		receipt(await s.call("remove_character", { character: "A" }), "character.remove");
+		assert.equal(s.f.cast.read().length, 0);
 		assert.ok(s.wire.every(frame => ["inspect_studio", "read_studio_context", "run_action", "describe"].includes(frame.name)), "cast aliases use no legacy mutation frames");
 	} finally { await s.close(); }
 };

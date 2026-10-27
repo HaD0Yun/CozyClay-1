@@ -10,7 +10,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { WebSocket } from "ws";
 
-import { chromeArgs, resolveChromePath } from "./qa-chrome.mjs";
+import { chromeArgs, resolveChromePath, seedCharacterStage } from "./qa-chrome.mjs";
 import { LiveHub } from "./live-hub.mjs";
 import { mcpToolCategory } from "../src/execution-telemetry.js";
 
@@ -293,7 +293,7 @@ try {
 	await send("Network.enable");
 	await send("Page.enable");
 	await send("Runtime.enable");
-	await send("Page.navigate", { url: `http://127.0.0.1:${vitePort}/app/` });
+	await seedCharacterStage(send); await send("Page.navigate", { url: `http://127.0.0.1:${vitePort}/app/` });
 
 	client = new Client({ name: "cozyclay-live-batch-verify", version: "1.0.0" });
 	await client.connect(new StdioClientTransport({ command: process.execPath, args: [serverPath, "--live-port", String(livePort)] }));

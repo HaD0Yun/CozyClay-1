@@ -13,6 +13,7 @@ import { playbackFrame, usePlaybackSnapshot } from "../motion/playback-frame-sto
 // - agentOpen/toggleAgent, preferencesOpen/setPreferencesOpen;
 // - statusText/setStatusText, previewRanges/setPreviewRanges, liveHubStatus,
 //   flySpeed (the navigation multiplier, not metres per second);
+// - castStyle ("rig" | "capsule" | "hybrid"), which orders Add > Character;
 // - previsMode ("storyboard" | "animation"), sceneRevision (bumps on every
 //   authored edit) and capturePanelThumbnail(shot) (the shot's first frame as
 //   a PNG data URL, or null) for the Board dock tab.

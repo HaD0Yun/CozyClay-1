@@ -2313,7 +2313,7 @@ export default function App() {
 		// patchable state, so every reader sees the body the save path writes.
 		stage: { shotAspect: shotAspectKey, cameraPresetId, sensorId, hasCharSheet, environmentImage, environment, style, hasEnvSheet, keyLight, lighting },
 		timeline: { currentFrame: tlFrame, frameCount: tlFrameCount, fps: tlFps },
-		activeCharacterId,
+		activeCharacterId: characters.length ? activeCharacterId : null,
 		partColours: partColoursEnabled ? PART_COLOURS : null,
 		waypoints,
 		characters,
@@ -4175,7 +4175,7 @@ export default function App() {
 			preserveAuthoredMotion: Boolean(c.layer?.waypoints?.length) }]));
 		return { host: { workspaceId: liveWorkspaceIdRef.current, documentEpoch: studioDocumentEpochRef.current,
 				sceneId: activeSceneIdRef.current, sceneEpoch: studioSceneEpochRef.current }, workspaceHandle: liveWorkspaceHandleRef.current,
-			sceneName: live.scenes.find(s => s.id === activeSceneIdRef.current)?.name ?? "Untitled Scene", previsMode: scenesDomain.previsMode, aspect: live.stage.shotAspect, stage: live.stage,
+			sceneName: live.scenes.find(s => s.id === activeSceneIdRef.current)?.name ?? "Untitled Scene", previsMode: scenesDomain.previsMode, castStyle: scenesDomain.castStyle, aspect: live.stage.shotAspect, stage: live.stage,
 			objects: storeRef.current.objects, characters: list, targets, shots: live.shots, frameCount: live.timeline.frameCount,
 			selection: live.studioSelection, activeCharacterId: live.activeCharacterId, selectedShotId: live.studioShotId,
 			view: live.studioView, camera: live.studioCamera ?? readStudioCamera(), filmback: live.filmback, manual: manualCameraOverrideRef.current,
@@ -4370,7 +4370,7 @@ export default function App() {
 		// an action sees its own edit before React renders it.
 		state: () => ({
 			shots: appContext.live.state.shots, objects: storeRef.current.objects, characters: appContext.live.characters, frame: tlFrame, frameCount: tlFrameCount,
-			selectedObjectId: selectedSceneObjectId, activeCharacterId: activeChar?.id ?? null,
+			selectedObjectId: selectedSceneObjectId, activeCharacterId: characters.length ? activeChar.id : null,
 			
 			generating: false,
 			motionReady: false,
@@ -4486,7 +4486,7 @@ export default function App() {
 	// The single shell snapshot keeps subsequent region work out of App.
 	const shellContext = {
 		sculptPanel,
-		projectMenuOpen, setProjectMenuOpen, projectDirty, projectName, previsMode, projectStartupOpen,
+		projectMenuOpen, setProjectMenuOpen, projectDirty, projectName, previsMode, castStyle: scenesDomain.castStyle, projectStartupOpen,
 		requestNewProject, setProjectStartupOpen, setProjectBrowserOpen, runStudioAction, saveProject,
 		projectManifest, projectSaveState, recState, exportMenuTriggerRef, exportMenuOpen,
 		exportShotIdRef, setExportMenuAnchor, setExportMenuOpen, exportPhaseLabel,
@@ -5241,9 +5241,9 @@ export default function App() {
 						openProject();
 					}}
 					starters={STARTER_SCENES}
-					onStarter={(id, name) => {
+					onStarter={(id, name, options) => {
 						setProjectBrowserOpen(false);
-						void openStarterScene(id, "starter", name);
+						void openStarterScene(id, "starter", name, options?.castStyle);
 					}}
 					onNew={(name, options) => {
 						setProjectBrowserOpen(false);
