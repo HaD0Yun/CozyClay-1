@@ -19,7 +19,8 @@ const sentences = text => text.split(/(?<=[.;:])\s+/).map(s => s.trim()).filter(
 // +253 for physical grasp (#816: let the hand hold, throwObject/catchObject, read LOAD): +260
 // +457 for key writing (extremes not a beat, lead with root and end effectors, break symmetry, read observations.life): +460
 // +168 for the repair loop (patch by frame or name after the first compile, obey output.stuck): +170
-check("the whole prompt is at most 12,790 characters", () => assert.ok(prompt.length <= 12790, `${prompt.length}`));
+// +1452 for the cast styles (scene.castStyle rig, capsule, hybrid and the capsule proposal): +1453
+check("the whole prompt is at most 14,243 characters", () => assert.ok(prompt.length <= 14243, `${prompt.length}`));
 check("the motion part is at most 2,690 characters", () => {
 	assert.ok(motion.length > 0 && motion.length <= 2690, `${motion.length}`);
 });
