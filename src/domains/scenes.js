@@ -430,7 +430,8 @@ export function useScenes(appContext) {
 
 	/** Open a bundled starter scene as a fresh, saveable project. Used by the
 	 * first-run dialog and by `npx cozyclay --scene <id>` (`?scene=`). */
-	async function openStarterScene(id, source = "starter", context = null, name = null) {
+	// A cast style chosen on the start screen overrides the starter's own.
+	async function openStarterScene(id, source = "starter", context = null, name = null, castStyle = undefined) {
 		if (source === "starter" && domain.dirtyStore.read("projectDirty") && !window.confirm(ko("Discard unsaved changes and start a new project?", "저장되지 않은 변경사항을 버리고 새 프로젝트를 시작할까요?"))) return false;
 		const url = playgroundSceneUrl(`?scene=${encodeURIComponent(id)}`);
 		const project = url ? await fetchSceneProject(url) : null;
@@ -439,7 +440,7 @@ export function useScenes(appContext) {
 			return false;
 		}
 		context?.check();
-		applyProject({ ...project, name: name?.trim() || project.name, savedAt: null }, true);
+		applyProject({ ...project, name: name?.trim() || project.name, savedAt: null, ...(castStyle ? { castStyle } : {}) }, true);
 		appContext.shared.projectHandleRef.current = null;
 		track("scene:loaded", { scene_source: source });
 		return true;
@@ -778,7 +779,7 @@ export function useScenes(appContext) {
 		};
 		if (id === "project.browse") { setProjectStartupOpen(false); setProjectBrowserOpen(true); return; }
 		if (id === "project.new") return newProject(args.name, true, { previsMode: args.previsMode, castStyle: args.castStyle });
-		if (id === "project.openStarter") return openStarterScene(args.id, args.source, context, args.name);
+		if (id === "project.openStarter") return openStarterScene(args.id, args.source, context, args.name, args.castStyle);
 		if (id === "project.restore") return restoreStoredProject({ handle: runtime("handleToken") }, context);
 		if (args.handleToken) return openProjectByHandle(runtime("handleToken"), context);
 		if (args.projectToken) { applyProject(runtime("projectToken"), true); return true; }
@@ -804,7 +805,7 @@ export function useScenes(appContext) {
 		setSaveBlockedReasons, workflowRevision, setWorkflowRevision, collectProjectSnapshot,
 		collectProjectSerialized, projectProblemsNotice, rehydrateProjectAssets, saveProject, applyProject,
 		exportAsAnimationProject,
-		openStarterScene: async (id, source = "starter", name = null) => (await runProject("project.openStarter", { id, source, ...(name ? { name } : {}) })).output?.opened === true,
+		openStarterScene: async (id, source = "starter", name = null, castStyle = undefined) => (await runProject("project.openStarter", { id, source, ...(name ? { name } : {}), ...(castStyle ? { castStyle } : {}) })).output?.opened === true,
 		openProject, openProjectByHandle, requestNewProject, newProject, restoreOffer,
 		setRestoreOffer, restoreStoredProject, flushScenes, openScene, selectSceneDocument,
 		createSceneDocumentFromUi, duplicateSceneDocumentFromUi, renameSceneDocumentFromUi,

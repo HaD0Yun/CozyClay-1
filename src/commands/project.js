@@ -13,7 +13,7 @@ const exportAsAnimation = studioActionDeclaration("project.exportAsAnimation");
 // The deadline covers the user in the file picker, so it is the hub's ceiling, not the 30 s default.
 const opening = { ...document("project.open", "Open a project file", { serialized: { type: "string", maxLength: 400_000_000 }, handleToken: token, projectToken: token }), timeoutMs: 300_000 };
 const fresh = document("project.new", "Start a new project", { name, previsMode: { type: "string", enum: [...PREVIS_MODES] }, castStyle: { type: "string", enum: [...CAST_STYLES] } });
-const starter = document("project.openStarter", "Open a starter project", { id: token, source: { type: "string", enum: ["starter", "launch"] }, name });
+const starter = document("project.openStarter", "Open a starter project", { id: token, source: { type: "string", enum: ["starter", "launch"] }, name, castStyle: { type: "string", enum: [...CAST_STYLES] } });
 const restore = { ...document("project.restore", "Restore the remembered project", { handleToken: token }), exposure: "ui-only" };
 const browse = { id: "project.browse", label: "Browse projects", description: "Show the project browser.", kind: "transient", exposure: "ui-only", input: input() };
 export const declarations = Object.freeze([rename, save, saveAs, exportAsAnimation, opening, fresh, starter, restore, browse]);

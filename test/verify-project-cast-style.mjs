@@ -14,6 +14,7 @@ import { CAST_STYLE_VALUES, sanitizeProps } from "../src/analytics.js";
 import { declarations as projectDeclarations } from "../src/commands/project.js";
 import { addCharacterEntries } from "../src/shell/add-character-entries.js";
 import { castFixture } from "./bus/cast-fixture.mjs";
+import { projectFixture } from "./bus/project-fixture.mjs";
 
 const memoryStorage = () => {
 	const values = new Map();
@@ -53,6 +54,8 @@ test("the session record keeps castStyle beside previsMode", () => {
 test("project.new, the agent context and analytics mirror CAST_STYLES", () => {
 	const fresh = projectDeclarations.find(entry => entry.id === "project.new");
 	assert.deepEqual(fresh.input.properties.castStyle.enum, [...CAST_STYLES], "project.new accepts the cast style");
+	const starter = projectDeclarations.find(entry => entry.id === "project.openStarter");
+	assert.deepEqual(starter.input.properties.castStyle.enum, [...CAST_STYLES], "a starter opens with the cast style chosen on the start screen");
 	assert.deepEqual(protocol.StudioSchemas.StudioContextV1.properties.scene.properties.castStyle.enum, [...CAST_STYLES], "protocol mirrors CAST_STYLES");
 	assert.equal(protocol.StudioSchemas.StudioContextV1.properties.scene.required.includes("castStyle"), false, "castStyle is optional in the context");
 	assert.deepEqual([...CAST_STYLE_VALUES], [...CAST_STYLES], "analytics mirrors CAST_STYLES");
@@ -84,4 +87,25 @@ test("the last character can be removed: the scene reads an empty cast and the a
 		ok(f.run("character.add", { character: { id: "actor-c", model: PROXY_FIGURE_MODEL, subject: "a stand-in" } }));
 		assert.equal(f.cast.read().length, 2);
 	} finally { f.dispose?.(); }
+});
+
+test("project.new and project.openStarter carry the chosen cast style; a starter keeps its own otherwise, hybrid when it has none", async () => {
+	const starterFile = castStyle => JSON.stringify(createProjectDocument({ scenesDocument: createSceneDocument({ seedCharacter: true }), name: "Starter", ...(castStyle ? { castStyle } : {}) }));
+	const files = { "/scenes/rig-starter.cclayproject": starterFile("rig"), "/scenes/old-starter.cclayproject": starterFile(null).replace(/"castStyle":"hybrid",/, "") };
+	const previousFetch = globalThis.fetch;
+	globalThis.fetch = async url => (files[url] ? { ok: true, text: async () => files[url] } : { ok: false, text: async () => "" });
+	const f = projectFixture();
+	try {
+		const style = () => f.project.metadata().castStyle;
+		ok(await f.run("project.new", { name: "Capsules", castStyle: "capsule" }));
+		assert.equal(style(), "capsule", "project.new keeps the chosen style");
+		assert.deepEqual(f.project.read()[0].stage.characters, [], "project.new starts on an empty stage");
+		ok(await f.run("project.openStarter", { id: "/scenes/rig-starter.cclayproject", name: "Picked", castStyle: "capsule" }));
+		assert.equal(style(), "capsule", "the style chosen on the start screen overrides the starter's");
+		ok(await f.run("project.openStarter", { id: "/scenes/rig-starter.cclayproject", name: "Own" }));
+		assert.equal(style(), "rig", "with no choice the starter keeps its own style");
+		assert.equal(files["/scenes/old-starter.cclayproject"].includes("castStyle"), false);
+		ok(await f.run("project.openStarter", { id: "/scenes/old-starter.cclayproject", name: "Old" }));
+		assert.equal(style(), "hybrid", "a starter written before the choice opens as hybrid");
+	} finally { f.dispose(); globalThis.fetch = previousFetch; }
 });

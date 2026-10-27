@@ -5241,9 +5241,9 @@ export default function App() {
 						openProject();
 					}}
 					starters={STARTER_SCENES}
-					onStarter={(id, name) => {
+					onStarter={(id, name, options) => {
 						setProjectBrowserOpen(false);
-						void openStarterScene(id, "starter", name);
+						void openStarterScene(id, "starter", name, options?.castStyle);
 					}}
 					onNew={(name, options) => {
 						setProjectBrowserOpen(false);
