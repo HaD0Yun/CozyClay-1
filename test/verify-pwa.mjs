@@ -31,7 +31,13 @@ for (const icon of manifest.icons) {
 pass("manifest exposes installable 192px, 512px, and maskable PNG icons");
 
 const index = readFileSync("app/index.html", "utf8");
-assert.match(index, /<html lang="en">/);
+// #972: browser page translation crashes the React tree (NotFoundError); the
+// studio has its own en / ko / zh UI, the landing page stays translatable.
+assert.match(index, /<html[^>]*\btranslate="no"/);
+assert.match(index, /<meta name="google" content="notranslate" \/>/);
+assert.doesNotMatch(readFileSync("index.html", "utf8"), /notranslate|translate="no"/);
+pass("studio opts out of browser page translation; landing does not");
+assert.match(index, /<html lang="en"[ >]/);
 assert.match(index, /rel="manifest" href="\/manifest\.webmanifest"/);
 assert.match(index, /name="theme-color" content="#232323"/);
 assert.match(index, /rel="apple-touch-icon"/);
