@@ -1,17 +1,22 @@
 # Tutorial recorder
 
-Turns an episode script into a tutorial video: it drives the Studio from the real startup chooser over CDP, screencasts it with a visible cursor, and writes `dist/tutorial/<episode>.mp4` (voice and burned-in captions in the `--locale` language) with `<episode>.ko.srt` and `<episode>.en.srt`.
+Turns an episode script into a tutorial video that points at each feature: it drives the Studio (and an install terminal) over CDP, dims the page around the feature it names in a callout, shows chapter cards, screencasts it with a visible cursor, and burns captions in the `--locale` language into a band under the frame. No voice unless asked.
 
 ```
-voice.mjs (user clip > say > none) -> record.mjs (cue hold = clip + 0.4 s) -> assemble.mjs (capture)
-  -> captions.mjs (PNG per cue, same Chrome) -> mux.mjs (caption band + overlays + voice) -> mp4
+episode (flat steps | chapters) -> record.mjs -> steps.mjs (input, overlay.mjs, terminal.mjs, Studio)
+  -> assemble.mjs (capture) -> captions.mjs (PNG per cue) -> mux.mjs (band + captions [+ voice]) -> mp4, chapter cuts
 ```
+
+| Episode shape | Output |
+| --- | --- |
+| flat array of steps | `dist/tutorial/<episode>.mp4` (`<episode>-ko.mp4`), `.ko.srt`, `.en.srt` |
+| `{ title, subtitle, chapters: [{ id, title, steps }] }` | `dist/tutorial/<episode>/<episode>.<locale>.mp4`, `<nn>-<chapter>.<locale>.mp4` per chapter, `<episode>.<locale>.srt` |
 
 ## Run
 
 ```sh
-npm run tutorial:record -- first-video
-npm run tutorial:record -- first-video --locale ko --size 1920x1080
+npm run tutorial:record -- stub-tour --locale ko
+npm run tutorial:record -- first-video --size 1920x1080
 ```
 
 `launch.mjs` starts `tools/dev-full.mjs` (the Agent panel needs the agent server) with an empty config dir and no provider keys or endpoints from your shell, so the panel shows the "Connect a model" card on any machine. It runs `record.mjs` inside `tools/qa-browser.mjs` and stops both. Ports: `TUTORIAL_DEV_PORT` (5594), `CDP_PORT` (5595), `COZYCLAY_LIVE_PORT` (5596), `COZYCLAY_OAUTH_PORT` (5597).
@@ -22,13 +27,13 @@ Against a dev server you already run:
 QA_URL=http://127.0.0.1:5594/app/ CDP_PORT=5595 node tools/qa-browser.mjs -- node tools/tutorial/record.mjs first-video
 ```
 
-`record.mjs` clears the origin's storage first (`Storage.clearDataForOrigin`), so it always starts from the chooser with the name field. Downloads from an export step go to a scratch dir.
+Opening the Studio clears the origin's storage first (`Storage.clearDataForOrigin`), so it always shows the chooser with the name field. Downloads from an export step go to a scratch dir. One continuous capture is cut into the chapter files, so chapters join without a seam.
 
-Flags: `--locale en|ko` (UI, voice and caption language; `ko` writes `<episode>-ko.mp4`), `--size 1600x1000|1920x1080`, `--voice on|off`, `--wps-ko 1.6` and `--wps-en 2.2` (words per second for cues without a clip), `--fps 30`, `--out dist/tutorial`. `npm run build` empties `dist/`.
+Flags: `--locale en|ko` (UI and caption language), `--size 1600x1000|1920x1080`, `--voice off|say` (default off), `--wps-ko 1.6` and `--wps-en 2.5` (reading speed), `--fps 30`, `--out dist/tutorial`. `npm run build` empties `dist/`.
 
-## Voice and captions
+## Captions and optional voice
 
-Voice is optional and runs before recording, because each cue's hold is its clip length plus 0.4 s (never shorter than its actions). Per narrated step, in order:
+A cue without a clip lasts max(its actions, 1.2 s + its words at the video language's reading speed). With `--voice say`, voice runs before recording, because each cue then lasts its clip plus 0.4 s. Per narrated step, in order:
 
 1. Your recording: `tools/tutorial/voice/<episode>/<step-id>.<ko|en>.<wav|m4a|mp3|aiff>` (ignored by git). Use the srt as the script.
 2. macOS `say` (ko Yuna, en Samantha). A step's `speech: { ko, en }` changes what is read, not the caption.
@@ -58,4 +63,12 @@ Each step has exactly one action:
 | `hold` | milliseconds |
 | `eval` | page expression, awaited; a result with `ok: false` stops the run |
 
-`until` (optional) waits for a selector after the action. `narration` is optional after the first step: a silent step runs inside the cue of the narrated step before it. A cue lasts max(its actions, clip + 0.4 s) with voice, or max(its actions, 1 s + words / wps) without; its srt entry and caption span exactly that. `test/verify-tutorial-recorder.mjs` validates every rule above.
+| `spotlight` | selector, with `label: { ko, en }` and optional `note`; dims the page around the element (rect read at that moment, so open menus work) and names it; `null` clears |
+| `menu` | `{ open, then }`: click `open`, then click `then`, leaving the menu open for a spotlight |
+| `card` | `"opening"` (episode title), `"closing"` (lists the titled chapters) or `{ title, subtitle }` (numbered by its chapter) |
+| `terminal` | `{ typed, lines }`: `scenes/terminal.html` types the command and prints the lines |
+| `studio` | `true`: open the Studio at its startup chooser (an episode without it starts there) |
+
+A spotlight holds for 1.2 s + its label and note at reading speed, a card for at least 2 s, a terminal for 1.5 s after its last line; `hold` beside them overrides that.
+
+`until` (optional) waits for a selector after the action. A step without narration runs inside the cue of the narrated step before it; a chapter end closes the cue. The srt entry and caption span exactly the cue. `test/verify-tutorial-recorder.mjs` validates every rule above.
