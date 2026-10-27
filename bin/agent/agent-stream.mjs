@@ -1,13 +1,25 @@
 // The provider call behind every model request of the agent runner (agent-runner.mjs). pi-agent-core 1.x's Agent does
 // not retry a failed request (the removed AgentHarness did), so one request is retried here, in place:
 //   - a transient failure, by pi-ai's own isRetryableAssistantError (429, 5xx, overload, dropped connections), up to
-//     RETRY_POLICY.maxRetries times with pi-ai's backoff;
+//     RETRY_POLICY.maxRetries times with pi-ai's backoff (1 s, 2 s, 4 s), or as long as the provider's message asks
+//     ("retry after 8 s", "try again in 2.5s"), capped at RETRY_HINT_CAP_MS (#975: two quick retries lost turns to
+//     overloads that cleared within ~10 s);
 //   - an expired Codex sign-in (401), once per turn, after a forced credential refresh (refreshAuth, the runner's).
 // An attempt is retried only while nothing of it reached the Agent: its events are held until its first content event,
 // so the transcript and the panel only ever see the attempt that answered. A retried request carries the same context,
 // so no failed assistant message is stored and no completed tool runs again.
 
-const RETRY_POLICY = Object.freeze({ maxRetries: 2, baseDelayMs: 1000 });
+const RETRY_POLICY = Object.freeze({ maxRetries: 3, baseDelayMs: 1000 });
+const RETRY_HINT_CAP_MS = 20_000;
+const RETRY_HINT = /(?:retry|try again)\D{0,12}?(\d+(?:\.\d+)?)\s*(ms|milliseconds?|s|sec|seconds?)\b/i;
+
+/** The wait a failed message asks for, in ms (capped), or 0 when it names none. */
+export function retryHintMs(message) {
+	const match = RETRY_HINT.exec(String(message?.errorMessage ?? ""));
+	if (!match) return 0;
+	const ms = Number(match[1]) * (/^m/i.test(match[2]) ? 1 : 1000);
+	return Number.isFinite(ms) && ms > 0 ? Math.min(ms, RETRY_HINT_CAP_MS) : 0;
+}
 
 const CONTENT_EVENT = /^(text|thinking|toolcall)_/;
 const EMPTY_USAGE = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } };
@@ -44,7 +56,7 @@ export function createRetryingStream({ ai, models, refreshAuth = async () => fal
 		const shouldRetry = async (message, retries) => {
 			if (retries >= RETRY_POLICY.maxRetries || signal?.aborted) return false;
 			if (ai.isRetryableAssistantError(message)) {
-				await pause(ai.retryDelayMs(RETRY_POLICY, retries + 1), signal);
+				await pause(Math.max(ai.retryDelayMs(RETRY_POLICY, retries + 1), retryHintMs(message)), signal);
 				return !signal?.aborted;
 			}
 			return refreshAuth(model, message);

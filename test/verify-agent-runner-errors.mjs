@@ -14,6 +14,7 @@ import { createModels, createAssistantMessageEventStream } from "@earendil-works
 import { fauxProvider, fauxAssistantMessage, fauxText } from "@earendil-works/pi-ai/providers/faux";
 import { fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
 import { createAgentRunner, classifyError } from "../bin/agent/agent-runner.mjs";
+import { retryHintMs } from "../bin/agent/agent-stream.mjs";
 import { createSessionStore, transcriptFromHistory } from "../bin/agent/session-store.mjs";
 import { createModels as createAgentModels, loadProvider } from "../bin/agent/providers.mjs";
 
@@ -147,6 +148,19 @@ function errorMessage(text) {
 	expect("the surviving text reached the panel", frames.some((f) => f.type === "text.delta" && f.text) || frames.some((f) => f.type === "text.delta"), JSON.stringify(frames));
 }
 
+// --- a provider's own wait hint sets the backoff, capped at 20 s (#975) ---
+{
+	const hint = (text) => retryHintMs({ errorMessage: text });
+	assert.equal(hint("429 Too Many Requests. Please retry after 8 seconds."), 8000);
+	assert.equal(hint("Rate limit reached. Please try again in 2.5s."), 2500);
+	assert.equal(hint("overloaded, retry in 750ms"), 750);
+	assert.equal(hint("try again in 600 seconds"), 20_000, "a long hint is capped");
+	assert.equal(hint("500 overloaded"), 0, "no hint: pi-ai's backoff alone");
+	assert.equal(hint("request 429 failed after 3 retries"), 0, "a count is not a wait");
+	assert.equal(retryHintMs(undefined), 0);
+	console.log("PASS retry hint: seconds and milliseconds, capped, none without a unit");
+}
+
 // --- one session whose tool set changes between turns (the Studio Tasks switch) still runs ---
 {
 	const models = createModels();
@@ -176,24 +190,24 @@ for (const token of ["AIza-secret-0123456789abcdefghijk", "sk-or-secret", "sk-an
 	expect(`provider key material (${token.split("secret")[0]}) is redacted from the runner error frame`, !!error && !error.message.includes("AIza") && !error.message.includes("secret"), JSON.stringify(error));
 }
 
-// --- 529 three times: retries exhausted (maxRetries:2 = 3 attempts total) -> error{code:'overloaded'} ---
+// --- 529 four times: retries exhausted (maxRetries:3 = 4 attempts total, #975) -> error{code:'overloaded'} ---
 {
 	const sessionsDir = mkdtempSync(join(tmpdir(), "cozyclay-agent-runner-errors-overloaded-store-"));
 	const sessionStore = createSessionStore(sessionsDir);
 	const models = createModels();
 	const faux = fauxProvider({ provider: "faux", models: [{ id: "scripted", name: "Scripted", input: ["text", "image"] }] });
 	models.setProvider(faux.provider);
-	const calls = installScripts(faux, [errorMessage("500 overloaded"), errorMessage("500 overloaded"), errorMessage("500 overloaded"), fauxAssistantMessage([fauxText("recovered after overload")])]);
+	const calls = installScripts(faux, [errorMessage("500 overloaded"), errorMessage("500 overloaded"), errorMessage("500 overloaded"), errorMessage("500 overloaded"), fauxAssistantMessage([fauxText("recovered after overload")])]);
 	const runner = createAgentRunner({ models, tools: [], sessionStore });
 	const session = await runner.openSession("errors-529", { surface: "workflow" });
 	const frames = await collect(session, { text: "hi", model: "faux/scripted" });
 	const firstHistory = sessionStore.read("errors-529")?.history || [];
 	console.log("16a-overloaded-store-roles", JSON.stringify(firstHistory.map((message) => message.role)));
 	const error = frames.find((f) => f.type === "error");
-	expect("529 three times exhausts retries with one error frame", !!error, JSON.stringify(frames));
+	expect("529 four times exhausts retries with one error frame", !!error, JSON.stringify(frames));
 	expect("the error frame carries code:'overloaded'", error?.code === "overloaded", JSON.stringify(error));
 	expect("a done frame follows the error frame", frames.at(-1)?.type === "done", JSON.stringify(frames));
-	expect("the model was called exactly 3 times", calls.length === 3, `calls.length=${calls.length}`);
+	expect("the model was called exactly 4 times", calls.length === 4, `calls.length=${calls.length}`);
 	expect("overloaded failures keep model history limited to the user message", JSON.stringify(firstHistory.map((message) => message.role)) === "[\"user\"]", JSON.stringify(firstHistory));
 	const firstSession = sessionStore.read("errors-529");
 	expect("overloaded failure is persisted separately with code and message", firstSession?.turnErrors?.length === 1 && firstSession.turnErrors[0].code === error.code && firstSession.turnErrors[0].message === error.message, JSON.stringify(firstSession?.turnErrors));

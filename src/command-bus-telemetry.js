@@ -81,15 +81,18 @@ const emit = (event, props) => {
 	try { send(event, props); } catch { /* telemetry is advisory */ }
 };
 
-/** A refusal receipt: the session counter always moves; the event, at most 3 times per (code, group, origin). */
-export function noteRefusal(value, origin, id) {
+/** A refusal receipt: the session counter always moves; the event, at most 3 times per (code, command, origin).
+ * `registered`: `id` is an action the registry declares, so it may ride along as `command`; an id the caller
+ * made up (an unknown action) is reported by its group alone. */
+export function noteRefusal(value, origin, id, registered = false) {
 	// A cancel the caller asked for is not a refusal. A UI one tells a click it was refused (click-friction.js);
 	// an agent's or MCP client's refusal at the same moment is not the user's click.
 	if (value.code === 'CANCELLED') return;
 	if (origin === 'ui') noteBusReceipt(false);
 	const by = origin === 'ui' ? 'ui' : 'agent', code = refusalCodeOf(value.code), group = commandGroup(id);
 	bump(by === 'ui' ? 'refusals_ui' : 'refusals_agent');
-	if (admit(`studio:refused:${code}:${group}:${by}`, REFUSALS_PER_KEY)) emit('studio:refused', { code, origin: by, phase: value.phase, group });
+	const command = registered ? String(id) : undefined;
+	if (admit(`studio:refused:${code}:${command ?? group}:${by}`, REFUSALS_PER_KEY)) emit('studio:refused', { code, origin: by, phase: value.phase, group, ...(command ? { command } : {}) });
 }
 
 // receiptId -> { at, kind }: when a history receipt was recorded and what it did.
