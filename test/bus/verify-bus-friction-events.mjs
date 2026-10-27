@@ -38,19 +38,22 @@ try {
   const inputs = { type: 'object', properties: {}, required: [], additionalProperties: false };
   const agent = (id, args = {}, extra = {}) => f.binding.bus.run(id, args, { origin: 'agent', host: f.host(), expectedRevision: f.binding.refresh().revision, ...extra });
 
-  // studio:refused: closed values, 3 per (code, group, origin); past the cap only the counter moves.
+  // studio:refused: closed values, 3 per (code, command, origin); past the cap only the counter moves.
   f.registry.register({ id: 'shot.testRefuse', kind: 'mutation', undoDomain: 'shot', input: inputs, available: () => true, run: () => { throw new Error('This edit is refused.'); } });
   for (let i = 0; i < 4; i++) assert.equal(f.binding.bus.run('shot.testRefuse', {}, { origin: 'ui' }).ok, false);
   const ui = take('studio:refused');
   assert.equal(ui.length, 3, 'three per key');
-  assert.deepEqual(ui[0], { code: 'INVALID_ARGUMENT', origin: 'ui', phase: 'admission', group: 'shot' });
+  assert.deepEqual(ui[0], { code: 'INVALID_ARGUMENT', origin: 'ui', phase: 'admission', group: 'shot', command: 'shot.testRefuse' });
   assert.equal(friction.snapshot().refusals_ui, '4-5', 'the counter keeps every refusal');
   for (const props of ui) closed('studio:refused', props);
   const mcp = f.binding.bus.run('shot.testRefuse', {}, { origin: 'mcp', host: f.host(), expectedRevision: -1 });
   assert.equal(mcp.code, 'STALE_SCENE', JSON.stringify(mcp));
-  assert.deepEqual(take('studio:refused'), [{ code: 'STALE_SCENE', origin: 'agent', phase: 'admission', group: 'shot' }], 'mcp is sent as agent');
+  assert.deepEqual(take('studio:refused'), [{ code: 'STALE_SCENE', origin: 'agent', phase: 'admission', group: 'shot', command: 'shot.testRefuse' }], 'mcp is sent as agent');
   assert.equal(agent('shot.testRefuse').ok, false);
-  assert.deepEqual(take('studio:refused'), [{ code: 'INVALID_ARGUMENT', origin: 'agent', phase: 'admission', group: 'shot' }], 'a new origin is a new key');
+  assert.deepEqual(take('studio:refused'), [{ code: 'INVALID_ARGUMENT', origin: 'agent', phase: 'admission', group: 'shot', command: 'shot.testRefuse' }], 'a new origin is a new key');
+  // An action the registry does not declare (#975): the group only, never the made-up id.
+  assert.equal(agent('shot.madeUpByModel').ok, false);
+  assert.deepEqual(take('studio:refused').map(row => [row.group, Object.hasOwn(row, 'command')]), [['shot', false]], 'an unknown id is not sent');
 
   // A cancel the caller asked for is neither an event nor a counted refusal.
   const started = deferred();

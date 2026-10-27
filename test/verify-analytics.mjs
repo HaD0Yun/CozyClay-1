@@ -671,7 +671,7 @@ console.log("PASS agent:prompt_sent: device-side words, Jaccard grades, length b
 	assert.deepEqual([0, 1999, 2000, 10_000, 60_000, -1].map(bucketAge), ["lt2s", "lt2s", "2-10s", "10-60s", "gte60s", "lt2s"]);
 	assert.deepEqual(["STALE_SCENE", "PRIVATE", "", undefined].map(refusalCodeOf), ["STALE_SCENE", "other", "other", "other"]);
 	const valid = {
-		"studio:refused": { code: "TARGET_BUSY", origin: "agent", phase: "admission", group: "shot" },
+		"studio:refused": { code: "TARGET_BUSY", origin: "agent", phase: "admission", group: "shot", command: "shot.setCameraRail" },
 		"edit:undone": { age: "2-10s", kind: "agent_turn", via: "key", result: "done" },
 		"agent:turn_summary": { turn_id: turn, outcome: "cancelled", wall: "1-2m", first_tool: "lt10s", tool_calls: "4-5", tool_failed: "1", refused: "1", refusal_top: "STALE_SCENE",
 			stale_retry: "0", authored: true, drafts: "3", qa_first: "problems", qa_last: "clean", qa_trend: "improved", stuck: false, cancel_phase: "during_tool" },

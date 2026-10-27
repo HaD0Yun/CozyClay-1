@@ -249,7 +249,7 @@ export function createCommandBus({ registry, ports }) {
       if (request.origin === 'ui' && error.uiMessage) ports.showRefusal?.(error.uiMessage);
       const value = refusal(request, before, error, job ? applied : undefined);
       // Session friction and studio:refused, by who asked and what (command-bus-telemetry.js).
-      noteRefusal(value, request.origin, action ?? id);
+      noteRefusal(value, request.origin, action ?? id, registry.ids?.().includes(action ?? id) === true);
       const recorded = begun ? remember(value) : value;
       if (job && !job.completion) { job.outcome = recorded; job.completion = Promise.resolve(recorded); emit({ type: 'job.completed', jobId: job.id, receipt: recorded }); }
       return recorded;

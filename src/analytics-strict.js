@@ -54,6 +54,8 @@ const SCHEMAS = Object.freeze({
 	"studio:refused": {
 		code: inSet(REFUSAL_CODES), origin: oneOf("ui", "agent"), phase: oneOf("admission", "commit"),
 		group: oneOf("object", "shot", "cast", "scene", "motion", "edit", "task", "agent", "other"),
+		// A registered Studio action id (command-bus-telemetry.js sends only those): code-defined, never args (#975).
+		command: (value) => typeof value === "string" && value.length <= 48 && /^[a-z][a-zA-Z0-9]*(?:\.[a-zA-Z0-9]+){1,3}$/.test(value),
 	},
 	// error_type: the app:error label set (analytics.js describeError); never a message or stack.
 	"app:render_crash": { error_type: inSet(ERROR_TYPE_VALUES) },
